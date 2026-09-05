@@ -32,10 +32,17 @@ Parse or inspect:
 - `HELP`
 - `UNIT`
 - family members
-- observed labels
+- observed exposition labels
 - representative values
 
 Missing `TYPE` means unknown/untyped. A numeric sample alone does not prove counter semantics.
+
+Keep two label layers separate:
+
+- exposition labels are visible in the raw `/metrics` or OpenMetrics dump
+- stored scrape labels come from the shared target-environment contract and may be attached by target configuration or relabeling
+
+In this environment, `kubernetes_namespace` and `kubernetes_pod_name` are valid stored application labels. Do not reject those selectors only because they are absent from the raw exposition dump.
 
 Prioritize signals that answer:
 
@@ -54,7 +61,7 @@ Do not invent HTTP panels for workers or batch jobs. Database panels require act
 
 Avoid unbounded dimensions such as raw URL, path, ID, message, trace, or user-controlled label values.
 
-Always surface a verified process/application start timestamp metric such as `process_start_time_seconds` as an annotation source candidate, even when it is not useful as a panel. Report its type, unit, labels, and semantic evidence. Do not assume its numeric timestamp can become a Grafana Prometheus annotation event time.
+Always surface a verified process/application start timestamp metric such as `process_start_time_seconds` as an annotation source candidate, even when it is not useful as a panel. Report its type, unit, identity labels, and semantic evidence. Do not assume its numeric timestamp can become a Grafana Prometheus annotation event time.
 
 ## PromQL
 
@@ -72,7 +79,7 @@ Escalate:
 - subqueries or offset logic
 - cardinality/performance concerns
 
-Use application labels from the shared contract, normally:
+Use application stored labels from the shared contract, normally:
 
 ```promql
 kubernetes_namespace="$namespace",kubernetes_pod_name=~"${pod:regex}"
@@ -125,4 +132,4 @@ annotation_sources:
     validation: <PASS|UNVERIFIED>
 ```
 
-Omit `annotation_sources` when none exists. Do not return rejected metrics unless rejection exposes a correctness or instrumentation problem.
+Omit `annotation_sources` when none exists. Keep only useful candidates and the strongest start-timestamp source; do not return equivalent duplicates. Do not return rejected metrics unless rejection exposes a correctness or instrumentation problem.

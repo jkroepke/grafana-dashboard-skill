@@ -21,11 +21,11 @@ Use only metric families available locally or documented by pinned/local sources
 
 Verify exact labels and metric versions in the local datasource.
 
-Current kube-state-metrics documentation recommends kube-scheduler `kube_pod_resource_requests` and `kube_pod_resource_limits` for pod-level resource values because they match scheduler semantics more precisely. Use them only when locally exposed. They are pod-level metrics and do not replace KSM container metrics for per-container usage/request/limit comparisons.
+When kube-scheduler `kube_pod_resource_requests` or `kube_pod_resource_limits` are locally exposed, prefer them for pod-level scheduling-resource views. Keep KSM container resource metrics for per-container usage/request/limit comparisons. Do not assume scheduler metrics exist merely because KSM container metrics are present.
 
 ## Labels
 
-Application scrape labels in this target environment:
+Application stored scrape labels in this target environment:
 
 ```text
 kubernetes_namespace
@@ -40,7 +40,7 @@ pod
 container
 ```
 
-Do not assume they were relabeled to application names.
+Do not assume they were relabeled to application names. Likewise, labels attached by the scrape pipeline may be absent from a raw exporter exposition.
 
 ## Container calculations
 

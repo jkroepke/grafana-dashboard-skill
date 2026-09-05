@@ -36,13 +36,11 @@ Invoke specialists by agent ID, not by file path:
 - `panel-expert`
 - `dashboard-reviewer`
 
-The skill is exposed through `.agents/skills/grafana-dashboard`, which is discovered by OpenCode, Pi, and Kilo.
+The repository exposes the skill through `.agents/skills/grafana-dashboard`. Keep the existing runtime symlink layout intact.
 
 When Pi uses a subagent extension with an agent-scope option, enable project agents (`project` or `both`); user-only scope does not discover `.pi/agents`.
 
-The shared agent frontmatter intentionally contains `name`, `description`, and `mode: subagent`. Pi uses `name` and `description` and ignores unknown fields; OpenCode and Kilo use `mode`.
-
-Do not duplicate agent definitions for individual runtimes.
+Keep shared agent frontmatter minimal. Do not duplicate agent definitions for individual runtimes.
 
 ## Scope
 
@@ -75,7 +73,9 @@ Use evidence in this order:
 3. verified live datasource data
 4. local `knowledge/` contracts
 
-A single exposition dump proves observed samples only. It does not prove historical behavior or every possible label value.
+A single exposition dump proves observed samples and exporter/instrumentation labels only. It does not prove historical behavior, every possible label value, or labels attached by the scrape pipeline.
+
+Treat exposition labels and stored scrape labels separately. In this target environment, `kubernetes_namespace` and `kubernetes_pod_name` are valid stored application labels and may be attached by Prometheus target configuration or relabeling. Their absence from a raw `/metrics` dump does not invalidate the stored-series selector contract.
 
 ## Required dashboard variables
 
@@ -89,7 +89,7 @@ Every dashboard has these variables in dependency order:
 
 Use `$datasource` for every Prometheus target, variable query, and annotation. Never embed a discovered datasource UID.
 
-Application metrics use the target-environment scrape labels:
+Application metrics use the target-environment stored labels:
 
 ```promql
 <metric>{kubernetes_namespace="$namespace",kubernetes_pod_name=~"${pod:regex}"}
@@ -156,6 +156,8 @@ Typical triggers:
 
 Do not route straightforward queries through the PromQL expert when their semantics are already established.
 
+Do not integrate a PromQL-expert result marked `REJECT` or `NEEDS_EVIDENCE`. Resolve the missing evidence or omit the panel/query.
+
 ### 4. Panel plan
 
 After selecting queries, batch the selected operational questions and query result shapes to subagent `panel-expert` for a substantial new dashboard or when visualization choice is non-obvious.
@@ -173,7 +175,7 @@ Read local Grafana knowledge only as needed:
 - `knowledge/grafana/variables.md`
 - `knowledge/grafana/annotations.md`
 
-When a verified `process_start_time_seconds`, `kube_pod_container_state_started`, or semantically equivalent start-timestamp metric exists for the application, add a Prometheus annotation when it can be expressed as sparse event-like results without flooding. Prometheus annotation event time is the returned sample timestamp, not the metric value. Label it as an observed restart/start event and document coverage; do not claim exact process-start time from the gauge value.
+When a verified process/container start-timestamp metric exists, read `knowledge/grafana/annotations.md`. Add an annotation only when a sparse event-like query validates without misleading duplicates or flooding; never query a continuously scraped timestamp gauge directly as an annotation.
 
 ### 6. Independent review
 
@@ -253,19 +255,21 @@ Read `knowledge/kubernetes/metrics.md` when Kubernetes context is used.
 Prefer repository build commands. When applicable, validate with installed local tools:
 
 ```bash
-jsonnetfmt -i dashboards/application.jsonnet
-jsonnet -J vendor dashboards/application.jsonnet > /tmp/application-dashboard.json
-jq empty /tmp/application-dashboard.json
-dashboard-linter lint --strict --config dashboards/.lint /tmp/application-dashboard.json
+jsonnetfmt -i <dashboard.jsonnet>
+jsonnet -J vendor <dashboard.jsonnet> > /tmp/dashboard.json
+jq empty /tmp/dashboard.json
+dashboard-linter lint --strict --config <lint-config> /tmp/dashboard.json
 ```
 
-`jq empty` checks JSON syntax only, not Grafana schema correctness.
+Use the repository's actual paths and commands when they differ. `jq empty` checks JSON syntax only, not Grafana schema correctness.
 
 When read-only datasource access is available, test representative application, Kubernetes, variable, and annotation queries with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics.
 
 For Prometheus annotations, verify that the query returns only event-like points. Every returned datapoint becomes a marker, so continuous timestamp gauges or overlapping change windows can flood or duplicate annotations.
 
 Test one pod, multiple pods, and All where supported.
+
+If live datasource access is unavailable, mark live-query and annotation validation `UNVERIFIED`; never infer a pass from static inspection alone.
 
 ## Completion
 

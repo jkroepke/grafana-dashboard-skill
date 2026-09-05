@@ -52,10 +52,13 @@ Do not load every knowledge file by default.
 3. Identify required population and label identity.
 4. Choose instant or range evaluation from the question.
 5. Construct the smallest expression with correct semantics.
-6. State assumptions and cases Prometheus cannot infer.
-7. Validate against the local datasource when available.
+6. State result identity and missing-data behavior.
+7. State assumptions and cases Prometheus cannot infer.
+8. Validate against the local datasource when available.
 
 Never hide semantic uncertainty behind a syntactically valid query.
+
+If required metric type, lifecycle, population, matching identity, or datasource behavior cannot be established, return `NEEDS_EVIDENCE` with no recommended expression rather than guessing. Return `REJECT` when the requested semantics cannot be represented safely with the available metrics.
 
 ## Input
 
@@ -74,8 +77,11 @@ Do not request the complete metrics dump unless targeted families are insufficie
 
 ```yaml
 question: <question>
-recommended_promql: <expression>
-mode: <instant|range>
+decision: <USE|REJECT|NEEDS_EVIDENCE>
+recommended_promql: <expression or null>
+mode: <instant|range|null>
+result_identity: [<labels that identify output series>]
+no_data_semantics: <what empty/missing result means or unknown>
 semantics: <concise explanation>
 assumptions:
   - <assumption>
@@ -83,5 +89,7 @@ edge_cases:
   - <important limitation>
 validation: <PASS|FAIL|UNVERIFIED>
 ```
+
+For `REJECT` or `NEEDS_EVIDENCE`, keep `recommended_promql` null and state the blocking reason in `semantics` or `edge_cases`.
 
 Keep proofs and raw responses in scratch files when large.
