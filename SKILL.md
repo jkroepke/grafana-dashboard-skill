@@ -1,5 +1,5 @@
 ---
-name: grafana-dashboard-from-metrics
+name: grafana-dashboard
 description: Create or update local Grafonnet dashboards for Kubernetes applications and APIs from Prometheus or OpenMetrics exposition dumps. Use application metrics first, add Kubernetes health and resource context where useful, and default to Dashboard Schema V2.
 ---
 
@@ -36,7 +36,7 @@ Invoke specialists by agent ID, not by file path:
 - `panel-expert`
 - `dashboard-reviewer`
 
-The skill is exposed through `.agents/skills/grafana-dashboard-from-metrics`, which is supported by OpenCode, Pi, and Kilo.
+The skill is exposed through `.agents/skills/grafana-dashboard`, which is supported by OpenCode, Pi, and Kilo.
 
 When Pi uses a subagent extension with an agent-scope option, enable project agents (`project` or `both`); user-only scope does not discover `.pi/agents`.
 
