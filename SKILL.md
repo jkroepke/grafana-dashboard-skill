@@ -119,18 +119,22 @@ The coordinator completes the input and selector contracts above before delegati
 
 | Task | Minimum input | Return to coordinator |
 | --- | --- | --- |
-| Application analysis | Application metric inventory and relevant raw families; shared contract | Prioritized application questions, exact scoped PromQL, units, retained labels, and unresolved semantics |
-| Kubernetes analysis | Workload manifests; relevant KSM/kubelet/scrape evidence; shared contract | Health/resource queries, container populations, matching keys, and availability limits |
-| Independent validation, after integration | Final Jsonnet and rendered JSON, shared contract, pinned dependencies, relevant raw fixtures | Concrete failures with file/query references and actual validation results |
+| Application analysis and live validation | Application metric inventory and relevant raw families; shared contract; configured read-only query access when available | Prioritized application questions, selected scoped PromQL, units, retained labels, unresolved semantics, and compact live-query records |
+| Kubernetes analysis and live validation | Workload manifests; relevant KSM/kubelet/scrape evidence; shared contract; configured read-only query access when available | Health/resource queries, container populations, matching keys, availability limits, and compact live-query records |
+| Independent validation, after integration | Final Jsonnet and rendered JSON, shared contract, pinned dependencies, relevant raw fixtures, and configured read-only query access when available | Concrete failures with file/query references and independent render, schema, lint, and representative live-query results |
 
-Run the two analysis tasks concurrently only when the local runtime can support them. Run rendering and validation after their results are integrated; avoid concurrent memory-heavy Jsonnet renders. Give the validator the artifacts and requirements, not the analysts' conclusions or a list of expected findings. Do not use a sub-agent to approve its own output.
+When read-only datasource access is available, each analysis worker executes the representative queries for its own metric source. The coordinator supplies the selector contract, connection method, and query purpose, but not credential contents. Workers use already-configured authentication, resolve dashboard variables and macros to explicit test values, follow the query-mode rules in section 4, and do not duplicate another worker's queries. An HTTP success alone is not a pass.
+
+Return one bounded record for every executed query with: query ID and purpose, metric source, exact selected expression or scratch-file reference, instant/range mode, evaluation time or range and step, series count, returned label keys, up to three representative label/value results, datasource errors and warnings, empty-result status, semantic verdict, and remaining uncertainty. State the total before truncating examples. Keep request bodies and raw responses in worker-owned temporary files; return a path only when the coordinator or validator needs targeted inspection. Do not paste complete Grafana frames into the coordinator context or suppress stderr.
+
+Run the two analysis tasks concurrently only when the local runtime can support them. The coordinator integrates only selected, validated queries. Run rendering and independent validation afterward; avoid concurrent memory-heavy Jsonnet renders. Give the validator the final artifacts and requirements, not the analysts' conclusions or a list of expected findings. The validator extracts representative final expressions and checks them independently. Do not use a sub-agent to approve its own output.
 
 Keep context bounded:
 
 - Leave raw dumps on disk. Parse an inventory, then retrieve selected families with their metadata and representative label sets. Do not truncate input blindly or discard rare error/restart families merely because they occur late in a file.
 - Give workers fresh contexts with file paths, the shared contract, the relevant skill sections, and a specific deliverable. Do not fork the entire conversation or attach every metric source to every worker.
 - Inspect generated Grafonnet libraries with targeted searches and small excerpts. Do not load an entire generated API file just to find one method.
-- Return compact findings: metric/source evidence, query, unit, population, and uncertainty. Refer to local files for large results rather than pasting them into the coordinator's history.
+- Return selected findings and the live-query records above. Refer to local files for rejected alternatives and large results rather than pasting them into the coordinator's history.
 - Use explicit file ownership. Analysis workers return proposals; the coordinator writes final dashboard files. Give a worker a separate scratch file only when its output genuinely needs one. No concurrent edits to shared helpers or final source.
 - Account for instructions, history, tool output, and the final response within the 256k limit. Keep room for integration and validation; a context window is a ceiling, not a target to fill.
 - Bound delegation to these useful roles; avoid recursive agent trees. Reuse a worker only for a concrete unresolved issue. If delegation is unavailable, perform the same focused passes sequentially with compact notes.
@@ -293,7 +297,7 @@ Set code-managed dashboards non-editable unless the repository explicitly requir
 
 Check meaningful invariants in the rendered output: unique panel IDs, V2 layout references resolving to elements, correct schema, variable types, dependencies, and refresh modes, datasource references, query populations, units, query modes, and annotation coverage. Validate against an available target-version schema as well as rendering.
 
-When an existing datasource is accessible, query representative application, resource, variable, and annotation expressions without modifying dashboards. Resolve dashboard variables and macros in temporary validation requests. Check per-query errors, warnings, labels, duplicate series, and empty results; HTTP success alone is insufficient. Test one pod, multiple pods, All, and a second namespace where available. For offline validation, report documented contracts separately from tested behavior.
+During final validation, use the live-query worker contract above for representative application, resource, variable, and annotation expressions without modifying dashboards. Test one pod, multiple pods, All, and a second namespace where available. For offline validation, report documented contracts separately from tested behavior.
 
 ## Completion
 
