@@ -17,6 +17,31 @@ This workflow runs air-gapped with a 256k context limit.
 - Prefer file paths and targeted excerpts over copying large inputs into agent contexts.
 - Leave raw metrics dumps and large query responses on disk.
 
+## Runtime compatibility
+
+Canonical subagent definitions live in `agents/`.
+
+They are exposed by repository symlinks for:
+
+- OpenCode: `.opencode/agents`
+- Kilo: `.kilo/agents`
+- Pi: `.pi/agents`
+- shared agent discovery: `.agents/agents`
+
+Invoke specialists by agent ID, not by file path:
+
+- `application-metrics`
+- `kubernetes-metrics`
+- `promql-expert`
+- `panel-expert`
+- `dashboard-reviewer`
+
+The skill is exposed through `.agents/skills/grafana-dashboard-from-metrics`, which is supported by OpenCode, Pi, and Kilo.
+
+When Pi uses a subagent extension with an agent-scope option, enable project agents (`project` or `both`); user-only scope does not discover `.pi/agents`.
+
+Do not duplicate agent definitions for individual runtimes. Keep runtime-specific frontmatter out of shared agent files unless all supported runtimes accept it.
+
 ## Scope
 
 - Create or update dashboard source only. Do not publish, import, provision, or write dashboards through Grafana APIs.
@@ -80,11 +105,13 @@ For full variable rules, read `knowledge/grafana/variables.md` only when impleme
 
 ## Specialist workflow
 
-Use dedicated agents for substantial dashboard creation or updates when isolated sub-agent contexts are available. Handle small focused edits directly.
+Use dedicated agents for substantial dashboard creation or updates when isolated subagent contexts are available. Handle small focused edits directly.
+
+Do not create recursive subagent trees. The coordinator performs all specialist dispatch.
 
 ### 1. Application analysis
 
-Delegate to `agents/application-metrics.md`.
+Delegate to subagent `application-metrics`.
 
 Give it only:
 
@@ -93,11 +120,11 @@ Give it only:
 - shared contract
 - read-only query access instructions when available
 
-It returns selected operational questions, scoped PromQL, units, retained labels, live-validation results, and unresolved semantics.
+It returns selected operational questions, straightforward scoped PromQL, units, retained labels, live-validation results, unresolved semantics, and isolated PromQL consultation requests when needed.
 
 ### 2. Kubernetes analysis
 
-Delegate to `agents/kubernetes-metrics.md`.
+Delegate to subagent `kubernetes-metrics`.
 
 Give it only:
 
@@ -106,13 +133,15 @@ Give it only:
 - shared contract
 - read-only query access instructions when available
 
-It returns health/resource questions, scoped PromQL, matching keys, container populations, live-validation results, and availability limits.
+It returns health/resource questions, straightforward scoped PromQL, matching keys, container populations, live-validation results, availability limits, and isolated PromQL consultation requests when needed.
 
 Run application and Kubernetes analysis concurrently when the runtime can do so without duplicating large inputs.
 
 ### 3. Difficult PromQL
 
-Use `agents/promql-expert.md` on demand for non-trivial PromQL semantics. Typical triggers:
+For each isolated consultation request, invoke subagent `promql-expert` with only the affected operational question, metric metadata, selectors, scrape timing, candidate expression, and relevant evidence.
+
+Typical triggers:
 
 - sparse or late-created counters
 - resets or staleness
@@ -127,7 +156,7 @@ Do not route straightforward queries through the PromQL expert when their semant
 
 ### 4. Panel plan
 
-After selecting queries, batch the selected operational questions and query result shapes to `agents/panel-expert.md` for a substantial new dashboard or when visualization choice is non-obvious.
+After selecting queries, batch the selected operational questions and query result shapes to subagent `panel-expert` for a substantial new dashboard or when visualization choice is non-obvious.
 
 The panel expert recommends visualization, query mode, unit, legend, sizing, and placement. It does not modify PromQL or dashboard files.
 
@@ -144,7 +173,7 @@ Read local Grafana knowledge only as needed:
 
 ### 6. Independent review
 
-After rendering, delegate to `agents/dashboard-reviewer.md`.
+After rendering, delegate to subagent `dashboard-reviewer`.
 
 Give the reviewer:
 
@@ -161,13 +190,14 @@ Fix confirmed findings in the coordinator context.
 
 ## Context discipline
 
-- Do not give sub-agents the complete conversation.
-- Do not give sub-agents the complete `SKILL.md` unless required by the runtime. Give the agent definition, shared contract, and only relevant knowledge files.
+- Do not give subagents the complete conversation.
+- Do not give subagents the complete `SKILL.md`. Their registered agent definition is their role contract.
+- Give each subagent only the shared contract fields and local files needed for its task.
 - Parse large metric dumps once, then retrieve selected families with metadata and representative label sets.
 - Do not paste complete Grafana frames or API responses into the coordinator context.
 - Store large requests/responses in worker-owned temporary files and return a path when targeted inspection is needed.
 - Return compact findings. Keep rejected alternatives out of the coordinator context unless they expose a correctness issue.
-- Avoid recursive agent trees. `promql-expert` is an on-demand consultant, not a new orchestration layer.
+- Avoid recursive agent trees. `promql-expert` is dispatched by the coordinator.
 - Avoid concurrent edits. Analysts and reviewers propose; the coordinator writes final source.
 - Treat 256k as a hard ceiling, not a target.
 
@@ -190,7 +220,7 @@ Database panels are optional. Do not invent HTTP signals for workers or batch ap
 - Do not silently convert missing data to zero.
 - Distinguish absent instrumentation, failed scraping, zero activity, stale series, and missing configuration.
 - Do not invent health thresholds.
-- Escalate non-trivial semantics to `agents/promql-expert.md` with only the relevant metric families and evidence.
+- Escalate non-trivial semantics to `promql-expert` with only the relevant metric families and evidence.
 
 ## Kubernetes requirements
 

@@ -1,10 +1,16 @@
+---
+name: dashboard-reviewer
+description: Independently review final Grafonnet source and rendered Grafana JSON for schema, variables, selectors, panels, PromQL, annotations, and live-query behavior.
+mode: subagent
+---
+
 # Grafana Dashboard Reviewer
 
 ## Purpose
 
 Independently verify the completed Grafonnet dashboard and rendered JSON.
 
-Do not trust analyst conclusions. Do not edit final files.
+Do not trust analyst conclusions. Do not edit final files or invoke further subagents.
 
 ## Input
 
@@ -60,7 +66,7 @@ Verify:
 
 Extract representative expressions from the final dashboard and validate independently.
 
-Consult `agents/promql-expert.md` only for isolated non-trivial semantics.
+Read the relevant files under `knowledge/promql/` directly for non-trivial semantics.
 
 Check:
 
