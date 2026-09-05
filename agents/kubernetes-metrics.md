@@ -49,6 +49,7 @@ Evaluate:
 - CPU throttling
 - OOM activity when collected
 - scrape availability when application-scoped target identity is verified
+- container/process start timestamps when useful for restart annotations
 
 Use native Kubernetes metric labels from the shared contract, normally:
 
@@ -68,6 +69,9 @@ Do not reuse application scrape labels on KSM/cAdvisor unless relabeling is veri
 - Missing/zero limits are not numeric capacity.
 - Requests are not ceilings; usage/request may exceed 100%.
 - Do not guess Deployment/StatefulSet/DaemonSet names from pod-name regexes when owner relationships can establish them.
+- When verified scheduler metrics `kube_pod_resource_requests`/`kube_pod_resource_limits` are available, prefer them for pod-level scheduling-resource views. Do not substitute them for per-container KSM metrics because the populations differ.
+
+If `kube_pod_container_state_started` is available, report it as an annotation source candidate for the relevant application containers. Its value is a Unix timestamp gauge; Grafana Prometheus annotations still use returned sample timestamps as event time.
 
 For non-trivial joins, KSM ownership resolution, duplicate-series handling, missing-series semantics, or complex resource ratios, return an isolated consultation request for coordinator dispatch to `promql-expert`. Do not recursively invoke another subagent.
 
@@ -87,15 +91,23 @@ Check:
 ## Output
 
 ```yaml
-- question: <operational question>
-  source: <KSM|KUBELET|SCRAPE|SCHEDULER|RECORDING_RULE>
-  promql: <expression or null>
-  mode: <instant|range|null>
-  unit: <unit>
-  population: <containers/workload represented>
-  match_keys: [<labels>]
-  validation: <PASS|FAIL|UNVERIFIED>
-  limitation: <none or concise issue>
-  promql_expert_required: <true|false>
-  promql_issue: <isolated question and evidence when required>
+candidates:
+  - question: <operational question>
+    source: <KSM|KUBELET|SCRAPE|SCHEDULER|RECORDING_RULE>
+    promql: <expression or null>
+    mode: <instant|range|null>
+    unit: <unit>
+    population: <containers/workload represented>
+    match_keys: [<labels>]
+    validation: <PASS|FAIL|UNVERIFIED>
+    limitation: <none or concise issue>
+    promql_expert_required: <true|false>
+    promql_issue: <isolated question and evidence when required>
+annotation_sources:
+  - metric: <verified Kubernetes start timestamp metric>
+    population: <containers represented>
+    semantics: <what the metric actually represents>
+    validation: <PASS|UNVERIFIED>
 ```
+
+Omit `annotation_sources` when none exists.

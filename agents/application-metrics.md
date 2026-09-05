@@ -54,6 +54,8 @@ Do not invent HTTP panels for workers or batch jobs. Database panels require act
 
 Avoid unbounded dimensions such as raw URL, path, ID, message, trace, or user-controlled label values.
 
+Always surface a verified process/application start timestamp metric such as `process_start_time_seconds` as an annotation source candidate, even when it is not useful as a panel. Report its type, unit, labels, and semantic evidence. Do not assume its numeric timestamp can become a Grafana Prometheus annotation event time.
+
 ## PromQL
 
 Construct straightforward queries when semantics are clear.
@@ -105,16 +107,22 @@ HTTP 200 alone is not a pass.
 Return selected candidates:
 
 ```yaml
-- question: <operational question>
-  source: APP
-  promql: <expression or null>
-  mode: <instant|range|null>
-  unit: <unit>
-  dimensions: [<bounded labels>]
-  validation: <PASS|FAIL|UNVERIFIED>
-  uncertainty: <none or concise issue>
-  promql_expert_required: <true|false>
-  promql_issue: <isolated question and evidence when required>
+candidates:
+  - question: <operational question>
+    source: APP
+    promql: <expression or null>
+    mode: <instant|range|null>
+    unit: <unit>
+    dimensions: [<bounded labels>]
+    validation: <PASS|FAIL|UNVERIFIED>
+    uncertainty: <none or concise issue>
+    promql_expert_required: <true|false>
+    promql_issue: <isolated question and evidence when required>
+annotation_sources:
+  - metric: <verified start timestamp metric>
+    semantics: <what the metric actually represents>
+    labels: [<identity labels>]
+    validation: <PASS|UNVERIFIED>
 ```
 
-Do not return rejected metrics unless rejection exposes a correctness or instrumentation problem.
+Omit `annotation_sources` when none exists. Do not return rejected metrics unless rejection exposes a correctness or instrumentation problem.

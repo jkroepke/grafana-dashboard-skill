@@ -28,9 +28,11 @@ increase(counter[$__range])
 
 For selected-period totals, normally use an instant query evaluated at the dashboard end time. A range query of `increase(counter[$__range])` produces a rolling total at each evaluation point, which answers a different question.
 
-## Extrapolation
+## Sample requirement and extrapolation
 
-`rate()` and `increase()` infer counter change from samples and extrapolate to range boundaries. They do not observe events directly.
+`rate()` and `increase()` need at least two samples in the selected range to calculate a change. A newly observed series with only one sample produces no result for the increase calculation.
+
+Both functions infer counter change from samples and extrapolate to range boundaries. They do not observe events directly and can return non-integer increases for integer counters.
 
 Do not claim exact event counts when scrape gaps, sparse samples, or series lifecycle make that unknowable.
 

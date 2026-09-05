@@ -26,7 +26,7 @@ They are exposed by repository symlinks for:
 - OpenCode: `.opencode/agents`
 - Kilo: `.kilo/agents`
 - Pi: `.pi/agents`
-- shared agent discovery: `.agents/agents`
+- shared compatibility: `.agents/agents`
 
 Invoke specialists by agent ID, not by file path:
 
@@ -36,11 +36,13 @@ Invoke specialists by agent ID, not by file path:
 - `panel-expert`
 - `dashboard-reviewer`
 
-The skill is exposed through `.agents/skills/grafana-dashboard`, which is supported by OpenCode, Pi, and Kilo.
+The skill is exposed through `.agents/skills/grafana-dashboard`, which is discovered by OpenCode, Pi, and Kilo.
 
 When Pi uses a subagent extension with an agent-scope option, enable project agents (`project` or `both`); user-only scope does not discover `.pi/agents`.
 
-Do not duplicate agent definitions for individual runtimes. Keep runtime-specific frontmatter out of shared agent files unless all supported runtimes accept it.
+The shared agent frontmatter intentionally contains `name`, `description`, and `mode: subagent`. Pi uses `name` and `description` and ignores unknown fields; OpenCode and Kilo use `mode`.
+
+Do not duplicate agent definitions for individual runtimes.
 
 ## Scope
 
@@ -87,7 +89,7 @@ Every dashboard has these variables in dependency order:
 
 Use `$datasource` for every Prometheus target, variable query, and annotation. Never embed a discovered datasource UID.
 
-Application metrics use the scrape-time labels:
+Application metrics use the target-environment scrape labels:
 
 ```promql
 <metric>{kubernetes_namespace="$namespace",kubernetes_pod_name=~"${pod:regex}"}
@@ -120,7 +122,7 @@ Give it only:
 - shared contract
 - read-only query access instructions when available
 
-It returns selected operational questions, straightforward scoped PromQL, units, retained labels, live-validation results, unresolved semantics, and isolated PromQL consultation requests when needed.
+It returns selected operational questions, straightforward scoped PromQL, units, retained labels, live-validation results, unresolved semantics, start-timestamp annotation sources, and isolated PromQL consultation requests when needed.
 
 ### 2. Kubernetes analysis
 
@@ -133,7 +135,7 @@ Give it only:
 - shared contract
 - read-only query access instructions when available
 
-It returns health/resource questions, straightforward scoped PromQL, matching keys, container populations, live-validation results, availability limits, and isolated PromQL consultation requests when needed.
+It returns health/resource questions, straightforward scoped PromQL, matching keys, container populations, live-validation results, availability limits, optional Kubernetes start-timestamp annotation sources, and isolated PromQL consultation requests when needed.
 
 Run application and Kubernetes analysis concurrently when the runtime can do so without duplicating large inputs.
 
@@ -170,6 +172,8 @@ Read local Grafana knowledge only as needed:
 - `knowledge/grafana/layout-v2.md`
 - `knowledge/grafana/variables.md`
 - `knowledge/grafana/annotations.md`
+
+When a verified `process_start_time_seconds`, `kube_pod_container_state_started`, or semantically equivalent start-timestamp metric exists for the application, add a Prometheus annotation when it can be expressed as sparse event-like results without flooding. Prometheus annotation event time is the returned sample timestamp, not the metric value. Label it as an observed restart/start event and document coverage; do not claim exact process-start time from the gauge value.
 
 ### 6. Independent review
 
@@ -217,6 +221,7 @@ Database panels are optional. Do not invent HTTP signals for workers or batch ap
 - Apply `rate()` or `increase()` to individual counters before aggregation.
 - Use `$__rate_interval` for counter rates.
 - Use `$__range` for selected-period totals when that is the intended question.
+- Remember that `rate()` and `increase()` need enough samples to calculate a change; a newly observed series with only one sample produces no useful increase.
 - Do not silently convert missing data to zero.
 - Distinguish absent instrumentation, failed scraping, zero activity, stale series, and missing configuration.
 - Do not invent health thresholds.
@@ -231,12 +236,14 @@ Read `knowledge/kubernetes/metrics.md` when Kubernetes context is used.
 - Match identical container populations before comparing usage with requests or limits.
 - Do not interpret missing or zero limits as numeric capacity.
 - Do not guess workload names from pod-name regexes when owner relationships are available.
+- Prefer verified scheduler pod resource metrics for pod-level scheduling capacity when available; retain KSM container metrics for per-container comparisons.
 
 ## Grafana and Grafonnet requirements
 
 - Prefer built-in visualizations.
-- For V2, prefer AutoGrid for similarly sized panels and custom grid only for deliberate size differences.
-- Use tabs only when each tab contains enough useful content.
+- For V2, use the actual layout kinds supported by the pinned schema: `AutoGridLayout`, `GridLayout`, `RowsLayout`, and `TabsLayout`.
+- Prefer `AutoGridLayout` for similarly sized panels and `GridLayout` only for deliberate size/position differences.
+- Use tabs or rows only when each section contains enough useful content.
 - Inspect pinned generated Grafonnet methods when uncertain; do not guess method or schema shapes.
 - Preserve dependency pins.
 - Keep code-managed dashboards non-editable unless the repository explicitly requires UI editing.
@@ -255,6 +262,8 @@ dashboard-linter lint --strict --config dashboards/.lint /tmp/application-dashbo
 `jq empty` checks JSON syntax only, not Grafana schema correctness.
 
 When read-only datasource access is available, test representative application, Kubernetes, variable, and annotation queries with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics.
+
+For Prometheus annotations, verify that the query returns only event-like points. Every returned datapoint becomes a marker, so continuous timestamp gauges or overlapping change windows can flood or duplicate annotations.
 
 Test one pod, multiple pods, and All where supported.
 

@@ -1,47 +1,71 @@
-# Grafana process-start and restart annotations
+# Grafana Prometheus process-start and restart annotations
 
-When a verified process/application start timestamp metric exists, prefer an event annotation based on that timestamp.
+Use a verified process/container start timestamp metric when available, such as application `process_start_time_seconds` or KSM `kube_pod_container_state_started`.
 
-Confirm metric unit and meaning from local metadata. Do not use an unrelated timestamp.
+Confirm metric type, unit, labels, and meaning from local metadata or live data. Do not use an unrelated timestamp metric.
 
-## Preferred behavior
+## Prometheus annotation time semantics
 
-Where supported by the pinned Grafana/Prometheus plugin, map the metric value (Unix seconds) to event time.
+Grafana executes Prometheus annotation expressions as range queries over the dashboard time range.
 
-- query across dashboard period
-- retain pod/process identity
-- verify repeated scrapes of the same timestamp produce one event marker
-- verify seconds/milliseconds conversion
-- use `$datasource` and the same application/cluster selectors as panels
+Every returned datapoint becomes an annotation marker. The marker time is the returned sample timestamp. The numeric metric value is not used as the annotation event timestamp.
 
-Label this event `Process started`. A process-start timestamp does not prove container restart, pod replacement, or rollout cause.
+Therefore this is wrong for a continuously scraped timestamp gauge:
 
-## Fallback: changes within same series
+```promql
+process_start_time_seconds{...}
+```
 
-If timestamp-value mapping is unavailable:
+It returns a point at every evaluation step and floods the dashboard. A Unix timestamp stored in the sample value does not move those markers to that Unix timestamp.
+
+## Same-label restart observation
+
+For a start timestamp gauge that changes when the process restarts while the complete label set stays the same, use an event-like expression:
 
 ```promql
 changes(process_start_time_seconds{
   kubernetes_namespace="$namespace",
   kubernetes_pod_name=~"${pod:regex}"
-}[<verified-short-window>]) > 0
+}[<window>]) > 0
 ```
 
-Add fixed application/cluster selectors.
+Add verified fixed application/cluster selectors.
 
-This detects value changes only within the same complete label set. It does not detect a replacement pod/new label set.
+For KSM, use the native label contract and select only the relevant application container population:
 
-Label the fallback `Observed process restart` and document coverage.
+```promql
+changes(kube_pod_container_state_started{
+  namespace="$namespace",
+  pod=~"${pod:regex}",
+  container=~"<verified-app-containers>"
+}[<window>]) > 0
+```
 
-Choose the window from scrape interval and query step. Rolling windows can create duplicate markers.
+Choose `<window>` from the scrape interval and annotation query step so it contains enough samples to observe a change. Validate duplicate behavior. Overlapping windows can return the same change at multiple evaluation points; increase the annotation Min step or change the window when needed.
 
-## Validation cases
+Label this `Observed process restart` or `Observed container restart`. The marker indicates when monitoring observed the change, not the exact Unix timestamp stored in the gauge.
+
+## New pod or new label set
+
+`changes()` needs multiple samples in the same series. It does not detect the initial appearance of a replacement pod/new label set.
+
+Do not claim complete rollout or pod-replacement coverage from `changes()` alone.
+
+A presence-edge expression may be used only when its semantics and duplicate behavior are validated against the local scrape interval and staleness behavior. Otherwise omit first-appearance markers rather than flooding the dashboard.
+
+## Better event sources
+
+Prefer a dedicated event-like metric or another datasource that carries the real event timestamp when one exists. Prometheus timestamp gauges are useful evidence but do not let the Prometheus annotation datasource remap sample values into event time.
+
+## Validation
 
 When history exists, test:
 
-- same-label process restart
+- same-label process/container restart
 - replacement pod/new label set
-- repeated unchanged timestamp scrapes
+- unchanged timestamp gauge
+- annotation query step and lookback window
+- duplicate markers
 - dashboard range filtering
 - selected pod and All behavior
 

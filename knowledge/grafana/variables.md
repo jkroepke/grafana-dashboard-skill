@@ -10,7 +10,7 @@ Create in this order:
 | `namespace` | query values of `kubernetes_namespace` scoped to the application | single, `multi=false`, `includeAll=false` |
 | `pod` | query values of `kubernetes_pod_name` scoped to application and namespace | multi, `includeAll=true`, empty custom All value |
 
-Use `$datasource` for every Prometheus panel target, variable query, and annotation.
+Restrict `datasource` to Prometheus datasources. Use `$datasource` for every Prometheus panel target, variable query, and annotation.
 
 Never embed a discovered datasource UID.
 
@@ -35,11 +35,13 @@ Single-value variable:
 label="$namespace"
 ```
 
-Multi/All variable:
+Multi-value or All variable:
 
 ```promql
 label=~"${pod:regex}"
 ```
+
+Grafana's `regex` interpolation escapes individual values and joins multi-selections as a regex expression. Use `=~`, not `=`, for multi/All variables.
 
 Use `${name:text}` for human-facing text.
 
@@ -59,10 +61,12 @@ Keep dependency chains shallow and acyclic. Scope child option queries by every 
 
 ## All
 
-Enable All only with a bounded meaning. Empty custom All value expands enumerated values. Do not replace this with `.*` unless every consumer independently enforces application scope.
+Enable All only with a bounded meaning. With an empty custom All value, Grafana expands the scoped option values rather than substituting a custom wildcard. Keep the option query application-scoped.
+
+Do not replace the empty custom All value with `.*` unless every consumer independently enforces application scope.
 
 ## Refresh
 
 Refresh on dashboard load for time-independent option queries. Use time-range refresh only when the option query actually depends on dashboard time.
 
-Linked child variables must refresh when parents change according to the pinned Grafana behavior.
+Child variable queries must explicitly reference their parent variables so Grafana can refresh them when parent selections change.

@@ -28,6 +28,10 @@ Use absence functions for detecting missing series, not for inventing a numeric 
 
 Ensure selectors identify the intended application; datasource-wide absence checks can be misleading.
 
+## `present_over_time()`
+
+Use `present_over_time(metric[window])` when the question is whether each matching label set had at least one sample in the window. It returns presence information for the original label sets; it does not prove successful scraping for every point in the window and is not a generic zero-fill mechanism.
+
 ## Staleness
 
 A series that stops being scraped is not equivalent to a zero. Preserve this distinction in dashboard queries and panels.

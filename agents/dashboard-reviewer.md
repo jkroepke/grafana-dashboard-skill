@@ -34,7 +34,7 @@ Verify:
 - existing helpers and dependency pins are preserved
 - generated JSON parses
 - target schema is correct
-- V2 layout references resolve
+- V2 layout references resolve to existing elements
 - panel IDs are unique where applicable
 
 ## Variable and selector checks
@@ -46,7 +46,7 @@ Verify:
 - `pod` is multi-value with bounded All behavior
 - `$datasource` is used for all Prometheus consumers
 - no discovered datasource UID is embedded
-- application queries use the application label contract
+- application queries use the target-environment application label contract
 - Kubernetes queries use the Kubernetes label contract
 - fixed application/cluster selectors are applied consistently
 
@@ -59,7 +59,7 @@ Verify:
 - units and legends are meaningful
 - titles are factual
 - thresholds are externally justified
-- V2 AutoGrid/custom grid/tabs are used intentionally
+- V2 `AutoGridLayout`, `GridLayout`, `RowsLayout`, and `TabsLayout` are used intentionally
 - missing data is not presented as healthy or zero without semantic evidence
 
 ## PromQL checks
@@ -84,7 +84,16 @@ HTTP success alone is not a pass.
 
 ## Annotation checks
 
-When annotations exist, verify query semantics, datasource, selectors, event-time behavior, duplicate markers, and limitations.
+When Prometheus annotations exist, verify:
+
+- `$datasource` and selectors are correct
+- the query returns sparse event-like points, not a continuous gauge
+- returned sample timestamp is treated as annotation event time; metric value is not assumed to control event time
+- zero-valued results are filtered when they are not events
+- overlapping range windows do not create misleading duplicate markers
+- same-label restart/change behavior is tested
+- new pod/new label-set coverage is stated rather than implied
+- titles describe an observed start/restart when exact event time is unavailable
 
 ## Output
 

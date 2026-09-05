@@ -26,9 +26,13 @@ histogram_quantile(
 
 Only keep bounded route templates, never unbounded raw paths.
 
-## Native histogram quantile
+## Native histograms
 
-Use native-histogram expressions only when native samples are verified in the datasource:
+Use native-histogram expressions only when native histogram samples are verified in the datasource and the pinned Prometheus version supports the required functions.
+
+Native histograms are stable in current Prometheus releases, but ingestion can still be disabled. A metric name alone or a text exposition dump does not prove that Prometheus stored native histogram samples.
+
+Quantile:
 
 ```promql
 histogram_quantile(
@@ -39,11 +43,29 @@ histogram_quantile(
 )
 ```
 
-Do not invent `_bucket` series for native histograms. A text exposition dump alone may not establish the representation stored by Prometheus.
+For grouped native-histogram quantiles, keep the intended grouping labels in `sum by (...)`; no `le` label is required.
 
-## Mean
+Mean when `histogram_avg()` is available:
 
-Classic histogram mean:
+```promql
+histogram_avg(
+  sum(rate(http_request_duration_seconds{...}[$__rate_interval]))
+)
+```
+
+Equivalent native-histogram form:
+
+```promql
+histogram_sum(sum(rate(http_request_duration_seconds{...}[$__rate_interval])))
+/
+histogram_count(sum(rate(http_request_duration_seconds{...}[$__rate_interval])))
+```
+
+Do not invent `_bucket` series for native histograms.
+
+A range containing a mix of float and native-histogram samples can cause `rate()`/`increase()` results to be omitted with query warnings. Inspect warnings during live validation.
+
+## Classic histogram mean
 
 ```promql
 sum(rate(h_sum{...}[$__rate_interval]))

@@ -8,19 +8,24 @@ Use only metric families available locally or documented by pinned/local sources
 | --- | --- | --- |
 | CPU usage | `rate(container_cpu_usage_seconds_total[$__rate_interval])` | CPU cores |
 | Memory | `container_memory_working_set_bytes` | bytes; working set, not exact OOM headroom |
-| Requests | `kube_pod_container_resource_requests` | CPU core or memory byte according to resource/unit labels |
-| Limits | `kube_pod_container_resource_limits` | CPU core or memory byte according to resource/unit labels |
+| Container requests | `kube_pod_container_resource_requests` | CPU core or memory byte according to resource/unit labels |
+| Container limits | `kube_pod_container_resource_limits` | CPU core or memory byte according to resource/unit labels |
+| Pod scheduling requests | `kube_pod_resource_requests` from kube-scheduler when exposed | effective pod-level scheduling request; verify resource/unit labels |
+| Pod scheduling limits | `kube_pod_resource_limits` from kube-scheduler when exposed | effective pod-level scheduling limit; verify resource/unit labels |
 | Readiness | `kube_pod_status_ready{condition="true"}` | ready/not-ready state |
 | Restarts | `increase(kube_pod_container_status_restarts_total[<window>])` | restart count over stated window |
+| Container start time | `kube_pod_container_state_started` when exposed | Unix timestamp gauge; potential annotation source |
 | CPU throttling | throttled periods / total periods | fraction of periods throttled, not CPU time lost |
 | OOM events | `increase(container_oom_events_total[<window>])` when collected | observed events |
 | Replicas | workload-kind KSM metrics | desired/ready/available workload state |
 
 Verify exact labels and metric versions in the local datasource.
 
+Current kube-state-metrics documentation recommends kube-scheduler `kube_pod_resource_requests` and `kube_pod_resource_limits` for pod-level resource values because they match scheduler semantics more precisely. Use them only when locally exposed. They are pod-level metrics and do not replace KSM container metrics for per-container usage/request/limit comparisons.
+
 ## Labels
 
-Application scrape labels in this environment:
+Application scrape labels in this target environment:
 
 ```text
 kubernetes_namespace
@@ -64,6 +69,12 @@ Usage/request may exceed 100% because requests are scheduling inputs, not ceilin
 Deployment/StatefulSet/DaemonSet replica metrics require the verified workload kind/name. Prefer owner relationships over guessed pod-name regexes.
 
 Workload-wide desired replicas do not change when the dashboard selects a subset of pods; label such panels as workload-wide.
+
+## Start timestamps
+
+`kube_pod_container_state_started`, when available, represents the container start time as a Unix timestamp gauge. Restrict it to the verified application container population before using it for restart annotation logic.
+
+Grafana Prometheus annotations use returned sample timestamps as marker time, not the gauge value. Read `knowledge/grafana/annotations.md` before building an annotation from this metric.
 
 ## Scrape availability
 
