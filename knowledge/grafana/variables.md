@@ -25,6 +25,36 @@ pod:       label_values(<metric>{<fixed-app-selectors>,kubernetes_namespace="$na
 
 Prefer structured Prometheus label-value variable queries when the pinned Grafana/Grafonnet API supports them. `label_values(...)` is Grafana variable syntax, not standalone PromQL.
 
+### Dashboard V2 Prometheus query payload
+
+A Dashboard V2 `QueryVariable` contains a generic `DataQuery`, but its inner `spec` is datasource-plugin-specific. Do not reuse the Prometheus panel-query `expr` field for a variable query.
+
+For the documented Grafana/Grafonnet v13 pin, a classic `label_values(...)` variable query uses:
+
+```json
+{
+  "kind": "QueryVariable",
+  "spec": {
+    "query": {
+      "kind": "DataQuery",
+      "group": "prometheus",
+      "datasource": {
+        "name": "<datasource-variable-reference>"
+      },
+      "spec": {
+        "qryType": 1,
+        "query": "label_values(<metric>{<selectors>}, <label>)",
+        "refId": "PrometheusVariableQueryEditor-VariableQuery"
+      }
+    }
+  }
+}
+```
+
+An `expr`-only variable payload may satisfy the generic Dashboard V2 structure while Grafana's Prometheus variable editor displays an empty query. Validate the plugin-specific payload, not only the outer schema.
+
+For another target or plugin pin, inspect a locally created/exported query variable or the pinned datasource plugin model before changing these fields.
+
 Request/event counters may not exist before first activity. Where required, union discovery with application-scoped `up` or verified KSM membership.
 
 ## Matchers

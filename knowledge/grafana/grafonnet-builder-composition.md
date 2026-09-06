@@ -69,10 +69,20 @@ Do not substitute `dv.spec.withQuery('prometheus')` for `withPluginId('prometheu
 
 ### Namespace query variable
 
-The QueryVariable builder is a standalone collection item. Its nested `spec.query.*` methods are path mixins within that variable.
+The QueryVariable builder is a standalone collection item. Its nested `spec.query.withKind()`, `withGroup(...)`, and datasource methods are path mixins within that variable.
+
+Grafonnet v13 has a generated-path defect in the nested `QueryVariableKind.spec.query.withSpec(...)` method: it emits `query.spec` at the variable root instead of `spec.query.spec`. For this exact pin, manually merge only the plugin-specific `spec` field at the correct path. Keep the generated builders for the surrounding variable, query kind, group, and datasource.
+
+Prometheus query variables use the Prometheus variable-query model. They do not use the panel-query `expr` field.
 
 ```jsonnet
 local qv = d.spec.variables.QueryVariableKind;
+
+local prometheusVariableQuerySpec(query) = {
+  qryType: 1,
+  query: query,
+  refId: 'PrometheusVariableQueryEditor-VariableQuery',
+};
 
 local namespaceVar =
   qv.withKind()
@@ -85,12 +95,18 @@ local namespaceVar =
   + qv.spec.query.withKind()
   + qv.spec.query.withGroup('prometheus')
   + qv.spec.query.datasource.withName('<verified datasource-variable reference>')
-  + qv.spec.query.withSpec({
-      expr: 'label_values(<verified_application_metric>, kubernetes_namespace)',
-    });
+  + {
+      spec+: {
+        query+: {
+          spec: prometheusVariableQuerySpec(
+            'label_values(<verified_application_metric>, kubernetes_namespace)'
+          ),
+        },
+      },
+    };
 ```
 
-Do not create a `query` local from `qv.spec.query.*` and then feed it into `qv.spec.withQuery(query)`. The nested builders already write to `spec.query`.
+Do not use `qv.spec.query.withSpec(...)` on the documented v13 pin. Do not feed a nested query fragment into `qv.spec.withQuery(...)`.
 
 ### Pod query variable
 
@@ -107,9 +123,15 @@ local podVar =
   + qv.spec.query.withKind()
   + qv.spec.query.withGroup('prometheus')
   + qv.spec.query.datasource.withName('<verified datasource-variable reference>')
-  + qv.spec.query.withSpec({
-      expr: 'label_values(<verified_application_metric>{kubernetes_namespace="$namespace"}, kubernetes_pod_name)',
-    });
+  + {
+      spec+: {
+        query+: {
+          spec: prometheusVariableQuerySpec(
+            'label_values(<verified_application_metric>{kubernetes_namespace="$namespace"}, kubernetes_pod_name)'
+          ),
+        },
+      },
+    };
 ```
 
 Keep `namespace` before `pod` in the dashboard variable list:
@@ -166,7 +188,9 @@ d.spec.withLayout(layout)  // WRONG for these v13 path mixins
 
 ### Annotation query
 
-`d.spec.annotations` is a standalone annotation-item builder. Compose its nested query mixins directly into the annotation, then pass the complete annotation to `d.spec.withAnnotations(...)`.
+`d.spec.annotations` is a standalone annotation-item builder. Compose its nested kind, group, and datasource mixins directly into the annotation, then pass the complete annotation to `d.spec.withAnnotations(...)`.
+
+The documented v13 pin has the same generated-path defect in `annotation.spec.query.withSpec(...)`. Manually merge only the annotation query's plugin-specific `spec` field. Unlike Prometheus variable queries, Prometheus annotation queries use the normal query model with `expr`.
 
 ```jsonnet
 local annotation = d.spec.annotations;
@@ -180,14 +204,20 @@ local restartAnnotation =
   + annotation.spec.query.withKind()
   + annotation.spec.query.withGroup('prometheus')
   + annotation.spec.query.datasource.withName('<verified datasource-variable reference>')
-  + annotation.spec.query.withSpec({
-      expr: 'changes(process_start_time_seconds{kubernetes_namespace="$namespace",kubernetes_pod_name=~"${pod:regex}"}[<validated-window>]) > 0',
-    });
+  + {
+      spec+: {
+        query+: {
+          spec: {
+            expr: 'changes(process_start_time_seconds{kubernetes_namespace="$namespace",kubernetes_pod_name=~"${pod:regex}"}[<validated-window>]) > 0',
+          },
+        },
+      },
+    };
 
 d.spec.withAnnotations([restartAnnotation])
 ```
 
-Do not create a query fragment from `annotation.spec.query.*` and feed that fragment back into `annotation.spec.withQuery(...)`.
+Do not use `annotation.spec.query.withSpec(...)` on the documented v13 pin. Do not feed a nested query fragment into `annotation.spec.withQuery(...)`.
 
 ### Allowed raw-object exception: V2 panel elements
 
@@ -252,6 +282,12 @@ local qv = d.spec.variables.QueryVariableKind;
 local auto = d.spec.layout.AutoGridLayoutKind;
 local item = auto.spec.items;
 
+local prometheusVariableQuerySpec(query) = {
+  qryType: 1,
+  query: query,
+  refId: 'PrometheusVariableQueryEditor-VariableQuery',
+};
+
 local datasourceVar =
   dv.withKind()
   + dv.spec.withName('datasource')
@@ -266,10 +302,11 @@ local namespaceVar =
   + qv.spec.withLabel('Namespace')
   + qv.spec.withIncludeAll(false)
   + qv.spec.withMulti(false)
+  + qv.spec.withRefresh('onDashboardLoad')
   + qv.spec.query.withKind()
   + qv.spec.query.withGroup('prometheus')
   + qv.spec.query.datasource.withName('<verified datasource-variable reference>')
-  + qv.spec.query.withSpec({ expr: '<namespace query>' });
+  + { spec+: { query+: { spec: prometheusVariableQuerySpec('<namespace query>') } } };
 
 local podVar =
   qv.withKind()
@@ -278,10 +315,11 @@ local podVar =
   + qv.spec.withIncludeAll(true)
   + qv.spec.withAllValue('')
   + qv.spec.withMulti(true)
+  + qv.spec.withRefresh('onDashboardLoad')
   + qv.spec.query.withKind()
   + qv.spec.query.withGroup('prometheus')
   + qv.spec.query.datasource.withName('<verified datasource-variable reference>')
-  + qv.spec.query.withSpec({ expr: '<pod query>' });
+  + { spec+: { query+: { spec: prometheusVariableQuerySpec('<pod query>') } } };
 
 local elementNames = ['overview'];
 local elements = {
@@ -405,5 +443,17 @@ For AutoGrid, require:
 ```
 
 There must be no extra `layout.spec.layout`, `layout.AutoGridLayoutKind`, `query.spec.query`, or other duplicate wrapper introduced by builder misuse.
+
+For every Prometheus query variable on the documented v13 pin, require this inner shape after rendering:
+
+```json
+{
+  "qryType": 1,
+  "query": "<non-empty variable query>",
+  "refId": "PrometheusVariableQueryEditor-VariableQuery"
+}
+```
+
+Reject an `expr`-only variable query. Structural Dashboard V2 validation is not enough because the datasource-specific `DataQuery.spec` is generic at the dashboard-schema layer.
 
 The reviewer must `FAIL` source that double-wraps generated path mixins, even if Jsonnet renders successfully.

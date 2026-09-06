@@ -215,6 +215,8 @@ Read local Grafana knowledge only as needed:
 
 For Dashboard Schema V2, **MUST read `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md` before writing the source. MUST use the pinned generated Grafonnet builder whenever one exists. Hand-authored equivalents are forbidden unless the local generated API genuinely has no suitable builder or the repository documents a compatibility workaround for the exact pin. Use the canonical v13 recipes before inventing another composition pattern.**
 
+Prometheus query variables use the datasource plugin's variable-query model, not the panel-query model. For the documented Grafonnet v13 pin, use `query`, `qryType`, and the variable-editor `refId` inside `QueryVariable.spec.query.spec`; an `expr`-only payload is invalid for this workflow because Grafana loads it as an empty variable query. The v13 nested `query.withSpec(...)` generator is also mis-rooted; use only the exact compatibility composition documented in `knowledge/grafana/grafonnet-builder-composition.md`.
+
 When a verified process/container start-timestamp metric exists, read `knowledge/grafana/annotations.md`. Add an annotation only when a sparse event-like query validates without misleading duplicates or flooding; never query a continuously scraped timestamp gauge directly as an annotation.
 
 ### 6. Independent review
@@ -349,6 +351,8 @@ Every target-access command MUST follow `knowledge/security/output-redaction.md`
 If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md` before changing source. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Follow the matching branch, capture the full error locally, and use bounded target-side isolation when necessary. Do not disable strict validation or invent union-wrapper fields as a workaround.
 
 When datasource access is available, test representative application, Kubernetes, variable, and annotation queries with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics. Sanitize all surfaced evidence.
+
+For every Dashboard V2 Prometheus `QueryVariable`, inspect the rendered plugin-specific query payload. On the documented v13 pin, require non-empty `spec.query.spec.query`, the expected `qryType`, and the Prometheus variable-editor `refId`. Do not accept `spec.query.spec.expr` as a substitute. Target schema admission alone is insufficient because the generic DataQuery schema does not prove that the Prometheus variable editor can deserialize the plugin payload.
 
 For Prometheus annotations, verify that the query returns only event-like points. Every returned datapoint becomes a marker, so continuous timestamp gauges or overlapping change windows can flood or duplicate annotations.
 

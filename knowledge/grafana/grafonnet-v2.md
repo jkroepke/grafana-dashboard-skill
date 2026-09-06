@@ -19,6 +19,20 @@ For Dashboard Schema V2, generated Grafonnet builders are mandatory when the pin
 
 The reviewer must return `FAIL` when an available generated V2 builder is bypassed without a documented compatibility reason.
 
+### Documented Grafonnet v13 nested query-spec exception
+
+In the documented v13 generated API, both `QueryVariableKind.spec.query.withSpec(...)` and `annotations.spec.query.withSpec(...)` emit `query.spec` at the standalone item's root. The required Dashboard V2 location is `spec.query.spec`.
+
+For this exact pin:
+
+- use generated builders for the variable/annotation, query kind, group, and datasource
+- manually merge only the datasource-specific query `spec` into `{ spec+: { query+: { spec: ... } } }`
+- use the Prometheus variable-query fields `qryType`, `query`, and `refId` for `QueryVariable`
+- use the normal Prometheus query field `expr` for panel and annotation queries
+- inspect the rendered JSON to confirm the final location and payload
+
+This is a documented compatibility exception, not permission to hand-author other generated V2 structures. Read `knowledge/grafana/grafonnet-builder-composition.md` for the complete recipes.
+
 ## Resolve the actual Grafonnet version
 
 The import path may legitimately use the upstream alias:

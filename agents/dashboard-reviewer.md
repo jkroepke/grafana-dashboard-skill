@@ -73,6 +73,8 @@ For every V2 structure in the Jsonnet source:
 
 This is a correctness rule, not a style recommendation. Successful Jsonnet rendering or schema-shaped JSON does not excuse bypassing an available generated builder or composing it at the wrong level.
 
+The documented Grafonnet v13 nested `QueryVariableKind.spec.query.withSpec(...)` and `annotations.spec.query.withSpec(...)` methods are an exact-pin exception: their generated bodies place `query.spec` at the standalone item's root. Accept the manual `{ spec+: { query+: { spec: ... } } }` merge only for that inner plugin-specific field, while requiring generated builders for the surrounding variable/annotation, query kind, group, and datasource. Reject use of those broken nested `withSpec(...)` methods on this pin.
+
 Examples that MUST fail when the pinned builder exists:
 
 ```jsonnet
@@ -199,6 +201,12 @@ Verify:
 - application queries use the target-environment application label contract
 - Kubernetes queries use the Kubernetes label contract
 - fixed application/cluster selectors are applied consistently
+- every rendered Prometheus `QueryVariable.spec.query.spec` uses the target/pinned Prometheus variable-query model rather than a panel-query model
+- for the documented v13 pin, `spec.query.spec.query` is non-empty, `qryType` is the verified label-values query type, and `refId` is `PrometheusVariableQueryEditor-VariableQuery`
+- an `expr`-only Prometheus query-variable payload is `FAIL`, even if Dashboard V2 schema admission succeeds
+- the source uses the documented v13 nested query-spec compatibility merge and the rendered payload remains under `variable.spec.query.spec`
+
+The generic Dashboard V2 `DataQuery.spec` shape does not prove that a datasource plugin can deserialize it. When target/local comparison evidence is available, compare against a query variable created or exported by the pinned Grafana/Prometheus plugin. A variable editor that loads with an empty query is `FAIL`.
 
 ## Panel checks
 
