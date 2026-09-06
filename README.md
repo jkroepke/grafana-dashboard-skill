@@ -1,8 +1,8 @@
 # Grafana Dashboard Skill
 
-Local agent skill for creating or updating Grafonnet dashboards for Kubernetes applications from Prometheus/OpenMetrics metrics.
+Local agent skill for creating, updating, validating, and optionally publishing Grafonnet dashboards for Kubernetes applications from Prometheus/OpenMetrics metrics.
 
-The workflow is designed for an air-gapped agent with a limited context window. Give it file paths and local read-only datasource access instead of pasting large metric dumps or query responses.
+The workflow is designed for an air-gapped agent with a limited context window. Give it file paths and local datasource/API access instead of pasting large metric dumps or query responses.
 
 ## Start a task
 
@@ -15,12 +15,35 @@ Create or update the Grafana dashboard for <application>.
 Metrics dump: <path>
 Kubernetes manifests: <path or none>
 Existing dashboard: <path or none>
-Read-only Grafana/Prometheus access: <local instructions or none>
-
-Do not publish the dashboard.
+Grafana/Prometheus access: <local instructions or none>
+Publish: <yes|no>
+Dashboard namespace: <namespace or default>
+Folder UID: <uid or none>
 ```
 
-Only include paths and constraints relevant to the application. The coordinator delegates metric analysis, difficult PromQL, panel selection, and final review to the repository subagents when the task is substantial.
+For `Publish: yes`, provide writable Grafana dashboard API access. Prometheus datasource access may remain read-only.
+
+The coordinator builds and validates the dashboard first, runs an independent review, and only then publishes it.
+
+## Dashboard V2 publishing
+
+For Dashboard Schema V2, the agent must use the Dashboard resource API instead of the legacy `/api/dashboards/db` endpoint.
+
+API contract source of truth on the target Grafana:
+
+```text
+<GRAFANA_URL>/swagger?api=dashboard.grafana.app-v2
+```
+
+Public reference:
+
+```text
+https://play.grafana.org/swagger?api=dashboard.grafana.app-v2
+```
+
+The target Grafana Swagger wins if it exposes a different supported API version.
+
+Detailed publish rules are in `knowledge/grafana/publishing-v2.md`.
 
 ## Target environment contract
 
