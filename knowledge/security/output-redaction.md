@@ -101,7 +101,7 @@ Keep operational identifiers inside the intended local artifact/API payload when
 - `application metric`
 - `validated query Q1`
 
-When a specialist must communicate a target-identifying query to the coordinator, prefer a neutral scratch-file path or query ID. The coordinator can read/use that local artifact without exposing its contents in visible prose.
+Keep target-identifying query text inside the digest-bound query pack. Specialists communicate only its neutral path, query ID, and digest. The coordinator routes those references and MUST NOT copy, reconstruct, repair, or quote the query text.
 
 Do not include resource names/UIDs in completion output unless the user explicitly asks for a specific identifier and disclosure is allowed by the task's confidentiality requirements.
 

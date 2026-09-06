@@ -2,6 +2,8 @@
 
 Read this file only when the user asks to publish/write the dashboard or when an existing Dashboard V2 resource must be inspected through the Grafana API.
 
+Only the fresh `dashboard-publisher` performs a real write. The coordinator routes the approved artifacts and checks the resulting publish report; it does not interpret Swagger or construct API payloads.
+
 **MUST read `knowledge/security/output-redaction.md` before target access.**
 
 ## API contract
@@ -126,9 +128,10 @@ Publish only after:
 4. Local schema/lint checks available in the repository pass.
 5. Every V2 layout `ElementReference.name` resolves to an exact `spec.elements` key.
 6. Every V2 panel visualization plugin ID is verified.
-7. Representative live queries are validated when datasource access exists.
+7. `promql-reviewer` has approved every query in the exact current query pack, with live validation when datasource access exists.
 8. Confidentiality/output-redaction checks pass.
-9. `dashboard-reviewer` passes or its confirmed findings are fixed.
+9. `dashboard-reviewer` has returned `PASS` for the exact current build/candidate digests. Fixing a finding requires rebuilding and repeating review; the fix alone is not approval.
+10. The exact reviewed candidate has been mechanically promoted and its final-path render is byte-identical to the reviewed render.
 
 ## Verification
 

@@ -50,15 +50,19 @@ Act on a decided diagnostic step instead of narrating it repeatedly.
 
 ## Runtime compatibility
 
-Canonical subagent definitions live in `agents/` and are exposed by the repository symlinks for OpenCode, Kilo, Pi, and shared agent discovery.
+Canonical subagent definitions live in `agents/` and are exposed by the repository symlinks for the primary clients OpenCode and Pi, plus existing compatibility discovery paths.
 
 Invoke specialists by agent ID:
 
 - `application-metrics`
 - `kubernetes-metrics`
-- `promql-expert`
-- `panel-expert`
+- `metrics-reviewer`
+- `dashboard-architect`
+- `promql-builder`
+- `promql-reviewer`
+- `dashboard-builder`
 - `dashboard-reviewer`
+- `dashboard-publisher`
 
 The repository exposes the skill through `.agents/skills/grafana-dashboard`. Keep the runtime symlink layout intact.
 
@@ -76,22 +80,25 @@ Do not duplicate agent definitions for individual runtimes.
 - Preserve the schema of an existing dashboard unless migration is requested.
 - Preserve existing dashboard identity, unrelated panels, repository helpers, and dependency pins.
 - Use the repository dashboard location, or `dashboards/<service>.jsonnet` when none exists.
-- The coordinator owns all final dashboard and shared-helper edits and all real publish operations.
+- `dashboard-builder` owns the single staged dashboard candidate. This workflow version does not stage helper edits, and it never writes the final destination.
+- The coordinator owns dispatch, stage state, digest checks, and mechanical promotion of an approved candidate. A fresh `dashboard-publisher` performs explicitly requested publication. The coordinator MUST NOT reconstruct or manually repair dashboard source, PromQL, or API payloads.
 
 Do not publish before rendering, validation, and independent review are complete.
 
 ## Establish the shared contract
 
-Before delegation, determine from local evidence:
+Before delegation, locate or record proposed facts and evidence paths without performing metric semantics or dashboard construction in the coordinator context:
 
 - application/workload identity
-- relevant containers and sidecars
+- candidate container and sidecar evidence
 - Grafana version and dashboard schema
 - Grafonnet revision
-- cluster scope
+- absolute repository root, final `.jsonnet` path, adjacent candidate path, and source baseline digest
+- shell-free render argv/cwd that emits JSON on stdout and uses one standalone `{source}` argument
+- proposed cluster scope
 - scrape intervals when available
-- available metric sources
-- fixed selectors required to identify the application
+- available metric-source paths/access capabilities
+- proposed fixed-selector references
 - configured datasource access method
 - opaque Grafana Dashboard resource API validation access/wrapper when available
 - existing dashboard resource identity when applicable
@@ -115,6 +122,8 @@ A single exposition dump proves observed samples and exporter/instrumentation la
 
 Treat exposition labels and stored scrape labels separately. In this target environment, `kubernetes_namespace` and `kubernetes_pod_name` are valid stored application labels and may be attached by the scrape pipeline. Their absence from a raw `/metrics` dump does not invalidate the stored-series selector contract.
 
+The run contract contains selector proposals and evidence references only. `metrics-reviewer` owns the approved selector/population contract consumed by every later stage.
+
 ## Required dashboard variables
 
 Every dashboard has these variables in dependency order:
@@ -126,6 +135,8 @@ Every dashboard has these variables in dependency order:
 | `pod` | application-scoped `kubernetes_pod_name` | multi, All enabled with empty custom All value |
 
 Use `$datasource` for every Prometheus target, variable query, and annotation according to the target/pinned Dashboard V2 datasource-reference model. Never embed a discovered datasource UID.
+
+These are query-contract requirements. Only `promql-builder` may instantiate them into final datasource query text.
 
 Application metrics use the target-environment stored labels:
 
@@ -145,114 +156,87 @@ Read `knowledge/grafana/variables.md` when implementing or reviewing variables.
 
 ## Specialist workflow
 
-Use dedicated agents for substantial dashboard creation or updates when isolated subagent contexts are available. Handle small focused edits directly.
+For every dashboard source creation or update, the following isolated-agent pipeline is mandatory. If the runtime cannot provide fresh subagent contexts or a required agent is unavailable, stop with the completed artifact statuses; the coordinator MUST NOT absorb the missing stage. A reviewer-only read-only inspection is allowed only when that reviewer's complete prerequisite artifact chain already exists; otherwise it is an informal inspection and cannot issue a gate status. No source change may bypass staged construction and review.
 
-Do not create recursive subagent trees. The coordinator performs all specialist dispatch.
+Read `knowledge/workflow/artifacts.md` before dispatch. Use its bounded file artifacts, digest-bound approvals, response limits, default budgets, and promotion gate. Do not create recursive subagent trees. The coordinator performs all dispatch and passes only neutral paths, expected digests, the sanitized fields required by the stage, opaque access references, and transitive artifact paths needed by recursive validation. Support artifacts are validator-only unless they are also direct role inputs. Use a fresh agent instance for every author/reviewer boundary.
 
-### 1. Application analysis
+The mandatory state machine is:
 
-Delegate to `application-metrics`.
+```text
+application-metrics + kubernetes-metrics
+  -> metrics-reviewer PASS
+  -> dashboard-architect PASS
+  -> promql-builder PASS
+  -> promql-reviewer PASS
+  -> dashboard-builder candidate PASS
+  -> dashboard-reviewer PASS
+  -> coordinator mechanical promotion
+  -> optional dashboard-publisher PASS when requested
+```
 
-Give it only:
+Any upstream artifact change invalidates every downstream approval derived from its previous digest.
 
-- application metric dump path
-- relevant metric inventory or selected families
-- sanitized shared contract
-- opaque read-only query access instructions when available
+### 1. Metric inventories
 
-It returns selected operational questions, straightforward scoped PromQL, units, retained labels, validation results, unresolved semantics, annotation-source candidates, and isolated PromQL consultation requests when needed.
+Run `application-metrics` and `kubernetes-metrics` concurrently when both evidence sets exist. They inventory observed facts and categorize capabilities as `BUSINESS`, `PROCESS`, or `KUBERNETES` in separate artifacts.
 
-### 2. Kubernetes analysis
+Analysts MUST NOT write final or candidate PromQL, variable queries, annotation queries, operational panel plans, or dashboard source. Large catalogs and raw evidence remain on disk; their visible response contains only stage status, artifact path, and digest.
 
-Delegate to `kubernetes-metrics`.
+### 2. Independent metrics review
 
-Give it only:
+Dispatch `metrics-reviewer` with the inventory artifacts, expected digests, targeted raw evidence, selector facts, existing dashboard source/render paths when updating, and approved-metric budget. It independently verifies types, units, labels, lifecycle, population, availability, cardinality, supported semantics, and dependencies of every existing Prometheus query that will remain.
 
-- workload manifests or verified workload identity
-- relevant container set
-- sanitized shared contract
-- opaque read-only query access instructions when available
+Only its bounded `metrics-contract.json` may supply metrics to downstream stages. It authors no datasource query text. On failure, route evidence defects to the owning analyst; do not repair the contract in the coordinator.
 
-It returns health/resource questions, straightforward scoped PromQL, matching keys, container populations, validation results, availability limits, optional annotation-source candidates, and isolated PromQL consultation requests when needed.
+### 3. Dashboard architecture
 
-Run application and Kubernetes analysis concurrently when the runtime can do so without duplicating large inputs.
+Dispatch `dashboard-architect` with only the approved metrics contract, existing-dashboard constraints, user objective, schema constraints, and declared budgets.
 
-### 3. Difficult PromQL
+It writes operational question IDs, allowed metric IDs, desired result shapes, conceptual panels/groups/layout, priorities, and omissions. It MUST NOT write datasource query text or dashboard source.
 
-For each isolated consultation request, invoke `promql-expert` with only the affected operational question, metric metadata, selectors, scrape timing, candidate expression, and sanitized relevant evidence.
+### 4. Exclusive PromQL construction
 
-Typical triggers:
+Dispatch `promql-builder` with only the approved metrics contract and dashboard plan, existing dashboard source/render paths when updating, relevant targeted evidence, and opaque read-only datasource access. It obtains selector, population, and scrape-timing facts only from the approved metrics contract and its evidence references, never from run-contract proposals.
 
-- sparse or late-created counters
-- resets or staleness
-- zero versus absent
-- histogram calculations
-- joins or vector matching
-- KSM ownership joins
-- subqueries or offset semantics
-- cardinality or query-cost concerns
+`promql-builder` is the only agent allowed to author or change any final Prometheus datasource query text. This includes all panel targets, Prometheus variable queries, and Prometheus annotation queries. Straightforward and difficult queries have the same owner. No analyst, architect, dashboard builder, reviewer, or coordinator may add, repair, normalize, or optimize them.
 
-Do not route straightforward queries through the PromQL expert when their semantics are already established.
+The builder writes a bounded `query-pack.json`. Discovery and validation probes by other roles are evidence only and MUST NOT be copied into dashboard artifacts.
 
-Do not integrate a result marked `REJECT` or `NEEDS_EVIDENCE`. Resolve the missing evidence or omit the panel/query.
+### 5. Independent PromQL review
 
-### 4. Panel plan
+Dispatch a fresh `promql-reviewer` with the exact query pack and digest, its approved inputs, targeted evidence, and opaque read-only datasource access.
 
-After selecting queries, batch operational questions and result shapes to `panel-expert` for a substantial new dashboard or when visualization choice is non-obvious.
+The reviewer validates every query rather than a representative subset. It writes findings but never replacement expressions. A query failure returns to `promql-builder`; any revised query pack requires a new PromQL review.
 
-The panel expert recommends visualization, query mode, unit, legend, sizing, and placement. It does not modify PromQL or dashboard files.
+Do not continue until the review artifact says `PASS` for the exact current query-pack digest. When live access is unavailable, preserve the documented `UNVERIFIED` status rather than inventing a pass.
 
-### 5. Integration
+### 6. Staged dashboard construction
 
-The coordinator integrates only selected queries and builds the dashboard using pinned local Grafonnet APIs.
+Dispatch a fresh `dashboard-builder` with the approved metrics contract, dashboard plan, exact approved query pack and review, pinned local versions, existing source when applicable, repository build commands, and assigned candidate/render/manifest paths.
 
-Read local Grafana knowledge only as needed:
+The builder writes and renders only the staged candidate. It MUST NOT edit the final dashboard path or publish. It copies approved query text byte-for-byte and may not create a new datasource query. If exact integration is impossible, it returns a failure artifact for the owning earlier stage.
 
-- `knowledge/grafana/panel-selection.md`
-- `knowledge/grafana/layout-v2.md`
-- `knowledge/grafana/variables.md`
-- `knowledge/grafana/annotations.md`
+For Dashboard Schema V2, the builder MUST read `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md`, use pinned generated builders whenever they exist, and use only documented exact-pin workarounds. It runs format, exact candidate-render binding, JSON, lint/schema, layout-reference, variable-contract, and query-parity checks before returning `PASS`.
 
-For Dashboard Schema V2, **MUST read `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md` before writing the source. MUST use the pinned generated Grafonnet builder whenever one exists. Hand-authored equivalents are forbidden unless the local generated API genuinely has no suitable builder or the repository documents a compatibility workaround for the exact pin. Use the canonical v13 recipes before inventing another composition pattern.**
+### 7. Independent dashboard review
 
-Prometheus query variables use the datasource plugin's variable-query model, not the panel-query model. For the documented Grafonnet v13 pin, use `query`, `qryType`, and the variable-editor `refId` inside `QueryVariable.spec.query.spec`; an `expr`-only payload is invalid for this workflow because Grafana loads it as an empty variable query. The v13 nested `query.withSpec(...)` generator is also mis-rooted; use only the exact compatibility composition documented in `knowledge/grafana/grafonnet-builder-composition.md`.
+Dispatch a fresh `dashboard-reviewer` with the candidate source, rendered JSON, build manifest, dashboard plan, query pack, query-review artifact, expected digests, pinned versions, and opaque target validation access.
 
-When a verified process/container start-timestamp metric exists, read `knowledge/grafana/annotations.md`. Add an annotation only when a sparse event-like query validates without misleading duplicates or flooding; never query a continuously scraped timestamp gauge directly as an annotation.
+The reviewer checks Grafonnet/source composition, rendered schema, variables, visualization plugins, panels, layout, annotations, and exact integration of every approved query. It does not repeat semantic PromQL ownership and never writes a replacement query or source patch.
 
-### 6. Independent review
+For Dashboard Schema V2, it MUST perform the target-advertised Dashboard resource API dry-run when validation-capable access is configured. A target failure follows `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md`, including the six-probe limit. Dry-run validation is not publication.
 
-After rendering, delegate to `dashboard-reviewer`.
+Route dashboard-source findings to `dashboard-builder`. A finding requiring query changes invalidates query review and returns to `promql-builder`. A worker never approves its own output.
 
-Give the reviewer:
+### 8. Mechanical promotion
 
-- final Jsonnet source
-- rendered JSON
-- sanitized shared contract
-- pinned Grafana/Grafonnet versions
-- relevant raw fixture paths
-- opaque read-only datasource access instructions when available
-- opaque Dashboard resource API validation access/wrapper instructions when available
-- existing dashboard resource identity only when needed for the operation
+Only after every required artifact is `PASS`, the coordinator verifies all current digests and confirms that the final destination still matches its recorded baseline state. It then promotes the exact reviewed candidate mechanically; it MUST NOT recreate or edit its contents.
 
-Never pass literal target endpoints, host/domain details, credentials, or unrelated discovered resource identifiers to the reviewer.
+If the final destination changed concurrently, stop rather than overwrite it. The promotion gate uses atomic no-clobber creation for a new source or atomic exchange/rollback for an existing source, then proves the final-path render is byte-identical to the reviewed render. Candidate source may not use `std.thisFile`. This workflow version does not permit shared-helper edits; block and redesign an atomic candidate-set contract when one is genuinely required.
 
-For Dashboard Schema V2, the reviewer MUST validate the rendered candidate against the real target Grafana with the target-advertised Dashboard resource API dry-run before returning `PASS` when validation-capable API access is configured. Read `knowledge/grafana/grafana-v2-dry-run.md`. For current stable V2 this is `dryRun=All`, not `dryRun=true`, and `fieldValidation=Strict` should be used when advertised by target Swagger.
+### 9. Publish when requested
 
-On any target dry-run failure, the reviewer MUST read `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md`, preserve the complete target error in a local scratch file, and isolate the selected schema branch before recommending a source correction. The coordinator MUST NOT accept a speculative explanation such as an unsupported layout, ambiguous discriminator, Grafana version quirk, or server bug without target-side evidence/minimal reproduction.
-
-The reviewer MUST keep dry-run isolation bounded: one changed candidate per probe, a compact PASS/FAIL ledger, proven facts carried forward, and at most six target-side isolation probes for one validation failure. If unresolved after the budget, return `FAIL` instead of continuing exploratory self-dialogue.
-
-The reviewer MUST also enforce `knowledge/security/output-redaction.md`. Visible target-information leakage is an independent `FAIL`.
-
-The dry-run is validation only and must not be reported as publication. If target Grafana is configured for the task but no validation-capable Dashboard API access is available, the reviewer reports the server-side V2 validation gap rather than silently treating static checks as equivalent.
-
-Do not give the reviewer analyst conclusions or expected findings. A worker must not approve its own output.
-
-Fix confirmed findings in the coordinator context and render/review again when the fix can affect dashboard semantics.
-
-### 7. Publish when requested
-
-Publish only after the dashboard has passed the applicable local validation, target-Grafana dry-run validation, confidentiality review, and independent review.
+Dispatch a fresh `dashboard-publisher`. Publish only after the dashboard has passed the applicable local validation, target-Grafana dry-run validation, confidentiality review, independent review, exact final-path render verification, and mechanical promotion. The publisher may construct API requests and verify the readback, but it MUST NOT change source or query text.
 
 Read:
 
@@ -272,24 +256,27 @@ For stable V2 the resource operations are normally collection create, resource G
 - Never create a duplicate dashboard because an update failed.
 - Never expose target endpoint details, resource identifiers, credentials, or authorization/session material in visible output.
 
-After writing, GET the resource again through the same API version under `namespaces/default` and verify the returned dashboard title, required variables, expected V2 layout, and layout element references. A write response alone is not sufficient publication verification.
+After writing, the publisher GETs the resource again through the same API version under `namespaces/default` and verifies the returned dashboard title, required variables, expected V2 layout, and layout element references. A write response alone is not sufficient publication verification.
 
 ## Context discipline
 
 - Do not give subagents the complete conversation.
 - Do not give subagents the complete `SKILL.md`; their registered agent definition is their role contract.
-- Give each subagent only shared-contract fields and local files needed for its task.
+- Give each subagent only the approved upstream artifact paths/digests, shared-contract fields, and local files needed for its task.
 - Sanitize target-specific context before handoff; use opaque access references.
-- Parse large metric dumps once, then retrieve selected families with metadata and representative label sets.
+- Metric analysts parse large dumps once and write file-backed inventories; the coordinator never imports their contents into conversation.
 - Do not paste complete Grafana frames or API responses into the coordinator context.
-- Store large requests/responses in temporary files and return a path when targeted inspection is needed.
+- Store all substantial stage results and raw requests/responses in files. Agent responses obey the status/path/digest limit in `knowledge/workflow/artifacts.md`.
 - Keep rejected alternatives out of the coordinator context unless they expose a correctness issue.
-- Avoid concurrent edits. Analysts and reviewers propose; the coordinator writes final source.
+- Only `dashboard-builder` writes the staged dashboard candidate. Reviewers never edit; the coordinator only verifies and mechanically promotes that exact approved file.
+- Discovery or review probes may use ad hoc PromQL as private evidence, but only `promql-builder` may create or change query text that enters a dashboard artifact.
+- Every Prometheus datasource query remaining in an updated dashboard, including preserved legacy queries, must be represented in and approved with the exact query pack. Explicitly non-Prometheus consumers remain outside the query pack and must be preserved unchanged by the non-Prometheus fingerprint gate. Adding, changing, or removing one is out of scope for this workflow and returns `BLOCKED` for a separate owner/review contract.
+- Limit query build/review and dashboard build/review correction loops to three revisions each. On exhaustion, stop with the latest bounded failure artifact rather than growing context indefinitely.
 - Treat 256k as a hard ceiling, not a target.
 
 ## Dashboard content priorities
 
-Choose panels by operational question, not by metric count:
+`dashboard-architect` chooses panels by operational question, not by metric count:
 
 1. traffic/work rate, failures, duration, application-specific outcomes
 2. saturation, concurrency, queues, dependency behavior
@@ -300,6 +287,8 @@ Database panels are optional. Do not invent HTTP signals for workers or batch ap
 
 ## PromQL requirements
 
+`promql-builder` applies these rules to every dashboard Prometheus query and `promql-reviewer` verifies them independently:
+
 - Apply `rate()` or `increase()` to individual counters before aggregation.
 - Use `$__rate_interval` for counter rates.
 - Use `$__range` for selected-period totals when that is the intended question.
@@ -307,11 +296,11 @@ Database panels are optional. Do not invent HTTP signals for workers or batch ap
 - Do not silently convert missing data to zero.
 - Distinguish absent instrumentation, failed scraping, zero activity, stale series, and missing configuration.
 - Do not invent health thresholds.
-- Escalate non-trivial semantics to `promql-expert` with only the relevant metric families and evidence.
+- Keep evidence and uncertainty in the query pack; reject a query that cannot be supported rather than delegating authorship or guessing.
 
 ## Kubernetes requirements
 
-Read `knowledge/kubernetes/metrics.md` when Kubernetes context is used.
+The Kubernetes analyst, metrics reviewer, PromQL builder, and PromQL reviewer read `knowledge/kubernetes/metrics.md` when Kubernetes context is used.
 
 - Keep application metric labels separate from native KSM/cAdvisor labels.
 - Exclude cAdvisor `container=""` and `container="POD"` for container resource calculations.
@@ -321,6 +310,8 @@ Read `knowledge/kubernetes/metrics.md` when Kubernetes context is used.
 - Prefer verified scheduler pod resource metrics for pod-level scheduling capacity when available; retain KSM container metrics for per-container comparisons.
 
 ## Grafana and Grafonnet requirements
+
+`dashboard-builder` applies these construction rules and `dashboard-reviewer` verifies them independently:
 
 - Prefer built-in visualizations.
 - For V2, use layout kinds supported by the pinned schema, such as `AutoGridLayout`, `GridLayout`, `RowsLayout`, and `TabsLayout`.
@@ -332,6 +323,8 @@ Read `knowledge/kubernetes/metrics.md` when Kubernetes context is used.
 - Keep code-managed dashboards non-editable unless repository policy explicitly requires UI editing.
 
 ## Local and target validation
+
+Local dashboard construction checks belong to `dashboard-builder`; independent repetition, target admission, and query-integration checks belong to `dashboard-reviewer`. Live PromQL validation belongs to `promql-builder` and `promql-reviewer`.
 
 Prefer repository build commands. When applicable, validate with installed local tools:
 
@@ -350,13 +343,13 @@ Every target-access command MUST follow `knowledge/security/output-redaction.md`
 
 If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md` before changing source. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Follow the matching branch, capture the full error locally, and use bounded target-side isolation when necessary. Do not disable strict validation or invent union-wrapper fields as a workaround.
 
-When datasource access is available, test representative application, Kubernetes, variable, and annotation queries with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics. Sanitize all surfaced evidence.
+When datasource access is available, `promql-reviewer` tests every approved application, Kubernetes, variable, and annotation query with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics. Sanitize all surfaced evidence.
 
 For every Dashboard V2 Prometheus `QueryVariable`, inspect the rendered plugin-specific query payload. On the documented v13 pin, require non-empty `spec.query.spec.query`, the expected `qryType`, and the Prometheus variable-editor `refId`. Do not accept `spec.query.spec.expr` as a substitute. Target schema admission alone is insufficient because the generic DataQuery schema does not prove that the Prometheus variable editor can deserialize the plugin payload.
 
 For Prometheus annotations, verify that the query returns only event-like points. Every returned datapoint becomes a marker, so continuous timestamp gauges or overlapping change windows can flood or duplicate annotations.
 
-Test one pod, multiple pods, and All where supported.
+`promql-reviewer` tests one pod, multiple pods, and All where supported.
 
 If live datasource access is unavailable, mark live-query and annotation validation `UNVERIFIED`; never infer a pass from static inspection alone.
 

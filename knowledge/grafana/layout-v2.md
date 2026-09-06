@@ -100,7 +100,7 @@ Tabs can have section-local behavior in the schema, but keep the required `datas
 - **MUST use the pinned generated layout-item and element-reference builders when they exist; hand-written `{kind: ...}` equivalents are forbidden unless a documented compatibility exception exists**
 - **MUST compose AutoGrid path mixins directly onto the dashboard; do not wrap them again with `spec.withLayout(...)`**
 
-The coordinator owns final layout integration. The panel expert only recommends placement and sizing.
+`dashboard-architect` owns conceptual placement and sizing. `dashboard-builder` owns staged layout integration, and `dashboard-reviewer` independently verifies the rendered layout before the coordinator mechanically promotes the approved candidate.
 
 ## Source
 

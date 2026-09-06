@@ -2,7 +2,7 @@
 
 Local agent skill for creating, updating, validating, and optionally publishing Grafonnet dashboards for Kubernetes applications from Prometheus/OpenMetrics metrics.
 
-The workflow is designed for an air-gapped agent with a limited context window. Give it file paths and local datasource/API access instead of pasting large metric dumps or query responses.
+The workflow is designed for air-gapped DeepSeek V3.7 agents with a 256k context window running through OpenCode or Pi. It uses fresh specialist contexts and bounded file-backed artifacts. Give it file paths and local datasource/API access instead of pasting large metric dumps or query responses.
 
 ## Start a task
 
@@ -17,7 +17,7 @@ Kubernetes manifests: <path or none>
 Existing dashboard: <path or none>
 Grafana/Prometheus access: <opaque local access instructions or none>
 Publish: <yes|no>
-Folder UID: <uid or none>
+Folder placement: <opaque configured reference or none>
 ```
 
 For `Publish: yes`, provide writable Grafana dashboard API access. Prometheus datasource access may remain read-only.
@@ -26,7 +26,18 @@ Do not paste target endpoints, host/domain details, credentials, or unrelated re
 
 The Grafana Dashboard resource namespace is always `default`. Do not provide or derive another API namespace.
 
-The coordinator builds and validates the dashboard first, runs an independent review, and only then publishes it.
+The mandatory pipeline is:
+
+```text
+metric inventories -> metrics review -> dashboard architecture
+  -> PromQL build -> PromQL review
+  -> staged dashboard build -> dashboard review
+  -> mechanical promotion -> optional publisher
+```
+
+`promql-builder` exclusively owns all Prometheus panel, variable, and annotation query text. `dashboard-builder` writes only a staged candidate. The coordinator routes artifact paths and digests, then promotes the exact approved candidate without reconstructing it in the coordinator context. A fresh `dashboard-publisher` performs the optional API write and readback verification.
+
+Canonical agent definitions under `agents/` are exposed to both OpenCode and Pi through the repository discovery symlinks. For Pi subagent extensions with an agent-scope setting, use `project` or `both`.
 
 ## Dashboard V2 publishing
 
