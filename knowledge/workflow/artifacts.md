@@ -248,6 +248,11 @@ Every Prometheus query that will exist in the final dashboard—including preser
 }
 ```
 
+The artifact validator rejects `rate()`, `irate()`, `increase()`, or `resets()`
+when the referenced approved metric is a gauge, info, stateset, or unknown type.
+This is checked from approved metadata and expression structure; a `_total`
+suffix never upgrades a gauge to a counter.
+
 For a Prometheus variable query, `plugin_query_model` is instead exactly:
 
 ```json

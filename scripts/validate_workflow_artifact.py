@@ -78,6 +78,7 @@ STATUSES = {
 ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,63}$")
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+COUNTER_FUNCTION_RE = re.compile(r"\b(?:rate|irate|increase|resets)\s*\(")
 
 
 class ArtifactError(ValueError):
@@ -87,6 +88,41 @@ class ArtifactError(ValueError):
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ArtifactError(message)
+
+
+def counter_function_arguments(expression: str, where: str) -> list[str]:
+    """Return the balanced argument text of counter-only PromQL functions."""
+    arguments: list[str] = []
+    for match in COUNTER_FUNCTION_RE.finditer(expression):
+        start = match.end()
+        depth = 1
+        quoted = False
+        escaped = False
+        index = start
+        while index < len(expression) and depth:
+            char = expression[index]
+            if quoted:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    quoted = False
+            elif char == '"':
+                quoted = True
+            elif char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+            index += 1
+        require(depth == 0, f"{where} has an unbalanced counter-only function")
+        arguments.append(expression[start:index - 1])
+    return arguments
+
+
+def expression_mentions_metric(expression: str, family: str) -> bool:
+    boundary = r"[A-Za-z0-9_:]"
+    return re.search(rf"(?<!{boundary}){re.escape(family)}(?!{boundary})", expression) is not None
 
 
 def strict_object(value: Any, fields: set[str], where: str) -> dict[str, Any]:
@@ -637,7 +673,24 @@ def validate_query_pack(data: dict[str, Any], inputs: dict[str, dict[str, Any]],
                 enum(item["language"], {"PROMQL"}, f"{where}.language")
                 enum(item["mode"], {"RANGE"}, f"{where}.mode")
 
-        text(item["expression"], f"{where}.expression", 4096)
+        expression = text(item["expression"], f"{where}.expression", 4096)
+        counter_arguments = counter_function_arguments(expression, f"{where}.expression")
+        if counter_arguments:
+            counter_compatible = {"counter", "histogram", "summary"}
+            compatible_ids = {
+                metric_id for metric_id in metric_ids
+                if metrics[metric_id]["type"] in counter_compatible
+            }
+            require(
+                compatible_ids,
+                f"{where} uses a counter-only function but no referenced metric has a counter-compatible type",
+            )
+            for metric_id in metric_ids - compatible_ids:
+                family = metrics[metric_id]["family"]
+                require(
+                    not any(expression_mentions_metric(argument, family) for argument in counter_arguments),
+                    f"{where} applies a counter-only function to {metric_id} declared as {metrics[metric_id]['type']}",
+                )
         text(item["datasource_ref"], f"{where}.datasource_ref", 256)
         require(item["datasource_ref"] == "${datasource}",
                 f"{where}.datasource_ref must be ${{datasource}}")

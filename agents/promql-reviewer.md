@@ -31,6 +31,8 @@ Validate all input digests. Independently check:
 - label names, fixed selectors, and application/Kubernetes label contracts
 - aggregation order and output identity
 - counter, reset, sparse-series, stale-series, and no-data behavior
+- every counter-only function consumes a metric whose approved type supports
+  counter semantics; `_total` and other name suffixes are never type evidence
 - histogram calculations
 - vector matching, joins, duplicate series, and populations
 - instant/range mode, range windows, scrape timing, and query cost

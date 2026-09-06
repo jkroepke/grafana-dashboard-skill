@@ -36,6 +36,15 @@ First validate JSON and input digests. Then independently verify each capability
 
 Reject or mark unresolved any invented metric, inferred counter type, unsupported workload identity, guessed label, unsafe cardinality, contradictory population, or semantics not grounded in evidence.
 
+Declared metric type wins over naming convention. A family named
+`http_requests_total` that is declared as `gauge` remains a gauge in the approved
+contract. Do not approve counter semantics from `_total`, HELP text, or a short
+monotonic sample window. If a requested traffic/total calculation requires
+counter behavior, record `TYPE_SEMANTICS_CONFLICT` and reject it or return the
+conflict to the coordinator for an instrumentation fix; do not silently repair
+the exporter in the contract. The metric may be planned only with genuine gauge
+semantics supported by evidence.
+
 Approved identity/dimension labels and every non-null selector-contract label must already occur in the corresponding shortlist evidence. When live review discovers a missing label, route the evidence back to the owning analyst for a revised shortlist; do not introduce it directly in the approved contract.
 
 Select only distinct capabilities with operational value, up to the declared approved-metric budget. Equivalent metric families should not all pass simply because they exist. Preserve rejected IDs with short reasons so later stages cannot rediscover them.

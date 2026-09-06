@@ -31,7 +31,13 @@ Parse each metric family once. Preserve raw dumps on disk and never paste them i
 - cardinality risk
 - uncertainty and limitations
 
-Missing `TYPE` means `unknown`. A numeric sample alone does not prove counter semantics.
+Treat the observed exposition `TYPE` (or equivalent live metadata for the same
+family) as authoritative. Metric names are not type evidence: suffixes such as
+`_total`, `_count`, and `_sum` MUST NOT override a declared type. For example,
+`# TYPE http_requests_total gauge` is recorded as `gauge`, with the naming/type
+contradiction in `limitations`; it is never silently rewritten to `counter`.
+Missing `TYPE` means `unknown`. Numeric samples, monotonic-looking samples, HELP
+text, and names alone do not prove counter semantics.
 
 Keep exposition labels separate from verified stored scrape labels. Stored labels supplied in the run contract may be valid even when absent from a raw exposition dump.
 

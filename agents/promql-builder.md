@@ -37,6 +37,13 @@ Validate input JSON and digests first. For every planned query:
 
 Handle counters, sparse series, resets, histograms, joins, ownership, missing series, cardinality, and query cost directly using the relevant local knowledge. Do not guess when required evidence is absent.
 
+Use the approved `type`, never a metric-name suffix, to decide whether counter
+semantics are available. `rate()`, `irate()`, `increase()`, and `resets()` MUST
+NOT consume an approved gauge, info, stateset, or unknown metric. In particular,
+do not apply them to `http_requests_total` when its approved type is `gauge`, and
+do not substitute `delta()`, `deriv()`, or offset arithmetic to disguise the
+same counter assumption. Return `NEEDS_EVIDENCE` for the type/semantics conflict.
+
 For required variables, author the exact Prometheus variable-query text and record the target/pinned query-model fields such as query type and editor reference. For annotations, author only event-like queries whose sample-time behavior is understood. Every Prometheus datasource query consumes the declared budget.
 
 HTTP success alone is not validation. Record sanitized evidence references for errors/warnings, series count, returned label keys, duplicates, representative values, and one/multiple/All pod behavior where applicable. Keep raw responses on disk.

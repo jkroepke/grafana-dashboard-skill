@@ -290,6 +290,13 @@ Database panels are optional. Do not invent HTTP signals for workers or batch ap
 `promql-builder` applies these rules to every dashboard Prometheus query and `promql-reviewer` verifies them independently:
 
 - Apply `rate()` or `increase()` to individual counters before aggregation.
+- The observed/approved metric type overrides naming convention. A declared
+  gauge remains a gauge even when its name ends in `_total`; never infer counter
+  semantics from `_total`, `_count`, `_sum`, HELP text, numeric values, or a
+  short monotonic sample window.
+- `rate()`, `irate()`, `increase()`, and `resets()` must not consume gauges,
+  info, stateset, or unknown metrics. A name/type contradiction is an
+  instrumentation blocker, not permission to repair the type in PromQL.
 - Use `$__rate_interval` for counter rates.
 - Use `$__range` for selected-period totals when that is the intended question.
 - `rate()` and `increase()` need enough samples to calculate a change; a newly observed series with only one sample produces no useful increase.

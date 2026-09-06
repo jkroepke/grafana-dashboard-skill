@@ -1,5 +1,30 @@
 # PromQL counters
 
+## Type evidence overrides the name
+
+Use the type recorded in the approved metrics contract. Names are conventions,
+not evidence. If the exporter says:
+
+```text
+# TYPE http_requests_total gauge
+http_requests_total 42
+```
+
+then `http_requests_total` is a gauge for this workflow. The `_total` suffix,
+HELP text, a numeric value, or samples that happen to increase do not authorize
+reclassifying it as a counter.
+
+Do not apply `rate()`, `irate()`, `increase()`, or `resets()` to that series.
+Do not use `delta()`, `deriv()`, or offset subtraction as a hidden workaround
+for intended counter behavior: those operations do not supply counter reset and
+lifecycle semantics. Record `TYPE_SEMANTICS_CONFLICT` and route the application
+instrumentation defect back to the coordinator. Fixing the exporter is the
+normal resolution. The metric may still be used as a gauge only when its actual
+gauge meaning supports the planned question.
+
+If `TYPE` is absent, keep the type `unknown`; a counter-like name does not fill
+the evidence gap.
+
 ## Rate before aggregation
 
 Apply counter functions before aggregation so resets are detected per series:

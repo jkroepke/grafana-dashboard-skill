@@ -638,6 +638,47 @@ class WorkflowScriptsTest(unittest.TestCase):
         )
         self.assertIn("datasource_ref must be ${datasource}", result.stderr)
 
+    def test_total_suffix_does_not_override_declared_gauge(self) -> None:
+        app = json.loads(self.paths["application-metrics"].read_text(encoding="utf-8"))
+        source_metric = app["metrics"][0]
+        source_metric["family"] = "http_requests_total"
+        source_metric["members"] = ["http_requests_total"]
+        source_metric["type"] = "gauge"
+        gauge_app = self.write("gauge-application-metrics", app)
+
+        metrics = json.loads(self.paths["metrics-contract"].read_text(encoding="utf-8"))
+        metrics["inputs"]["application-metrics"] = digest(gauge_app)
+        approved = metrics["approved"][0]
+        approved["family"] = "http_requests_total"
+        approved["type"] = "gauge"
+        gauge_metrics = self.write("gauge-metrics-contract", metrics)
+
+        plan = json.loads(self.paths["dashboard-plan"].read_text(encoding="utf-8"))
+        plan["inputs"]["metrics-contract"] = digest(gauge_metrics)
+        gauge_plan = self.write("gauge-dashboard-plan", plan)
+
+        pack = json.loads(self.paths["query-pack"].read_text(encoding="utf-8"))
+        pack["inputs"]["metrics-contract"] = digest(gauge_metrics)
+        pack["inputs"]["dashboard-plan"] = digest(gauge_plan)
+        for query in pack["queries"]:
+            query["expression"] = query["expression"].replace("work_total", "http_requests_total")
+        gauge_pack = self.write("gauge-query-pack", pack)
+
+        result = self.run_tool(
+            VALIDATOR,
+            gauge_pack,
+            "--input",
+            f"run-contract={self.paths['run-contract']}",
+            "--input",
+            f"metrics-contract={gauge_metrics}",
+            "--input",
+            f"dashboard-plan={gauge_plan}",
+            "--support",
+            f"application-metrics={gauge_app}",
+            expected=1,
+        )
+        self.assertIn("counter-only function but no referenced metric has a counter-compatible type", result.stderr)
+
     def test_revision_four_is_rejected(self) -> None:
         plan = json.loads(self.paths["dashboard-plan"].read_text(encoding="utf-8"))
         plan["revision"] = 4
