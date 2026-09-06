@@ -40,7 +40,32 @@ Verify:
 
 For Dashboard Schema V2, review the Grafonnet construction before only inspecting the rendered JSON.
 
-Read `knowledge/grafana/layout-v2.md`. Read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel.
+**MUST read `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/layout-v2.md` for every Dashboard V2 review.** Read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel.
+
+### Mandatory builder enforcement
+
+For every V2 structure in the Jsonnet source:
+
+1. determine whether the pinned local Grafonnet revision provides a generated builder for that structure
+2. if a builder exists, require the source to use it
+3. if the source hand-authors an equivalent object despite an available builder, return `FAIL`
+4. allow raw schema-shaped Jsonnet only when the pinned Grafonnet API genuinely has no suitable builder or the repository documents a compatibility workaround for the exact pin
+5. require evidence from the local vendored generated API for any claimed builder absence
+
+This is a correctness rule, not a style recommendation. Successful Jsonnet rendering or schema-shaped JSON does not excuse bypassing an available generated builder.
+
+Examples that MUST fail when the pinned builder exists:
+
+```jsonnet
+{ kind: 'AutoGridLayoutItem', spec: { ... } }
+{ kind: 'ElementReference', name: n }
+{ kind: 'DatasourceVariable', spec: { ... } }
+{ kind: 'AnnotationQuery', spec: { ... } }
+```
+
+The source must instead use the corresponding generated `g.apps.dashboard.v2` builders.
+
+Do not fail schema-shaped V2 `PanelKind` / `QueryGroup` internals merely because they are raw objects when the pinned Grafonnet version does not expose typed builders for them. Verify their shape against the pinned Dashboard V2 schema instead.
 
 For each V2 panel/layout relationship:
 
@@ -52,7 +77,7 @@ For each V2 panel/layout relationship:
 
 Use the actual methods from the pinned local Grafonnet revision. Upstream method names are examples, not authority for a different pin.
 
-Do not accept hand-authored raw V2 reference objects when the pinned Grafonnet revision provides a typed builder, unless the repository has a documented reason. Do not accept a patch to rendered JSON as the source fix.
+Do not accept a patch to rendered JSON as the source fix.
 
 For every rendered layout `ElementReference`:
 
@@ -64,6 +89,8 @@ For every rendered layout `ElementReference`:
 Grafana's error `Panel with uid <name> not found in the dashboard elements` is misleading wording. Do not infer that `ElementReference.name` must match a panel `uid`. Grafana resolves the reference through `elements[item.spec.element.name]`.
 
 Do not add or require a guessed UID on normal V2 panels. `PanelKind` is `kind: Panel` plus `spec`; `PanelSpec` uses a numeric `id`.
+
+Reject direct `g.panel.*.new(...)` results inside V2 `spec.elements` unless a verified repository helper converts them into the required V2 `PanelKind` structure. Classic panel objects are not V2 panel elements.
 
 If the Grafonnet source appears consistent but the rendered dashboard does not contain matching keys/references, report a Grafonnet builder/composition problem. Inspect mixin usage and the pinned generated API.
 

@@ -4,6 +4,21 @@ Use this file whenever creating or reviewing a Dashboard Schema V2 dashboard wit
 
 This repository targets an air-gapped model. Do not rely on model memory for Grafonnet APIs. The vendored/pinned Grafonnet source is authoritative.
 
+## Hard rule: use builders when available
+
+For Dashboard Schema V2, generated Grafonnet builders are mandatory when the pinned local library provides them.
+
+- **MUST use the pinned generated Grafonnet builder when one exists.**
+- **MUST NOT hand-author an equivalent raw Jsonnet/JSON object just because the schema shape is known.**
+- **MUST inspect the vendored generated API before claiming that no builder exists.**
+- **MUST preserve the repository's pinned Grafonnet version/import convention.**
+- Raw schema-shaped Jsonnet is allowed only when the pinned Grafonnet API genuinely has no suitable builder, or when the repository documents a compatibility workaround for that exact pin.
+- A manual equivalent of an available builder is a correctness failure, not a style preference.
+- Successful Jsonnet rendering does not excuse bypassing an available builder.
+- Do not patch rendered JSON to compensate for incorrect source construction.
+
+The reviewer must return `FAIL` when an available generated V2 builder is bypassed without a documented compatibility reason.
+
 ## Resolve the actual Grafonnet version
 
 The import path may legitimately use the upstream alias:
@@ -59,7 +74,7 @@ For the v13 generated API, `d.new(name, title)` produces the resource envelope w
 
 Do not use `g.dashboard.new(...)` as the root of a Dashboard Schema V2 resource.
 
-## Use generated V2 builders where they exist
+## Generated V2 builders
 
 For Grafonnet v13, `g.apps.dashboard.v2` includes generated builders for the dashboard resource and many V2 structures, including:
 
@@ -77,7 +92,7 @@ For Grafonnet v13, `g.apps.dashboard.v2` includes generated builders for the das
 - typed V2 variable builders under `spec.variables.*`
 - typed annotation builders under `spec.annotations.*`
 
-Use those generated builders instead of manually reimplementing their JSON shape.
+These builders are mandatory when present.
 
 When unsure, inspect the pinned local generated API instead of guessing:
 
@@ -88,9 +103,9 @@ rg -n 'withElements|AutoGridLayoutKind|DatasourceVariableKind|QueryVariableKind|
 
 The local vendored revision wins over examples in this file.
 
-## Important exception: V2 panel elements
+## Allowed exception: V2 panel elements
 
-Do not generalize the previous rule into "every V2 object has a typed builder".
+Do not generalize the builder rule into "every V2 object has a typed builder".
 
 In Grafonnet v13, the generated Dashboard V2 API accepts `spec.withElements(value)` as an object map, but it does not provide a typed `PanelKind`/`QueryGroup` constructor under `g.apps.dashboard.v2`.
 
@@ -215,7 +230,7 @@ local auto = d.spec.layout.AutoGridLayoutKind;
 local item = auto.spec.items;
 ```
 
-A layout item reference should be built from the generated item API:
+A layout item reference must be built from the generated item API when that API exists:
 
 ```jsonnet
 local elementName = 'overview-mean-pages';
@@ -243,13 +258,11 @@ d.new('my-dashboard', 'My Dashboard')
 + auto.spec.withItems([layoutItem])
 ```
 
-Add other dashboard fields through the corresponding generated V2 builders when available.
-
 Do not manually write `{kind: 'AutoGridLayoutItem', ...}` or `{kind: 'ElementReference', ...}` when the pinned generated builder exists.
 
 ## Variables, annotations, and time settings
 
-Prefer the generated V2 builders under:
+MUST use the generated V2 builders under these namespaces when available:
 
 ```text
 d.spec.variables.*
@@ -267,11 +280,12 @@ Before accepting a Schema V2 Grafonnet source:
 
 1. Resolve the actual vendored Grafonnet revision/alias.
 2. Confirm the root uses `g.apps.dashboard.v2` rather than the classic `g.dashboard` API.
-3. Use generated V2 builders for envelope/layout/variables/annotations/time settings when available.
-4. Require every `spec.elements` panel value to render as `kind: "Panel"` with a V2 `spec`.
-5. Reject direct `g.panel.*.new(...)` objects inside V2 `spec.elements` unless a verified conversion helper wraps them.
-6. Require V2 panels to use `data.kind = "QueryGroup"` and `vizConfig.kind = "VizConfig"` where required by the pinned schema.
-7. Require V2 DataQuery plugin identity/datasource fields to use the pinned V2 shape; do not assume classic `{type, uid}` datasource references.
-8. Require every layout `ElementReference.name` to exactly match a key in rendered `spec.elements`.
-9. Render and inspect the resulting JSON; source-level builder use alone is not sufficient.
-10. Validate the rendered resource against the target/pinned Dashboard V2 schema before publishing.
+3. **FAIL if an available generated V2 builder is replaced by a hand-authored equivalent without a documented compatibility reason.**
+4. Use generated V2 builders for envelope/layout/variables/annotations/time settings when available.
+5. Require every `spec.elements` panel value to render as `kind: "Panel"` with a V2 `spec`.
+6. Reject direct `g.panel.*.new(...)` objects inside V2 `spec.elements` unless a verified conversion helper wraps them.
+7. Require V2 panels to use `data.kind = "QueryGroup"` and `vizConfig.kind = "VizConfig"` where required by the pinned schema.
+8. Require V2 DataQuery plugin identity/datasource fields to use the pinned V2 shape; do not assume classic `{type, uid}` datasource references.
+9. Require every layout `ElementReference.name` to exactly match a key in rendered `spec.elements`.
+10. Render and inspect the resulting JSON; source-level builder use alone is not sufficient.
+11. Validate the rendered resource against the target/pinned Dashboard V2 schema before publishing.

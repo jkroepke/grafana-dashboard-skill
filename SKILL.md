@@ -175,6 +175,8 @@ Read local Grafana knowledge only as needed:
 - `knowledge/grafana/variables.md`
 - `knowledge/grafana/annotations.md`
 
+For Dashboard Schema V2, **MUST read `knowledge/grafana/grafonnet-v2.md` before writing the source. MUST use the pinned generated Grafonnet builder whenever one exists. Hand-authored equivalents are forbidden unless the local generated API genuinely has no suitable builder or the repository documents a compatibility workaround for the exact pin.**
+
 When a verified process/container start-timestamp metric exists, read `knowledge/grafana/annotations.md`. Add an annotation only when a sparse event-like query validates without misleading duplicates or flooding; never query a continuously scraped timestamp gauge directly as an annotation.
 
 ### 6. Independent review
@@ -289,6 +291,7 @@ Read `knowledge/kubernetes/metrics.md` when Kubernetes context is used.
 - For V2, use layout kinds supported by the pinned schema, such as `AutoGridLayout`, `GridLayout`, `RowsLayout`, and `TabsLayout`.
 - Prefer `AutoGridLayout` for similarly sized panels and `GridLayout` only for deliberate size/position differences.
 - Use tabs or rows only when each section contains enough useful content.
+- **For Dashboard V2, MUST use generated Grafonnet builders whenever the pinned library provides them; manual equivalents are not acceptable source.**
 - Inspect pinned generated Grafonnet methods when uncertain; do not guess method or schema shapes.
 - Preserve dependency pins.
 - Keep code-managed dashboards non-editable unless repository policy explicitly requires UI editing.
