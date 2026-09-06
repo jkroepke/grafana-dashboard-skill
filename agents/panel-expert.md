@@ -24,10 +24,11 @@ Batch related questions in one request. For each question provide:
 - unit
 - expected cardinality
 - Grafana/schema constraints when relevant
+- verified target/pinned panel plugin inventory when available
 
 Read:
 
-- `knowledge/grafana/panel-selection.md` for visualization choice
+- `knowledge/grafana/panel-selection.md` for visualization choice and V2 visualization identity
 - `knowledge/grafana/layout-v2.md` when layout, tabs, repetition, or sizing is involved
 
 ## Responsibilities
@@ -35,6 +36,7 @@ Read:
 Recommend:
 
 - visualization type
+- verified visualization plugin ID only when evidence is supplied
 - query mode correction only when visualization semantics expose a mismatch
 - unit
 - legend strategy
@@ -44,6 +46,20 @@ Recommend:
 - overview/detail placement
 - repeat strategy when useful
 - transformation only when justified
+
+## Visualization identity
+
+Keep these concepts separate for Dashboard Schema V2:
+
+- an `elements` map key is a descriptive dashboard-local identifier
+- the element `kind` for a normal panel is `Panel`
+- the actual visualization/plugin identity is carried by the panel visualization configuration, normally `spec.vizConfig.group`
+
+Never derive a visualization plugin ID from an element key, panel title, placement name, metric name, or operational question.
+
+A value such as `overview-mean-pages` can be a valid element key. It is not automatically a valid visualization plugin ID.
+
+If the actual plugin ID is not verified from the target Grafana, pinned Grafonnet API, or local plugin schema, return it as unverified/null and let the coordinator resolve it. Do not invent one.
 
 ## Rules
 
@@ -55,12 +71,14 @@ Recommend:
 - Use tables for label-rich diagnostic data, not as the default overview.
 - Use pie charts only for mutually exclusive additive parts of one whole.
 - Do not choose a heatmap merely because a histogram metric exists.
+- Never treat a descriptive panel/element name as a plugin ID.
 
 ## Output
 
 ```yaml
 - question: <id or question>
-  visualization: <type>
+  visualization: <conceptual visualization type>
+  visualization_plugin_id: <verified plugin id or null>
   mode: <instant|range>
   unit: <unit>
   legend: <strategy>

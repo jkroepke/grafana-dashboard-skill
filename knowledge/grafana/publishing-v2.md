@@ -66,6 +66,22 @@ Populate `spec` with the rendered Dashboard Schema V2 spec. Omit the folder anno
 
 If the rendered Jsonnet produces a full resource containing `apiVersion`, `kind`, `metadata`, and `spec`, use its `spec` as the dashboard spec and construct the API request according to the target Swagger. Do not blindly POST a DTO or classic dashboard envelope.
 
+## Visualization plugin validation
+
+Before publishing, validate every V2 panel visualization against the target/pinned Grafana environment.
+
+Keep these fields separate:
+
+- `spec.elements` map key: dashboard-local descriptive identifier; arbitrary names such as `overview-mean-pages` are allowed
+- panel element `kind`: normally `Panel`
+- panel visualization plugin ID: normally `spec.vizConfig.group`
+
+Never copy an element name, title, placement, metric name, or operational question into `vizConfig.group` unless independent target evidence proves a panel plugin with exactly that ID exists.
+
+When target Grafana API access is available, inspect the installed plugin inventory, for example with `GET /api/plugins`, and require every used visualization plugin ID to resolve to an available panel plugin. Otherwise verify it from pinned Grafonnet constructors or local panel plugin schemas for the exact target version.
+
+Do not publish when a visualization plugin ID is unknown or unverified. Dashboard schema validation alone is not proof that the referenced visualization plugin exists.
+
 ## Create versus update
 
 Before publishing, determine whether the resource already exists under `namespaces/default`.
@@ -79,7 +95,7 @@ For an existing dashboard:
 
 For a new dashboard, use the collection create operation under `namespaces/default`, normally `POST`.
 
-Never create a second dashboard merely because an update failed. Report conflicts, authorization failures, and schema-validation errors instead.
+Never create a second dashboard merely because an update failed. Report conflicts, authorization failures, schema-validation errors, and missing panel plugins instead.
 
 ## Authentication
 
@@ -95,8 +111,9 @@ Publish only after:
 2. Dashboard renders successfully.
 3. Rendered JSON parses.
 4. Local schema/lint checks available in the repository pass.
-5. Representative live queries are validated when datasource access exists.
-6. `dashboard-reviewer` passes or its confirmed findings are fixed.
+5. Every V2 panel visualization plugin ID is verified.
+6. Representative live queries are validated when datasource access exists.
+7. `dashboard-reviewer` passes or its confirmed findings are fixed.
 
 ## Verification
 
@@ -108,6 +125,7 @@ After create/update:
 2. Verify the returned resource namespace is `default`.
 3. Verify `metadata.name`, folder annotation when applicable, and `spec.title`.
 4. Verify the expected V2 layout and required variables are present in the returned `spec`.
-5. Report the returned resource name and API version.
+5. Verify the returned panel visualization plugin IDs are the expected verified IDs.
+6. Report the returned resource name and API version.
 
-Do not claim publication succeeded if the follow-up read fails, returns a different resource, or returns a non-default resource namespace.
+Do not claim publication succeeded if the follow-up read fails, returns a different resource, returns a non-default resource namespace, or contains an unverified visualization plugin ID.

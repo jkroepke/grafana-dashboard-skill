@@ -22,6 +22,7 @@ Receive:
 - pinned Grafana/Grafonnet versions
 - relevant raw fixture paths
 - configured read-only datasource access instructions when available
+- target/pinned panel plugin inventory when available
 
 Read only the knowledge files needed for checks being performed.
 
@@ -61,6 +62,24 @@ Verify:
 - thresholds are externally justified
 - V2 `AutoGridLayout`, `GridLayout`, `RowsLayout`, and `TabsLayout` are used intentionally
 - missing data is not presented as healthy or zero without semantic evidence
+
+For Dashboard Schema V2, explicitly distinguish dashboard-local element names from visualization plugin identity:
+
+- `spec.elements` keys may be descriptive arbitrary names
+- a normal panel element has `kind: Panel`
+- its visualization plugin ID is normally `spec.vizConfig.group`
+
+Do not reject a descriptive element key such as `overview-mean-pages` merely because no plugin with that name exists.
+
+Do reject a panel when `spec.vizConfig.group` does not resolve to a verified panel plugin in the target/pinned Grafana environment. Never accept a plugin ID merely because it resembles the element key, title, placement, or operational question.
+
+Verify visualization plugin IDs using, in order:
+
+1. target Grafana installed plugin inventory when API access is available, for example `GET /api/plugins`
+2. pinned generated Grafonnet constructors/local panel plugin schemas
+3. other repository-pinned evidence for the exact target Grafana version
+
+Schema parsing alone is not sufficient evidence that a visualization plugin exists. The reviewer must not return `PASS` while any used visualization plugin ID remains unverified.
 
 ## PromQL checks
 
