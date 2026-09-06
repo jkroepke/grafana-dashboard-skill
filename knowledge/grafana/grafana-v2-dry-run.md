@@ -18,6 +18,7 @@ When target Grafana dashboard API access is configured:
 - the reviewer MUST enable strict field validation when the target advertises it
 - the reviewer MUST NOT return `PASS` if the dry-run request fails
 - the reviewer MUST inspect the dry-run response body, not only the HTTP status
+- on any dry-run failure, the reviewer MUST read `knowledge/grafana/v2-validation-errors.md` before changing or recommending a source change
 - credentials and authorization headers MUST NOT be printed in review output
 
 If the target Swagger exposes no dry-run mechanism, return `FAIL` with the validation gap unless the task explicitly permits server-side validation to remain unverified.
@@ -82,6 +83,8 @@ curl -fsS \
 
 Use the repository's configured authenticated wrapper/mechanism instead of inventing authentication.
 
+When diagnosing a failure, use equivalent options that preserve the complete response body and headers even on an HTTP error. See `knowledge/grafana/v2-validation-errors.md`.
+
 ## Existing dashboard
 
 For an existing dashboard, validate the same operation the publisher would perform.
@@ -119,6 +122,18 @@ Inspect the returned resource and verify at least:
 
 If the server returns warnings, capture and evaluate them. Unknown-field warnings are a review failure even if a non-strict request would otherwise succeed.
 
+## When the dry-run fails
+
+Do not infer a root cause from a single error line.
+
+MUST read `knowledge/grafana/v2-validation-errors.md`, preserve the complete error details, classify the failure layer, and isolate the selected schema branch before recommending a correction.
+
+In particular, Dashboard V2 layout is a CUE disjunction. An AutoGrid payload can report `conflicting values` for `GridLayout`, `RowsLayout`, and `TabsLayout` simply because those alternative branches do not match. Those messages do not prove that multiple layouts are present and do not prove that AutoGrid is unsupported. Find the error from the branch matching the submitted discriminator.
+
+Do not add generated union-arm wrappers such as `AutoGridLayoutKind` to the Dashboard JSON based on OpenAPI/language-binding structure. The Dashboard V2 wire layout remains a flattened `{kind, spec}` object when that is what the target resource API emits/accepts.
+
+If the matching-branch failure is not obvious, run the minimal target-side probe from `knowledge/grafana/v2-validation-errors.md` before changing the production dashboard source.
+
 ## Dry-run catches and does not catch
 
 Dry-run is valuable for:
@@ -144,4 +159,4 @@ Current Grafana server code also skips some write-time checks during dry-run, in
 
 The reviewer may return `PASS` only when all applicable checks pass, including server-side dry-run when target Grafana API access is available/required.
 
-On failure, report the exact Grafana error concisely and point back to the Jsonnet/Grafonnet source correction. Do not patch the rendered JSON as the final fix.
+On failure, report the exact Grafana error concisely and point back to the Jsonnet/Grafonnet source correction. Do not patch the rendered JSON as the final fix. Do not replace unresolved evidence with a speculative server/version explanation.

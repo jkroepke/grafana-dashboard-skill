@@ -10,7 +10,7 @@ mode: subagent
 
 Independently verify the completed Grafonnet dashboard and rendered JSON.
 
-Do not trust analyst conclusions. Do not edit final files or invoke further subagents.
+Do not trust analyst conclusions. Do not edit final files or invoke further subagents. Temporary scratch files and non-persisting diagnostic dry-run requests are allowed when needed to isolate a validation failure.
 
 ## Input
 
@@ -42,7 +42,7 @@ Verify:
 
 For Dashboard Schema V2, review the Grafonnet construction before only inspecting the rendered JSON.
 
-**MUST read `knowledge/grafana/grafonnet-v2.md`, `knowledge/grafana/grafonnet-builder-composition.md`, `knowledge/grafana/layout-v2.md`, and `knowledge/grafana/grafana-v2-dry-run.md` for every Dashboard V2 review.** Read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel.
+**MUST read `knowledge/grafana/grafonnet-v2.md`, `knowledge/grafana/grafonnet-builder-composition.md`, `knowledge/grafana/layout-v2.md`, and `knowledge/grafana/grafana-v2-dry-run.md` for every Dashboard V2 review.** Read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel. **Read `knowledge/grafana/v2-validation-errors.md` whenever target dry-run validation fails.**
 
 ### Mandatory builder enforcement
 
@@ -140,10 +140,19 @@ Rules:
 8. Inspect the returned resource and warnings, not only the status code.
 9. Re-run the exact layout-reference checks against the dry-run response.
 10. Return `FAIL` on any target schema/admission/conversion error, dropped expected structure, warning about unknown fields, or unresolved returned layout reference.
+11. If dry-run fails, preserve the complete response body/details and follow `knowledge/grafana/v2-validation-errors.md` before recommending any source change.
+12. If the error contains CUE `empty disjunction` / multiple `conflicting values`, identify the submitted discriminator and the matching branch. Treat discriminator conflicts from nonmatching branches as branch noise, not as evidence that multiple kinds are present.
+13. Do not infer an unsupported layout, ambiguous discriminator, Grafana version quirk, or server bug from disjunction branch conflicts alone.
+14. Do not add union-arm wrapper fields such as `AutoGridLayoutKind` merely because generated OpenAPI or language bindings expose that internal union property. Validate the target wire representation.
+15. If the selected-branch error remains unclear, run a minimal non-persisting target-side probe and reintroduce fields/items incrementally until the failure is isolated.
 
 A dry-run request MUST NOT persist the dashboard and MUST NOT be reported as publication.
 
+A diagnostic probe may simplify a temporary request, but the final correction MUST be made in Jsonnet/Grafonnet source and rendered again. Do not patch the final rendered JSON.
+
 If target Grafana is configured for the task but validation-capable Dashboard API access is missing, return `FAIL` with `server-side Dashboard V2 dry-run unavailable` rather than silently approving from static checks alone.
+
+If a dry-run remains unresolved after the required isolation, return `FAIL` and state that the root cause is unresolved. Do not replace missing evidence with a plausible-sounding explanation.
 
 Dry-run does not replace live-query validation, plugin validation, or real post-publication GET verification.
 
@@ -241,5 +250,7 @@ FAIL
    Evidence: <concise evidence>
    Required correction: <correction>
 ```
+
+Evidence MUST distinguish the exact target error from interpretation. Never state a speculative version/server theory as established evidence.
 
 Do not repeat checks that passed when findings exist.

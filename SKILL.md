@@ -201,6 +201,8 @@ Give the reviewer:
 
 For Dashboard Schema V2, the reviewer MUST validate the rendered candidate against the real target Grafana with the target-advertised Dashboard resource API dry-run before returning `PASS` when validation-capable API access is configured. Read `knowledge/grafana/grafana-v2-dry-run.md`. For current stable V2 this is `dryRun=All`, not `dryRun=true`, and `fieldValidation=Strict` should be used when advertised by target Swagger.
 
+On any target dry-run failure, the reviewer MUST read `knowledge/grafana/v2-validation-errors.md`, preserve the complete target error, and isolate the selected schema branch before recommending a source correction. The coordinator MUST NOT accept a speculative explanation such as an unsupported layout, ambiguous discriminator, Grafana version quirk, or server bug without target-side evidence/minimal reproduction.
+
 The dry-run is validation only and must not be reported as publication. If target Grafana is configured for the task but no validation-capable Dashboard API access is available, the reviewer reports the server-side V2 validation gap rather than silently treating static checks as equivalent.
 
 Do not give the reviewer analyst conclusions or expected findings. A worker must not approve its own output.
@@ -321,6 +323,8 @@ dashboard-linter lint --strict --config <lint-config> /tmp/dashboard.json
 Use the repository's actual paths and commands when they differ. `jq empty` checks JSON syntax only, not Grafana schema correctness.
 
 For Dashboard Schema V2 with configured target Grafana Dashboard API validation access, server-side dry-run validation is mandatory before review can pass. Use target Swagger, namespace `default`, and `knowledge/grafana/grafana-v2-dry-run.md`. A successful HTTP status alone is insufficient: inspect warnings and the returned resource structure.
+
+If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` before changing source. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Follow the matching branch, capture the full error, and use a minimal target-side probe when necessary. Do not disable strict validation or invent union-wrapper fields as a workaround.
 
 When datasource access is available, test representative application, Kubernetes, variable, and annotation queries with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics.
 
