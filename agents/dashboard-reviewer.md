@@ -38,9 +38,23 @@ Verify:
 - V2 layout references resolve to existing elements
 - panel IDs are unique where applicable
 
-For Dashboard Schema V2, read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel.
+For Dashboard Schema V2, review the Grafonnet construction before only inspecting the rendered JSON.
 
-For every layout `ElementReference`:
+Read `knowledge/grafana/layout-v2.md`. Read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel.
+
+For each V2 panel/layout relationship:
+
+1. identify the dashboard-local element name in the Jsonnet/Grafonnet source
+2. identify how that value becomes the key passed through the pinned dashboard `spec.withElements{,Mixin}` builder
+3. identify how the same value is passed through the pinned layout-item element-reference builder, for example AutoGrid item `spec.element.withName(...)`
+4. prefer a single Jsonnet local reused by both sides instead of duplicated unrelated literals
+5. render and require the resulting `ElementReference.name` to exactly match a key in rendered `spec.elements`
+
+Use the actual methods from the pinned local Grafonnet revision. Upstream method names are examples, not authority for a different pin.
+
+Do not accept hand-authored raw V2 reference objects when the pinned Grafonnet revision provides a typed builder, unless the repository has a documented reason. Do not accept a patch to rendered JSON as the source fix.
+
+For every rendered layout `ElementReference`:
 
 1. read its exact `name`
 2. require an exact key with the same string in `spec.elements`
@@ -50,6 +64,8 @@ For every layout `ElementReference`:
 Grafana's error `Panel with uid <name> not found in the dashboard elements` is misleading wording. Do not infer that `ElementReference.name` must match a panel `uid`. Grafana resolves the reference through `elements[item.spec.element.name]`.
 
 Do not add or require a guessed UID on normal V2 panels. `PanelKind` is `kind: Panel` plus `spec`; `PanelSpec` uses a numeric `id`.
+
+If the Grafonnet source appears consistent but the rendered dashboard does not contain matching keys/references, report a Grafonnet builder/composition problem. Inspect mixin usage and the pinned generated API.
 
 If the rendered dashboard contains the expected element key but the resource read back from Grafana does not, report a publication/envelope/API-version problem instead of changing the reference model.
 
