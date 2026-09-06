@@ -17,6 +17,18 @@ This workflow runs air-gapped with a 256k context limit.
 - Prefer file paths and targeted excerpts over copying large inputs into agent contexts.
 - Leave raw metrics dumps and large query responses on disk.
 
+## Execution discipline
+
+Act on a decided diagnostic step instead of narrating it repeatedly.
+
+- Do not emit repeated self-dialogue such as `Let me ...`, `Wait ...`, `Actually ...`, `I will ...`, or multiple restatements of the same next command.
+- Never state the same intended action twice without new tool/command output between the statements. Execute it; if execution is impossible, report the concrete blocker.
+- One diagnostic step is: hypothesis -> one changed candidate -> one action -> one result -> one recorded fact.
+- Do not rerun an identical request against an identical endpoint unless deterministic reproduction is explicitly needed.
+- Preserve proven PASS/FAIL facts; do not reopen an unchanged hypothesis without new interaction evidence.
+- For Dashboard V2 target-validation failures requiring more than one probe, MUST read `knowledge/grafana/diagnostic-execution.md`. Use its diagnostic ledger and six-probe isolation budget.
+- Prefer direct repository commands and `jq` structural slicing over repeatedly generating throwaway helper scripts.
+
 ## Runtime compatibility
 
 Canonical subagent definitions live in `agents/` and are exposed by the repository symlinks for OpenCode, Kilo, Pi, and shared agent discovery.
@@ -201,7 +213,9 @@ Give the reviewer:
 
 For Dashboard Schema V2, the reviewer MUST validate the rendered candidate against the real target Grafana with the target-advertised Dashboard resource API dry-run before returning `PASS` when validation-capable API access is configured. Read `knowledge/grafana/grafana-v2-dry-run.md`. For current stable V2 this is `dryRun=All`, not `dryRun=true`, and `fieldValidation=Strict` should be used when advertised by target Swagger.
 
-On any target dry-run failure, the reviewer MUST read `knowledge/grafana/v2-validation-errors.md`, preserve the complete target error, and isolate the selected schema branch before recommending a source correction. The coordinator MUST NOT accept a speculative explanation such as an unsupported layout, ambiguous discriminator, Grafana version quirk, or server bug without target-side evidence/minimal reproduction.
+On any target dry-run failure, the reviewer MUST read `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md`, preserve the complete target error, and isolate the selected schema branch before recommending a source correction. The coordinator MUST NOT accept a speculative explanation such as an unsupported layout, ambiguous discriminator, Grafana version quirk, or server bug without target-side evidence/minimal reproduction.
+
+The reviewer MUST keep dry-run isolation bounded: one changed candidate per probe, a compact PASS/FAIL ledger, proven facts carried forward, and at most six target-side isolation probes for one validation failure. If unresolved after the budget, return `FAIL` instead of continuing exploratory self-dialogue.
 
 The dry-run is validation only and must not be reported as publication. If target Grafana is configured for the task but no validation-capable Dashboard API access is available, the reviewer reports the server-side V2 validation gap rather than silently treating static checks as equivalent.
 
@@ -324,7 +338,7 @@ Use the repository's actual paths and commands when they differ. `jq empty` chec
 
 For Dashboard Schema V2 with configured target Grafana Dashboard API validation access, server-side dry-run validation is mandatory before review can pass. Use target Swagger, namespace `default`, and `knowledge/grafana/grafana-v2-dry-run.md`. A successful HTTP status alone is insufficient: inspect warnings and the returned resource structure.
 
-If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` before changing source. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Follow the matching branch, capture the full error, and use a minimal target-side probe when necessary. Do not disable strict validation or invent union-wrapper fields as a workaround.
+If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md` before changing source. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Follow the matching branch, capture the full error, and use bounded target-side isolation when necessary. Do not disable strict validation or invent union-wrapper fields as a workaround.
 
 When datasource access is available, test representative application, Kubernetes, variable, and annotation queries with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics.
 

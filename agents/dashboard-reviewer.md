@@ -42,7 +42,7 @@ Verify:
 
 For Dashboard Schema V2, review the Grafonnet construction before only inspecting the rendered JSON.
 
-**MUST read `knowledge/grafana/grafonnet-v2.md`, `knowledge/grafana/grafonnet-builder-composition.md`, `knowledge/grafana/layout-v2.md`, and `knowledge/grafana/grafana-v2-dry-run.md` for every Dashboard V2 review.** Read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel. **Read `knowledge/grafana/v2-validation-errors.md` whenever target dry-run validation fails.**
+**MUST read `knowledge/grafana/grafonnet-v2.md`, `knowledge/grafana/grafonnet-builder-composition.md`, `knowledge/grafana/layout-v2.md`, and `knowledge/grafana/grafana-v2-dry-run.md` for every Dashboard V2 review.** Read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel. **Read `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md` whenever target dry-run validation fails.**
 
 ### Mandatory builder enforcement
 
@@ -144,7 +144,7 @@ Rules:
 12. If the error contains CUE `empty disjunction` / multiple `conflicting values`, identify the submitted discriminator and the matching branch. Treat discriminator conflicts from nonmatching branches as branch noise, not as evidence that multiple kinds are present.
 13. Do not infer an unsupported layout, ambiguous discriminator, Grafana version quirk, or server bug from disjunction branch conflicts alone.
 14. Do not add union-arm wrapper fields such as `AutoGridLayoutKind` merely because generated OpenAPI or language bindings expose that internal union property. Validate the target wire representation.
-15. If the selected-branch error remains unclear, run a minimal non-persisting target-side probe and reintroduce fields/items incrementally until the failure is isolated.
+15. If the selected-branch error remains unclear, run bounded target-side isolation according to `knowledge/grafana/diagnostic-execution.md`.
 
 A dry-run request MUST NOT persist the dashboard and MUST NOT be reported as publication.
 
@@ -155,6 +155,20 @@ If target Grafana is configured for the task but validation-capable Dashboard AP
 If a dry-run remains unresolved after the required isolation, return `FAIL` and state that the root cause is unresolved. Do not replace missing evidence with a plausible-sounding explanation.
 
 Dry-run does not replace live-query validation, plugin validation, or real post-publication GET verification.
+
+## Diagnostic execution discipline
+
+For any dry-run failure requiring more than one diagnostic action, `knowledge/grafana/diagnostic-execution.md` is mandatory.
+
+- Do not narrate repeated intended actions. Avoid self-dialogue such as `Let me ...`, `Wait ...`, `Actually ...`, or repeated restatements of the next command.
+- One step is: hypothesis -> one changed candidate -> one request -> one result -> one recorded fact.
+- Keep a compact diagnostic ledger. Do not reconstruct prior PASS/FAIL results from prose on every step.
+- A PASS for an exact serialized subtree is a proven fact for that candidate. Do not retest or reopen it unchanged without new interaction evidence.
+- Prefer `jq` slicing of the rendered dashboard over generating throwaway Python scripts for ordinary structural isolation.
+- If a shell/heredoc quoting attempt fails, correct/switch method once and execute. Do not produce repeated planning text around retries.
+- Use at most 6 target-side isolation probes for one validation failure, excluding the initial full failure and final full verification after a source fix.
+- If the budget is exhausted, return `FAIL` with the compact ledger, proven accepted groups, smallest remaining failing scope, and missing evidence.
+- Never rerun the identical request against the identical endpoint unless deterministic reproduction is the explicit purpose.
 
 ## Variable and selector checks
 
