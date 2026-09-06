@@ -12,7 +12,28 @@ A generic schema field may require a schema-checked Jsonnet object when no typed
 
 Current Dashboard Schema V2 separates dashboard elements from layout. Panels live in the dashboard `elements` map and layout items reference those element names.
 
-Validate every layout reference after rendering. Do not assume classic `gridPos` placement applies to V2.
+For a layout reference:
+
+```json
+{
+  "kind": "ElementReference",
+  "name": "overview-mean-pages"
+}
+```
+
+Grafana resolves the panel as:
+
+```text
+spec.elements["overview-mean-pages"]
+```
+
+The `name` must exactly match a key in `spec.elements`. Do not convert this into UID-based lookup and do not add a guessed panel `uid` field. Normal V2 `PanelKind` uses `kind: "Panel"`; `PanelSpec` has a numeric `id`.
+
+Grafana may misleadingly report `Panel with uid <name> not found in the dashboard elements`. The implementation still looks up `elements[item.spec.element.name]`. Treat that error as a missing/mismatched `spec.elements` key.
+
+When that error occurs, read `knowledge/grafana/layout-reference-debugging.md` and inspect the exact stored dashboard resource before changing the model.
+
+Validate every layout reference after rendering and again on the resource returned by Grafana after publication. Do not assume classic `gridPos` placement applies to V2.
 
 V2 supports four layout kinds:
 
@@ -35,6 +56,8 @@ Tabs can have section-local behavior in the schema, but keep the required `datas
 - omit empty sections
 - do not force tabs onto a small dashboard
 - do not duplicate the same panel element into multiple places unless the pinned schema explicitly supports the intended behavior
+- require every `ElementReference.name = X` to have an exact `spec.elements[X]` key
+- never infer element-reference semantics from the word `uid` in Grafana error text
 
 The coordinator owns final layout integration. The panel expert only recommends placement and sizing.
 
@@ -58,5 +81,7 @@ Render with repository commands and check:
 - query modes
 - units
 - annotations
+
+For V2, compare all layout element-reference names with the keys of `spec.elements`. Static schema validity alone is not enough; a schema-valid reference can still name a nonexistent element.
 
 `jq empty` proves JSON syntax only.
