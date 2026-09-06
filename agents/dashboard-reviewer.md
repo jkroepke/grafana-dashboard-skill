@@ -38,6 +38,21 @@ Verify:
 - V2 layout references resolve to existing elements
 - panel IDs are unique where applicable
 
+For Dashboard Schema V2, read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel.
+
+For every layout `ElementReference`:
+
+1. read its exact `name`
+2. require an exact key with the same string in `spec.elements`
+3. treat matching as case-sensitive
+4. fail review if any referenced key is missing
+
+Grafana's error `Panel with uid <name> not found in the dashboard elements` is misleading wording. Do not infer that `ElementReference.name` must match a panel `uid`. Grafana resolves the reference through `elements[item.spec.element.name]`.
+
+Do not add or require a guessed UID on normal V2 panels. `PanelKind` is `kind: Panel` plus `spec`; `PanelSpec` uses a numeric `id`.
+
+If the rendered dashboard contains the expected element key but the resource read back from Grafana does not, report a publication/envelope/API-version problem instead of changing the reference model.
+
 ## Variable and selector checks
 
 Verify:
