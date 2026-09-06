@@ -15,12 +15,14 @@ Create or update the Grafana dashboard for <application>.
 Metrics dump: <path>
 Kubernetes manifests: <path or none>
 Existing dashboard: <path or none>
-Grafana/Prometheus access: <local instructions or none>
+Grafana/Prometheus access: <opaque local access instructions or none>
 Publish: <yes|no>
 Folder UID: <uid or none>
 ```
 
 For `Publish: yes`, provide writable Grafana dashboard API access. Prometheus datasource access may remain read-only.
+
+Do not paste target endpoints, host/domain details, credentials, or unrelated resource identifiers into the task prompt. Use an opaque local wrapper/environment reference. Visible command/output redaction is defined in `knowledge/security/output-redaction.md`.
 
 The Grafana Dashboard resource namespace is always `default`. Do not provide or derive another API namespace.
 
@@ -28,19 +30,9 @@ The coordinator builds and validates the dashboard first, runs an independent re
 
 ## Dashboard V2 publishing
 
-For Dashboard Schema V2, the agent must use the Dashboard resource API instead of the legacy `/api/dashboards/db` endpoint.
+For Dashboard Schema V2, the agent must use the Dashboard resource API instead of the legacy dashboard endpoint.
 
-API contract source of truth on the target Grafana:
-
-```text
-<GRAFANA_URL>/swagger?api=dashboard.grafana.app-v2
-```
-
-Public reference:
-
-```text
-https://play.grafana.org/swagger?api=dashboard.grafana.app-v2
-```
+Use the target Grafana Swagger/OpenAPI schema through the configured opaque target access as the API contract source of truth. Do not print or copy the resolved Swagger endpoint into visible output.
 
 The target Grafana Swagger wins if it exposes a different supported API version. The Dashboard resource namespace remains `default`.
 

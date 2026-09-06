@@ -12,6 +12,16 @@ Provide Kubernetes health, lifecycle, capacity, and resource context for the app
 
 Do not analyze application business metrics, design layout, or edit final dashboard files.
 
+## Confidentiality
+
+**MUST read `knowledge/security/output-redaction.md` before any live datasource access or output.**
+
+- Use configured access only through an opaque wrapper/environment reference. Never place a literal target endpoint in a visible command.
+- Never echo resolved connection values, host/domain information, organization/customer identifiers, cluster/environment names, resource IDs, or unrelated workload identifiers.
+- Keep raw responses in scratch files and return only sanitized evidence.
+- Real selectors/resource names may be required inside PromQL or local artifacts; that does not authorize repeating them in prose or visible command lines.
+- If a PromQL expression contains target-identifying names/selectors, write it to a neutral scratch file and return `query_ref` instead of printing the expression.
+
 ## Input
 
 Receive only:
@@ -88,26 +98,32 @@ Check:
 - empty results
 - query warnings/errors
 
+Sanitize label values, resource identities, warnings, and errors according to `knowledge/security/output-redaction.md` before returning evidence.
+
 ## Output
 
 ```yaml
 candidates:
   - question: <operational question>
     source: <KSM|KUBELET|SCRAPE|SCHEDULER|RECORDING_RULE>
-    promql: <expression or null>
+    promql: <non-sensitive expression or null>
+    query_ref: <neutral scratch path or null>
     mode: <instant|range|null>
     unit: <unit>
-    population: <containers/workload represented>
-    match_keys: [<labels>]
+    population: <generic population description>
+    match_keys: [<label names>]
     validation: <PASS|FAIL|UNVERIFIED>
-    limitation: <none or concise issue>
+    limitation: <none or concise sanitized issue>
     promql_expert_required: <true|false>
-    promql_issue: <isolated question and evidence when required>
+    promql_issue: <isolated sanitized question/evidence when required>
 annotation_sources:
-  - metric: <verified Kubernetes start timestamp metric>
-    population: <containers represented>
+  - metric: <generic identity or null when sensitive>
+    query_ref: <neutral scratch path when needed>
+    population: <generic population description>
     semantics: <what the metric actually represents>
     validation: <PASS|UNVERIFIED>
 ```
+
+Exactly one of `promql` or `query_ref` should carry the query. Prefer `query_ref` whenever the expression would reveal target identity.
 
 Omit `annotation_sources` when none exists.

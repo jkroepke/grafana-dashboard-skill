@@ -12,6 +12,15 @@ Choose appropriate Grafana visualizations and panel configuration for already-de
 
 Do not invent metrics, rewrite PromQL, edit dashboard files, or invoke further subagents.
 
+## Confidentiality
+
+**MUST read `knowledge/security/output-redaction.md` before producing output.**
+
+- Do not echo target URLs, hostnames, domains, resource IDs, dashboard IDs, cluster/environment identifiers, organization/customer identifiers, or other sensitive target literals supplied in the input.
+- Use generic question IDs and conceptual descriptions in output.
+- Do not repeat sensitive literals merely because the coordinator included them.
+- A technically correct recommendation that leaks sensitive target information is a failure.
+
 ## Input
 
 Batch related questions in one request. For each question provide:

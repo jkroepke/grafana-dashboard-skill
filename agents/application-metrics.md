@@ -12,6 +12,16 @@ Identify application-level operational questions and queries from supplied Prome
 
 Do not design dashboard layout or edit final dashboard files.
 
+## Confidentiality
+
+**MUST read `knowledge/security/output-redaction.md` before any live datasource access or output.**
+
+- Use configured access only through an opaque wrapper/environment reference. Never place a literal target endpoint in a visible command.
+- Never echo resolved connection values, host/domain information, organization/customer identifiers, resource IDs, or unrelated environment identifiers.
+- Keep raw responses in scratch files and return only sanitized evidence.
+- Sensitive application/resource names may be required inside PromQL or local artifacts; that does not authorize repeating them in prose or visible command lines.
+- If a PromQL expression contains target-identifying metric names/selectors, write it to a neutral scratch file and return `query_ref` instead of printing the expression.
+
 ## Input
 
 Receive only what is needed:
@@ -96,16 +106,18 @@ Resolve dashboard variables/macros to explicit test values. Do not return raw AP
 For each executed query return:
 
 - ID and purpose
-- expression or scratch-file path
+- `promql` only when non-sensitive; otherwise neutral `query_ref` scratch path
 - instant/range mode
 - evaluation time or range/step
 - series count
 - returned label keys
-- up to three representative results
-- datasource errors/warnings
+- up to three sanitized representative results
+- sanitized datasource errors/warnings
 - empty-result status
 - semantic verdict
 - remaining uncertainty
+
+Sanitize representative results and errors according to `knowledge/security/output-redaction.md` before returning them.
 
 HTTP 200 alone is not a pass.
 
@@ -117,19 +129,23 @@ Return selected candidates:
 candidates:
   - question: <operational question>
     source: APP
-    promql: <expression or null>
+    promql: <non-sensitive expression or null>
+    query_ref: <neutral scratch path or null>
     mode: <instant|range|null>
     unit: <unit>
     dimensions: [<bounded labels>]
     validation: <PASS|FAIL|UNVERIFIED>
     uncertainty: <none or concise issue>
     promql_expert_required: <true|false>
-    promql_issue: <isolated question and evidence when required>
+    promql_issue: <isolated sanitized question/evidence when required>
 annotation_sources:
-  - metric: <verified start timestamp metric>
+  - metric: <generic identity or null when sensitive>
+    query_ref: <neutral scratch path when needed>
     semantics: <what the metric actually represents>
-    labels: [<identity labels>]
+    labels: [<identity label names only>]
     validation: <PASS|UNVERIFIED>
 ```
+
+Exactly one of `promql` or `query_ref` should carry the query. Prefer `query_ref` whenever the expression would reveal target identity.
 
 Omit `annotation_sources` when none exists. Keep only useful candidates and the strongest start-timestamp source; do not return equivalent duplicates. Do not return rejected metrics unless rejection exposes a correctness or instrumentation problem.

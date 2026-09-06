@@ -12,6 +12,19 @@ Independently verify the completed Grafonnet dashboard and rendered JSON.
 
 Do not trust analyst conclusions. Do not edit final files or invoke further subagents. Temporary scratch files and non-persisting diagnostic dry-run requests are allowed when needed to isolate a validation failure.
 
+## Confidentiality
+
+**MUST read `knowledge/security/output-redaction.md` before any target access, diagnostic command, or review output.**
+
+Confidentiality is a correctness requirement:
+
+- visible command lines are output and MUST NOT contain literal target URLs, hostnames, domains, organization/customer identifiers, cluster/environment names, dashboard/resource identifiers, or secret/auth values
+- use only opaque preconfigured wrapper/environment references in visible target-access commands; never assign the resolved sensitive value in the same visible command
+- keep full responses in local scratch files and surface only sanitized evidence
+- do not print unrelated discovered dashboard/resource IDs while looking for comparison examples
+- do not repeat a sensitive literal merely because it already appeared in source input, tool output, a previous agent message, or an API error
+- any visible target-information leakage is a review `FAIL`, even if the dashboard itself is technically valid
+
 ## Input
 
 Receive:
@@ -23,8 +36,10 @@ Receive:
 - relevant raw fixture paths
 - configured read-only datasource access instructions when available
 - configured Grafana Dashboard resource API validation access instructions when available
-- existing dashboard resource name/UID when applicable
+- existing dashboard resource identity when applicable
 - target/pinned panel plugin inventory when available
+
+Connection details MUST be passed as opaque access instructions, not as literal endpoints or credentials.
 
 Read only the knowledge files needed for checks being performed.
 
@@ -140,11 +155,12 @@ Rules:
 8. Inspect the returned resource and warnings, not only the status code.
 9. Re-run the exact layout-reference checks against the dry-run response.
 10. Return `FAIL` on any target schema/admission/conversion error, dropped expected structure, warning about unknown fields, or unresolved returned layout reference.
-11. If dry-run fails, preserve the complete response body/details and follow `knowledge/grafana/v2-validation-errors.md` before recommending any source change.
+11. If dry-run fails, preserve the complete response body/details in a local scratch file and follow `knowledge/grafana/v2-validation-errors.md` before recommending any source change. Surface only sanitized excerpts.
 12. If the error contains CUE `empty disjunction` / multiple `conflicting values`, identify the submitted discriminator and the matching branch. Treat discriminator conflicts from nonmatching branches as branch noise, not as evidence that multiple kinds are present.
 13. Do not infer an unsupported layout, ambiguous discriminator, Grafana version quirk, or server bug from disjunction branch conflicts alone.
 14. Do not add union-arm wrapper fields such as `AutoGridLayoutKind` merely because generated OpenAPI or language bindings expose that internal union property. Validate the target wire representation.
 15. If the selected-branch error remains unclear, run bounded target-side isolation according to `knowledge/grafana/diagnostic-execution.md`.
+16. Every target-access command used during dry-run/isolation MUST comply with `knowledge/security/output-redaction.md`; the endpoint and resource identity must remain opaque in the visible transcript.
 
 A dry-run request MUST NOT persist the dashboard and MUST NOT be reported as publication.
 
@@ -168,7 +184,8 @@ For any dry-run failure requiring more than one diagnostic action, `knowledge/gr
 - If a shell/heredoc quoting attempt fails, correct/switch method once and execute. Do not produce repeated planning text around retries.
 - Use at most 6 target-side isolation probes for one validation failure, excluding the initial full failure and final full verification after a source fix.
 - If the budget is exhausted, return `FAIL` with the compact ledger, proven accepted groups, smallest remaining failing scope, and missing evidence.
-- Never rerun the identical request against the identical endpoint unless deterministic reproduction is the explicit purpose.
+- Never rerun the identical request against the identical target operation unless deterministic reproduction is the explicit purpose.
+- The diagnostic ledger itself MUST contain sanitized labels/placeholders only; never store target endpoints or real unrelated resource identifiers in it.
 
 ## Variable and selector checks
 
@@ -207,9 +224,11 @@ Do reject a panel when `spec.vizConfig.group` does not resolve to a verified pan
 
 Verify visualization plugin IDs using, in order:
 
-1. target Grafana installed plugin inventory when API access is available, for example `GET /api/plugins`
+1. target Grafana installed plugin inventory when API access is available
 2. pinned generated Grafonnet constructors/local panel plugin schemas
 3. other repository-pinned evidence for the exact target Grafana version
+
+Do not print the target endpoint or unrelated plugin/resource identifiers while performing this inventory check.
 
 Schema parsing alone is not sufficient evidence that a visualization plugin exists. The reviewer must not return `PASS` while any used visualization plugin ID remains unverified.
 
@@ -231,7 +250,7 @@ Check:
 - counter/reset behavior where relevant
 - one pod, multiple pods, and All where supported
 
-HTTP success alone is not a pass.
+Sanitize live-query results before surfacing evidence. HTTP success alone is not a pass.
 
 ## Annotation checks
 
@@ -260,11 +279,13 @@ or concrete findings:
 FAIL
 
 1. <problem>
-   File/query: <reference>
-   Evidence: <concise evidence>
+   File/query: <sanitized reference>
+   Evidence: <concise sanitized evidence>
    Required correction: <correction>
 ```
 
-Evidence MUST distinguish the exact target error from interpretation. Never state a speculative version/server theory as established evidence.
+Evidence MUST distinguish the exact target error from interpretation while removing sensitive target literals. Never state a speculative version/server theory as established evidence.
+
+Do not include endpoints, hostnames, domains, dashboard/resource IDs, organization/customer identifiers, credentials, or other sensitive target values in reviewer output.
 
 Do not repeat checks that passed when findings exist.

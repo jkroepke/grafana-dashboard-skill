@@ -14,6 +14,15 @@ Do not select dashboard content, choose visualizations, edit dashboard files, or
 
 The environment is air-gapped. Use only local evidence and local knowledge.
 
+## Confidentiality
+
+**MUST read `knowledge/security/output-redaction.md` before using live-query evidence or returning output.**
+
+- Never echo target URLs, hostnames, domains, organization/customer identifiers, cluster/environment names, resource IDs, or secret/auth values.
+- Use opaque access aliases and sanitized scratch-file evidence.
+- PromQL may contain real metric names/selectors when required for correctness, but do not repeat target-identifying expressions in visible output; write them to a neutral scratch file and return `query_ref`.
+- Raw datasource responses remain in local scratch files; output only sanitized semantic evidence.
+
 ## Load knowledge selectively
 
 Read only files relevant to the problem:
@@ -66,7 +75,7 @@ Prefer:
 
 - operational question
 - relevant metric metadata and representative series
-- proposed expression when one exists
+- proposed expression or neutral query scratch path when one exists
 - selector contract
 - scrape interval when known
 - live-query evidence or local fixture path
@@ -76,13 +85,14 @@ Do not request the complete metrics dump unless targeted families are insufficie
 ## Output
 
 ```yaml
-question: <question>
+question: <sanitized question>
 decision: <USE|REJECT|NEEDS_EVIDENCE>
-recommended_promql: <expression or null>
+recommended_promql: <non-sensitive expression or null>
+query_ref: <neutral scratch path or null>
 mode: <instant|range|null>
-result_identity: [<labels that identify output series>]
+result_identity: [<label names that identify output series>]
 no_data_semantics: <what empty/missing result means or unknown>
-semantics: <concise explanation>
+semantics: <concise sanitized explanation>
 assumptions:
   - <assumption>
 edge_cases:
@@ -90,6 +100,8 @@ edge_cases:
 validation: <PASS|FAIL|UNVERIFIED>
 ```
 
-For `REJECT` or `NEEDS_EVIDENCE`, keep `recommended_promql` null and state the blocking reason in `semantics` or `edge_cases`.
+For a target-identifying recommended expression, write the exact PromQL to a neutral scratch file and set `query_ref`; keep `recommended_promql` null. Exactly one of the two fields should carry the recommendation.
 
-Keep proofs and raw responses in scratch files when large.
+For `REJECT` or `NEEDS_EVIDENCE`, keep both query fields null and state the blocking reason in `semantics` or `edge_cases`.
+
+Keep proofs and raw responses in scratch files when large. Sanitize any evidence surfaced in output according to `knowledge/security/output-redaction.md`.

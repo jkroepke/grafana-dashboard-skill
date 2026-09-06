@@ -17,6 +17,25 @@ This workflow runs air-gapped with a 256k context limit.
 - Prefer file paths and targeted excerpts over copying large inputs into agent contexts.
 - Leave raw metrics dumps and large query responses on disk.
 
+## Confidentiality
+
+**MUST read `knowledge/security/output-redaction.md` before any target-system access, specialist handoff containing target context, or visible completion output.**
+
+Sensitive target information may be used internally when required to perform the task, but MUST NOT appear in visible agent text, subagent output, visible shell commands, command previews, diagnostic ledgers, review findings, or completion summaries.
+
+Treat target connection details, host/domain information, organization/customer identifiers, cluster/environment names, dashboard/resource identifiers, unrelated discovered resource IDs, local paths revealing target identity, and all authentication/session material as sensitive.
+
+Hard rules:
+
+- Never place a literal target endpoint in a visible command. Use an already configured opaque wrapper/environment reference whose value is not echoed.
+- Never assign a sensitive endpoint/identifier value in the same visible command that uses it.
+- Never print resolved connection variables, credential files, tokens, cookies, authorization headers, or netrc contents.
+- Never repeat sensitive literals merely because they appeared in input, previous output, an API response, or an error body.
+- Keep raw target responses in local scratch files; surface only sanitized fields/evidence.
+- Do not print unrelated dashboard/resource IDs while probing target examples.
+- Use placeholders such as `<TARGET>`, `<DASHBOARD_ID>`, `<RESOURCE_ID>`, `<CLUSTER>`, `<ENVIRONMENT>`, and `<APPLICATION>` in visible prose/commands when a role label is needed.
+- A technically correct dashboard that leaks target information in the visible transcript is a failed workflow.
+
 ## Execution discipline
 
 Act on a decided diagnostic step instead of narrating it repeatedly.
@@ -24,7 +43,7 @@ Act on a decided diagnostic step instead of narrating it repeatedly.
 - Do not emit repeated self-dialogue such as `Let me ...`, `Wait ...`, `Actually ...`, `I will ...`, or multiple restatements of the same next command.
 - Never state the same intended action twice without new tool/command output between the statements. Execute it; if execution is impossible, report the concrete blocker.
 - One diagnostic step is: hypothesis -> one changed candidate -> one action -> one result -> one recorded fact.
-- Do not rerun an identical request against an identical endpoint unless deterministic reproduction is explicitly needed.
+- Do not rerun an identical request against an identical target operation unless deterministic reproduction is explicitly needed.
 - Preserve proven PASS/FAIL facts; do not reopen an unchanged hypothesis without new interaction evidence.
 - For Dashboard V2 target-validation failures requiring more than one probe, MUST read `knowledge/grafana/diagnostic-execution.md`. Use its diagnostic ledger and six-probe isolation budget.
 - Prefer direct repository commands and `jq` structural slicing over repeatedly generating throwaway helper scripts.
@@ -74,10 +93,12 @@ Before delegation, determine from local evidence:
 - available metric sources
 - fixed selectors required to identify the application
 - configured datasource access method
-- Grafana base URL and configured Dashboard resource API validation access/wrapper when available
-- existing dashboard resource name/UID when applicable
+- opaque Grafana Dashboard resource API validation access/wrapper when available
+- existing dashboard resource identity when applicable
 - whether publication is requested
-- when publication is requested: writable authentication method and folder UID when applicable
+- when publication is requested: writable authentication method and folder placement when applicable
+
+Do not place literal connection details or target identifiers into the shared contract passed to subagents. Provide an opaque access capability/reference instead.
 
 Do not require publication intent before using an already configured Dashboard API credential/wrapper for a non-persisting dry-run validation request.
 
@@ -136,8 +157,8 @@ Give it only:
 
 - application metric dump path
 - relevant metric inventory or selected families
-- shared contract
-- read-only query access instructions when available
+- sanitized shared contract
+- opaque read-only query access instructions when available
 
 It returns selected operational questions, straightforward scoped PromQL, units, retained labels, validation results, unresolved semantics, annotation-source candidates, and isolated PromQL consultation requests when needed.
 
@@ -149,8 +170,8 @@ Give it only:
 
 - workload manifests or verified workload identity
 - relevant container set
-- shared contract
-- read-only query access instructions when available
+- sanitized shared contract
+- opaque read-only query access instructions when available
 
 It returns health/resource questions, straightforward scoped PromQL, matching keys, container populations, validation results, availability limits, optional annotation-source candidates, and isolated PromQL consultation requests when needed.
 
@@ -158,7 +179,7 @@ Run application and Kubernetes analysis concurrently when the runtime can do so 
 
 ### 3. Difficult PromQL
 
-For each isolated consultation request, invoke `promql-expert` with only the affected operational question, metric metadata, selectors, scrape timing, candidate expression, and relevant evidence.
+For each isolated consultation request, invoke `promql-expert` with only the affected operational question, metric metadata, selectors, scrape timing, candidate expression, and sanitized relevant evidence.
 
 Typical triggers:
 
@@ -204,18 +225,22 @@ Give the reviewer:
 
 - final Jsonnet source
 - rendered JSON
-- shared contract
+- sanitized shared contract
 - pinned Grafana/Grafonnet versions
 - relevant raw fixture paths
-- read-only datasource access instructions when available
-- Grafana base URL and Dashboard resource API validation access/wrapper instructions when available
-- existing dashboard resource name/UID when applicable
+- opaque read-only datasource access instructions when available
+- opaque Dashboard resource API validation access/wrapper instructions when available
+- existing dashboard resource identity only when needed for the operation
+
+Never pass literal target endpoints, host/domain details, credentials, or unrelated discovered resource identifiers to the reviewer.
 
 For Dashboard Schema V2, the reviewer MUST validate the rendered candidate against the real target Grafana with the target-advertised Dashboard resource API dry-run before returning `PASS` when validation-capable API access is configured. Read `knowledge/grafana/grafana-v2-dry-run.md`. For current stable V2 this is `dryRun=All`, not `dryRun=true`, and `fieldValidation=Strict` should be used when advertised by target Swagger.
 
-On any target dry-run failure, the reviewer MUST read `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md`, preserve the complete target error, and isolate the selected schema branch before recommending a source correction. The coordinator MUST NOT accept a speculative explanation such as an unsupported layout, ambiguous discriminator, Grafana version quirk, or server bug without target-side evidence/minimal reproduction.
+On any target dry-run failure, the reviewer MUST read `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md`, preserve the complete target error in a local scratch file, and isolate the selected schema branch before recommending a source correction. The coordinator MUST NOT accept a speculative explanation such as an unsupported layout, ambiguous discriminator, Grafana version quirk, or server bug without target-side evidence/minimal reproduction.
 
 The reviewer MUST keep dry-run isolation bounded: one changed candidate per probe, a compact PASS/FAIL ledger, proven facts carried forward, and at most six target-side isolation probes for one validation failure. If unresolved after the budget, return `FAIL` instead of continuing exploratory self-dialogue.
+
+The reviewer MUST also enforce `knowledge/security/output-redaction.md`. Visible target-information leakage is an independent `FAIL`.
 
 The dry-run is validation only and must not be reported as publication. If target Grafana is configured for the task but no validation-capable Dashboard API access is available, the reviewer reports the server-side V2 validation gap rather than silently treating static checks as equivalent.
 
@@ -225,53 +250,34 @@ Fix confirmed findings in the coordinator context and render/review again when t
 
 ### 7. Publish when requested
 
-Publish only after the dashboard has passed the applicable local validation, target-Grafana dry-run validation, and independent review.
+Publish only after the dashboard has passed the applicable local validation, target-Grafana dry-run validation, confidentiality review, and independent review.
 
 Read:
 
 - `knowledge/grafana/publishing-v2.md`
 
-For Dashboard Schema V2, use the Grafana Dashboard resource API. Do not use the legacy `/api/dashboards/db` endpoint and do not convert the dashboard to classic JSON merely to publish it.
+For Dashboard Schema V2, use the Grafana Dashboard resource API. Do not use the legacy dashboard endpoint and do not convert the dashboard to classic JSON merely to publish it.
 
-The API contract source of truth is the target Grafana Swagger:
-
-```text
-<GRAFANA_URL>/swagger?api=dashboard.grafana.app-v2
-```
-
-When internet access exists, the public reference is:
-
-```text
-https://play.grafana.org/swagger?api=dashboard.grafana.app-v2
-```
-
-The target Grafana Swagger wins. If the target advertises `v2beta1`, `v2alpha1`, or another supported structured dashboard version instead of stable `v2`, use that target-advertised API and schema. Never guess an API version.
+The API contract source of truth is the target Grafana Swagger obtained through the configured opaque target access. The target Grafana Swagger wins. If the target advertises another supported structured dashboard version instead of stable V2, use that target-advertised API and schema. Never guess an API version.
 
 Always use the Dashboard resource namespace `default`.
 
-For stable V2 the resource routes are normally:
-
-```text
-POST /apis/dashboard.grafana.app/v2/namespaces/default/dashboards
-GET  /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/<name>
-PUT  /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/<name>
-```
-
-Confirm methods and request bodies from Swagger before writing. Do not substitute another namespace even if a Kubernetes namespace, Grafana folder, or dashboard `namespace` variable has the same name.
+For stable V2 the resource operations are normally collection create, resource GET, and resource PUT under the Dashboard resource API. Confirm methods and request bodies from target Swagger before writing.
 
 - New dashboard: use the collection create operation.
 - Existing dashboard: GET it first, preserve identity/folder placement unless intentionally changed, then use the documented replace/update operation.
 - Use the rendered Schema V2 resource/spec; do not blindly POST a classic DTO or arbitrary Jsonnet output envelope.
 - Never create a duplicate dashboard because an update failed.
-- Never expose credentials or authorization headers in output.
+- Never expose target endpoint details, resource identifiers, credentials, or authorization/session material in visible output.
 
-After writing, GET the resource again through the same API version under `namespaces/default` and verify the returned dashboard name, title, required variables, expected V2 layout, and layout element references. A write response alone is not sufficient publication verification.
+After writing, GET the resource again through the same API version under `namespaces/default` and verify the returned dashboard title, required variables, expected V2 layout, and layout element references. A write response alone is not sufficient publication verification.
 
 ## Context discipline
 
 - Do not give subagents the complete conversation.
 - Do not give subagents the complete `SKILL.md`; their registered agent definition is their role contract.
 - Give each subagent only shared-contract fields and local files needed for its task.
+- Sanitize target-specific context before handoff; use opaque access references.
 - Parse large metric dumps once, then retrieve selected families with metadata and representative label sets.
 - Do not paste complete Grafana frames or API responses into the coordinator context.
 - Store large requests/responses in temporary files and return a path when targeted inspection is needed.
@@ -338,9 +344,11 @@ Use the repository's actual paths and commands when they differ. `jq empty` chec
 
 For Dashboard Schema V2 with configured target Grafana Dashboard API validation access, server-side dry-run validation is mandatory before review can pass. Use target Swagger, namespace `default`, and `knowledge/grafana/grafana-v2-dry-run.md`. A successful HTTP status alone is insufficient: inspect warnings and the returned resource structure.
 
-If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md` before changing source. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Follow the matching branch, capture the full error, and use bounded target-side isolation when necessary. Do not disable strict validation or invent union-wrapper fields as a workaround.
+Every target-access command MUST follow `knowledge/security/output-redaction.md`. Use an opaque configured target reference and never expose the resolved endpoint or target identifiers in the visible transcript.
 
-When datasource access is available, test representative application, Kubernetes, variable, and annotation queries with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics.
+If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md` before changing source. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Follow the matching branch, capture the full error locally, and use bounded target-side isolation when necessary. Do not disable strict validation or invent union-wrapper fields as a workaround.
+
+When datasource access is available, test representative application, Kubernetes, variable, and annotation queries with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics. Sanitize all surfaced evidence.
 
 For Prometheus annotations, verify that the query returns only event-like points. Every returned datapoint becomes a marker, so continuous timestamp gauges or overlapping change windows can flood or duplicate annotations.
 
@@ -352,12 +360,14 @@ If live datasource access is unavailable, mark live-query and annotation validat
 
 Report only:
 
-- source paths changed
+- source paths changed, sanitized if they reveal target identity
 - schema
-- major panel groups added or changed
+- major panel groups added or changed using generic descriptions
 - important omitted signals and why
 - render/schema/lint status
 - target-Grafana Dashboard V2 dry-run validation status when applicable
 - live-query validation status
 - annotation validation status when applicable
-- publish status when requested: API version, dashboard resource name/UID, and verification result (`namespace=default`)
+- publish verification status when requested
+
+Never include target endpoints, host/domain data, organization/customer identifiers, cluster/environment names, dashboard/resource IDs, credentials, or session/auth material in completion output.
