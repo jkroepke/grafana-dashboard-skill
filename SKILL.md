@@ -62,7 +62,9 @@ Before delegation, determine from local evidence:
 - fixed selectors required to identify the application
 - configured datasource access method
 - whether publication is requested
-- when publication is requested: Grafana base URL, writable authentication method, dashboard namespace, existing dashboard name/UID when applicable, and folder UID when applicable
+- when publication is requested: Grafana base URL, writable authentication method, existing dashboard name/UID when applicable, and folder UID when applicable
+
+The Grafana Dashboard resource API namespace is always `default`. Do not ask for, infer, discover, or configure another Dashboard API namespace. This API namespace is unrelated to the dashboard variable named `namespace`.
 
 Use evidence in this order:
 
@@ -216,15 +218,17 @@ https://play.grafana.org/swagger?api=dashboard.grafana.app-v2
 
 The target Grafana Swagger wins. If the target advertises `v2beta1`, `v2alpha1`, or another supported structured dashboard version instead of stable `v2`, use that target-advertised API and schema. Never guess an API version.
 
+Always use the Dashboard resource namespace `default`.
+
 For stable V2 the resource routes are normally:
 
 ```text
-POST /apis/dashboard.grafana.app/v2/namespaces/<namespace>/dashboards
-GET  /apis/dashboard.grafana.app/v2/namespaces/<namespace>/dashboards/<name>
-PUT  /apis/dashboard.grafana.app/v2/namespaces/<namespace>/dashboards/<name>
+POST /apis/dashboard.grafana.app/v2/namespaces/default/dashboards
+GET  /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/<name>
+PUT  /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/<name>
 ```
 
-Confirm methods and request bodies from Swagger before writing.
+Confirm methods and request bodies from Swagger before writing. Do not substitute another namespace even if a Kubernetes namespace, Grafana folder, or dashboard `namespace` variable has the same name.
 
 - New dashboard: use the collection create operation.
 - Existing dashboard: GET it first, preserve identity/folder placement unless intentionally changed, then use the documented replace/update operation.
@@ -232,7 +236,7 @@ Confirm methods and request bodies from Swagger before writing.
 - Never create a duplicate dashboard because an update failed.
 - Never expose credentials or authorization headers in output.
 
-After writing, GET the resource again through the same API version and verify the returned dashboard name, title, required variables, and expected V2 layout. A write response alone is not sufficient publication verification.
+After writing, GET the resource again through the same API version under `namespaces/default` and verify the returned dashboard name, title, required variables, and expected V2 layout. A write response alone is not sufficient publication verification.
 
 ## Context discipline
 
@@ -321,4 +325,4 @@ Report only:
 - render/schema/lint status
 - live-query validation status
 - annotation validation status when applicable
-- publish status when requested: API version, namespace, dashboard resource name/UID, and verification result
+- publish status when requested: API version, dashboard resource name/UID, and verification result (`namespace=default`)

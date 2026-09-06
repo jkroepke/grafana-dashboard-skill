@@ -17,11 +17,12 @@ Kubernetes manifests: <path or none>
 Existing dashboard: <path or none>
 Grafana/Prometheus access: <local instructions or none>
 Publish: <yes|no>
-Dashboard namespace: <namespace or default>
 Folder UID: <uid or none>
 ```
 
 For `Publish: yes`, provide writable Grafana dashboard API access. Prometheus datasource access may remain read-only.
+
+The Grafana Dashboard resource namespace is always `default`. Do not provide or derive another API namespace.
 
 The coordinator builds and validates the dashboard first, runs an independent review, and only then publishes it.
 
@@ -41,7 +42,7 @@ Public reference:
 https://play.grafana.org/swagger?api=dashboard.grafana.app-v2
 ```
 
-The target Grafana Swagger wins if it exposes a different supported API version.
+The target Grafana Swagger wins if it exposes a different supported API version. The Dashboard resource namespace remains `default`.
 
 Detailed publish rules are in `knowledge/grafana/publishing-v2.md`.
 
@@ -61,5 +62,7 @@ Every generated dashboard uses:
 - `datasource`: Prometheus datasource, single value
 - `namespace`: single value
 - `pod`: multi value with bounded All behavior
+
+The dashboard variable named `namespace` is unrelated to the Grafana Dashboard resource API namespace, which is always `default`.
 
 New dashboards default to Dashboard Schema V2 when supported by the pinned local Grafana/Grafonnet dependencies.

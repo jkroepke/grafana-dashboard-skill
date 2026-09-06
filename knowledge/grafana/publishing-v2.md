@@ -22,17 +22,29 @@ The target Grafana contract wins over the public reference. If the target expose
 
 Do not convert a Schema V2 dashboard to classic dashboard JSON just to publish it. Do not use the legacy `/api/dashboards/db` endpoint for a Schema V2 resource.
 
+## Namespace
+
+Always use the Grafana Dashboard resource namespace:
+
+```text
+default
+```
+
+Do not ask for, derive, discover, or configure another Dashboard resource namespace.
+
+The Dashboard resource API namespace is not the Kubernetes namespace and is not the dashboard variable named `namespace`. Kubernetes namespace selection continues to use `$namespace`; publishing always uses `namespaces/default`.
+
 ## Resource API
 
 For the stable V2 API, the resource routes are:
 
 ```text
-POST /apis/dashboard.grafana.app/v2/namespaces/<namespace>/dashboards
-GET  /apis/dashboard.grafana.app/v2/namespaces/<namespace>/dashboards/<name>
-PUT  /apis/dashboard.grafana.app/v2/namespaces/<namespace>/dashboards/<name>
+POST /apis/dashboard.grafana.app/v2/namespaces/default/dashboards
+GET  /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/<name>
+PUT  /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/<name>
 ```
 
-Confirm these methods and request schemas in the target Swagger before writing.
+Confirm these methods and request schemas in the target Swagger before writing. Keep `namespaces/default` even when the target exposes another structured Dashboard API version.
 
 `metadata.name` is the dashboard resource name/UID used in the item URL.
 
@@ -56,16 +68,16 @@ If the rendered Jsonnet produces a full resource containing `apiVersion`, `kind`
 
 ## Create versus update
 
-Before publishing, determine whether the resource already exists.
+Before publishing, determine whether the resource already exists under `namespaces/default`.
 
 For an existing dashboard:
 
-1. `GET` the current resource.
+1. `GET` the current resource from `namespaces/default`.
 2. Preserve its `metadata.name` and folder placement unless the user requested a change.
 3. Preserve or send server metadata such as `resourceVersion` only when required by the target API contract.
 4. Replace it with the method and body defined by the target Swagger, normally `PUT` on the item URL.
 
-For a new dashboard, use the collection create operation, normally `POST`.
+For a new dashboard, use the collection create operation under `namespaces/default`, normally `POST`.
 
 Never create a second dashboard merely because an update failed. Report conflicts, authorization failures, and schema-validation errors instead.
 
@@ -92,9 +104,10 @@ A successful write response is not enough.
 
 After create/update:
 
-1. `GET` the dashboard resource from the same API version.
-2. Verify `metadata.name`, namespace, folder annotation when applicable, and `spec.title`.
-3. Verify the expected V2 layout and required variables are present in the returned `spec`.
-4. Report the returned resource name and API version.
+1. `GET` the dashboard resource from the same API version under `namespaces/default`.
+2. Verify the returned resource namespace is `default`.
+3. Verify `metadata.name`, folder annotation when applicable, and `spec.title`.
+4. Verify the expected V2 layout and required variables are present in the returned `spec`.
+5. Report the returned resource name and API version.
 
-Do not claim publication succeeded if the follow-up read fails or returns a different resource.
+Do not claim publication succeeded if the follow-up read fails, returns a different resource, or returns a non-default resource namespace.
