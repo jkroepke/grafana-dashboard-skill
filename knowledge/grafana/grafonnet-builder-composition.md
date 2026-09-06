@@ -12,121 +12,44 @@ The generated Grafonnet API is **path-oriented**. Not every nested builder retur
 - MUST NOT replace a confusing builder with hand-written JSON merely to avoid understanding its composition.
 - MUST NOT infer a field name from a classic dashboard model or from model memory when the pinned V2 builder exposes a different field.
 - Render a small isolated expression when necessary to prove the resulting shape before integrating it.
+- For Grafonnet v13, use the canonical recipes below before inventing another composition pattern.
 
-## Two important builder shapes
+## Canonical Grafonnet v13 recipes
 
-### 1. Path mixins
+These examples are intentionally concrete. Copy their composition pattern, then replace only application-specific values.
 
-A path mixin returns a fragment already rooted at its owning object path.
+The pinned local generated API remains authoritative if the repository moves away from v13.
 
-For Grafonnet v13, these AutoGrid builders are dashboard path mixins:
-
-```jsonnet
-local d = g.apps.dashboard.v2;
-local auto = d.spec.layout.AutoGridLayoutKind;
-
-auto.withKind()
-auto.spec.withFillScreen(false)
-auto.spec.withMaxColumnCount(3)
-auto.spec.withItems(items)
-```
-
-The generated bodies already write into `spec.layout` / `spec.layout.spec`.
-
-Therefore compose them **directly onto the dashboard resource**:
+### Dashboard root
 
 ```jsonnet
+local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonnet';
 local d = g.apps.dashboard.v2;
-local auto = d.spec.layout.AutoGridLayoutKind;
-local item = auto.spec.items;
-
-local layoutItem(name) =
-  item.withKind()
-  + item.spec.element.withKind()
-  + item.spec.element.withName(name);
 
 d.new('my-dashboard', 'My Dashboard')
-+ d.spec.withElements(elements)
-+ auto.withKind()
-+ auto.spec.withFillScreen(false)
-+ auto.spec.withMaxColumnCount(3)
-+ auto.spec.withItems([
-    layoutItem('overview-mean-pages'),
-    layoutItem('overview-errors'),
-  ])
++ d.spec.withDescription('Operational dashboard')
++ d.spec.withEditable(false)
++ d.spec.withTags(['application'])
 ```
 
-Do **not** do this:
+Do not hand-write the `apiVersion`, `kind`, `metadata`, and root `spec` when `d.new(...)` and generated root builders exist.
+
+### Time settings
+
+`d.spec.timeSettings.*` methods are dashboard path mixins. Add them directly to the dashboard:
 
 ```jsonnet
-local layout =
-  auto.withKind()
-  + auto.spec.withItems(items);
-
 d.new('my-dashboard', 'My Dashboard')
-+ d.spec.withLayout(layout)  // WRONG: layout is already rooted at spec.layout
++ d.spec.timeSettings.withFrom('now-6h')
++ d.spec.timeSettings.withTo('now')
++ d.spec.timeSettings.withTimezone('browser')
 ```
 
-Do not extract `layout.spec.layout` merely to feed it into `withLayout(...)`. Use one composition route.
+Do not wrap those fragments in `d.spec.withTimeSettings(...)`.
 
-The same principle applies to dashboard path builders such as `d.spec.timeSettings.*`: when the generated method already writes into `spec.timeSettings`, add that mixin directly to the dashboard instead of wrapping it again with `d.spec.withTimeSettings(...)`.
+### Datasource variable
 
-### 2. Standalone collection-item builders
-
-Some nested namespaces build standalone values intended for an array or map.
-
-For example, `d.spec.variables.QueryVariableKind.withKind()` returns a standalone variable object beginning with:
-
-```json
-{"kind":"QueryVariable"}
-```
-
-Compose its nested path mixins into that standalone variable, then pass the completed variable to `d.spec.withVariables(...)`:
-
-```jsonnet
-local d = g.apps.dashboard.v2;
-local qv = d.spec.variables.QueryVariableKind;
-
-local namespaceVar =
-  qv.withKind()
-  + qv.spec.withName('namespace')
-  + qv.spec.withLabel('Namespace')
-  + qv.spec.withIncludeAll(false)
-  + qv.spec.withMulti(false)
-  + qv.spec.withRefresh('onDashboardLoad')
-  + qv.spec.query.withKind()
-  + qv.spec.query.withGroup('prometheus')
-  + qv.spec.query.datasource.withName('<verified datasource reference>')
-  + qv.spec.query.withSpec({
-      expr: '<verified variable query>',
-    });
-
-d.new('my-dashboard', 'My Dashboard')
-+ d.spec.withVariables([namespaceVar])
-```
-
-The nested query builders above are **path mixins within the QueryVariable object**. They already write under `spec.query`.
-
-Therefore do **not** do this:
-
-```jsonnet
-local query =
-  qv.spec.query.withKind()
-  + qv.spec.query.withGroup('prometheus')
-  + qv.spec.query.withSpec({ expr: '...' });
-
-local namespaceVar =
-  qv.withKind()
-  + qv.spec.withQuery(query);  // WRONG: query already contains spec.query
-```
-
-If a standalone `DataQuery` value is genuinely required by a parent setter, construct it only with a builder that actually returns a standalone `DataQuery`, or use the documented schema-shaped exception when the pinned API has no such standalone builder. Do not mistake a nested path mixin for a standalone value.
-
-## Canonical DatasourceVariable builder
-
-Do not copy the classic datasource-variable model or guess a `query` field.
-
-For Grafonnet v13, `DatasourceVariableKind.spec` exposes `withPluginId(...)`. Use the pinned generated field:
+For Grafonnet v13, the datasource variable identifies the datasource plugin through `pluginId`:
 
 ```jsonnet
 local dv = d.spec.variables.DatasourceVariableKind;
@@ -142,44 +65,267 @@ local datasourceVar =
   + dv.spec.withHide('dontHide');
 ```
 
-Then include it through:
+Do not substitute `dv.spec.withQuery('prometheus')` for `withPluginId('prometheus')` on v13.
+
+### Namespace query variable
+
+The QueryVariable builder is a standalone collection item. Its nested `spec.query.*` methods are path mixins within that variable.
 
 ```jsonnet
-d.spec.withVariables([datasourceVar, namespaceVar, podVar])
+local qv = d.spec.variables.QueryVariableKind;
+
+local namespaceVar =
+  qv.withKind()
+  + qv.spec.withName('namespace')
+  + qv.spec.withLabel('Namespace')
+  + qv.spec.withDescription('Application namespace')
+  + qv.spec.withIncludeAll(false)
+  + qv.spec.withMulti(false)
+  + qv.spec.withRefresh('onDashboardLoad')
+  + qv.spec.query.withKind()
+  + qv.spec.query.withGroup('prometheus')
+  + qv.spec.query.datasource.withName('<verified datasource-variable reference>')
+  + qv.spec.query.withSpec({
+      expr: 'label_values(<verified_application_metric>, kubernetes_namespace)',
+    });
 ```
 
-For the v13 `DatasourceVariableKind`, do **not** substitute:
+Do not create a `query` local from `qv.spec.query.*` and then feed it into `qv.spec.withQuery(query)`. The nested builders already write to `spec.query`.
+
+### Pod query variable
 
 ```jsonnet
-dv.spec.withQuery('prometheus')
+local podVar =
+  qv.withKind()
+  + qv.spec.withName('pod')
+  + qv.spec.withLabel('Pod')
+  + qv.spec.withDescription('Application pods')
+  + qv.spec.withIncludeAll(true)
+  + qv.spec.withAllValue('')
+  + qv.spec.withMulti(true)
+  + qv.spec.withRefresh('onDashboardLoad')
+  + qv.spec.query.withKind()
+  + qv.spec.query.withGroup('prometheus')
+  + qv.spec.query.datasource.withName('<verified datasource-variable reference>')
+  + qv.spec.query.withSpec({
+      expr: 'label_values(<verified_application_metric>{kubernetes_namespace="$namespace"}, kubernetes_pod_name)',
+    });
 ```
 
-for `withPluginId('prometheus')`. Verify the exact builder fields again if the pinned Grafonnet revision changes.
-
-## AutoGrid item builders
-
-`d.spec.layout.AutoGridLayoutKind.spec.items` is a standalone item builder namespace.
-
-This is correct:
+Keep `namespace` before `pod` in the dashboard variable list:
 
 ```jsonnet
-local item = d.spec.layout.AutoGridLayoutKind.spec.items;
+d.spec.withVariables([
+  datasourceVar,
+  namespaceVar,
+  podVar,
+])
+```
 
-local x =
+### AutoGrid layout item
+
+```jsonnet
+local auto = d.spec.layout.AutoGridLayoutKind;
+local item = auto.spec.items;
+
+local layoutItem(name) =
   item.withKind()
   + item.spec.element.withKind()
-  + item.spec.element.withName('overview-mean-pages');
+  + item.spec.element.withName(name);
 ```
 
-It produces an `AutoGridLayoutItem` value that can be passed to `auto.spec.withItems(...)`.
+The result is a standalone `AutoGridLayoutItem` suitable for `auto.spec.withItems(...)`.
 
-The element reference is built by composing `item.spec.element.*` directly into the item. Do not separately wrap that fragment again with `item.spec.withElement(...)`.
+### AutoGrid layout
 
-## Annotation builders
+The AutoGrid kind/spec builders are dashboard path mixins. Compose them directly into the dashboard:
 
-`d.spec.annotations` builds a standalone `AnnotationQuery` item. Compose `annotations.withKind()` with its `annotations.spec.*` and nested query path mixins, then pass the completed item to `d.spec.withAnnotations(...)`.
+```jsonnet
+local elementNames = [
+  'overview-mean-pages',
+  'overview-errors',
+];
 
-Do not build a nested annotation query path fragment and then pass the wrapped fragment back to `annotations.spec.withQuery(...)`.
+d.new('my-dashboard', 'My Dashboard')
++ d.spec.withElements(elements)
++ auto.withKind()
++ auto.spec.withFillScreen(false)
++ auto.spec.withMaxColumnCount(3)
++ auto.spec.withItems([layoutItem(name) for name in elementNames])
+```
+
+Do not do this:
+
+```jsonnet
+local layout =
+  auto.withKind()
+  + auto.spec.withItems(items);
+
+d.spec.withLayout(layout)  // WRONG for these v13 path mixins
+```
+
+### Annotation query
+
+`d.spec.annotations` is a standalone annotation-item builder. Compose its nested query mixins directly into the annotation, then pass the complete annotation to `d.spec.withAnnotations(...)`.
+
+```jsonnet
+local annotation = d.spec.annotations;
+
+local restartAnnotation =
+  annotation.withKind()
+  + annotation.spec.withBuiltIn(false)
+  + annotation.spec.withName('Observed process restart')
+  + annotation.spec.withEnable(true)
+  + annotation.spec.withHide(false)
+  + annotation.spec.query.withKind()
+  + annotation.spec.query.withGroup('prometheus')
+  + annotation.spec.query.datasource.withName('<verified datasource-variable reference>')
+  + annotation.spec.query.withSpec({
+      expr: 'changes(process_start_time_seconds{kubernetes_namespace="$namespace",kubernetes_pod_name=~"${pod:regex}"}[<validated-window>]) > 0',
+    });
+
+d.spec.withAnnotations([restartAnnotation])
+```
+
+Do not create a query fragment from `annotation.spec.query.*` and feed that fragment back into `annotation.spec.withQuery(...)`.
+
+### Allowed raw-object exception: V2 panel elements
+
+Grafonnet v13 does not expose a typed `PanelKind` / `QueryGroup` constructor under `g.apps.dashboard.v2`.
+
+A schema-shaped V2 panel object is therefore allowed for the panel internals, but it MUST render as a V2 `PanelKind`:
+
+```jsonnet
+local panel = {
+  kind: 'Panel',
+  spec: {
+    id: 1,
+    title: 'Example',
+    data: {
+      kind: 'QueryGroup',
+      spec: {
+        queries: [
+          {
+            kind: 'PanelQuery',
+            spec: {
+              refId: 'A',
+              query: {
+                kind: 'DataQuery',
+                group: 'prometheus',
+                datasource: { name: '<verified datasource reference>' },
+                spec: {
+                  expr: '<verified PromQL>',
+                },
+              },
+              hidden: false,
+            },
+          },
+        ],
+      },
+    },
+    vizConfig: {
+      kind: 'VizConfig',
+      group: 'timeseries',
+      spec: {
+        fieldConfig: {
+          defaults: {},
+          overrides: [],
+        },
+        options: {},
+      },
+    },
+  },
+};
+```
+
+Do not put `g.panel.stat.new(...)`, `g.panel.timeSeries.new(...)`, `g.panel.heatmap.new(...)`, or another classic panel object directly into V2 `spec.elements`.
+
+### Minimal complete composition skeleton
+
+Use this as the starting shape for a new v13 Schema V2 dashboard:
+
+```jsonnet
+local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonnet';
+local d = g.apps.dashboard.v2;
+local dv = d.spec.variables.DatasourceVariableKind;
+local qv = d.spec.variables.QueryVariableKind;
+local auto = d.spec.layout.AutoGridLayoutKind;
+local item = auto.spec.items;
+
+local datasourceVar =
+  dv.withKind()
+  + dv.spec.withName('datasource')
+  + dv.spec.withLabel('Data source')
+  + dv.spec.withPluginId('prometheus')
+  + dv.spec.withIncludeAll(false)
+  + dv.spec.withMulti(false);
+
+local namespaceVar =
+  qv.withKind()
+  + qv.spec.withName('namespace')
+  + qv.spec.withLabel('Namespace')
+  + qv.spec.withIncludeAll(false)
+  + qv.spec.withMulti(false)
+  + qv.spec.query.withKind()
+  + qv.spec.query.withGroup('prometheus')
+  + qv.spec.query.datasource.withName('<verified datasource-variable reference>')
+  + qv.spec.query.withSpec({ expr: '<namespace query>' });
+
+local podVar =
+  qv.withKind()
+  + qv.spec.withName('pod')
+  + qv.spec.withLabel('Pod')
+  + qv.spec.withIncludeAll(true)
+  + qv.spec.withAllValue('')
+  + qv.spec.withMulti(true)
+  + qv.spec.query.withKind()
+  + qv.spec.query.withGroup('prometheus')
+  + qv.spec.query.datasource.withName('<verified datasource-variable reference>')
+  + qv.spec.query.withSpec({ expr: '<pod query>' });
+
+local elementNames = ['overview'];
+local elements = {
+  overview: <schema-shaped V2 PanelKind>,
+};
+
+local layoutItem(name) =
+  item.withKind()
+  + item.spec.element.withKind()
+  + item.spec.element.withName(name);
+
+d.new('my-dashboard', 'My Dashboard')
++ d.spec.withDescription('Operational dashboard')
++ d.spec.withEditable(false)
++ d.spec.withElements(elements)
++ d.spec.withVariables([datasourceVar, namespaceVar, podVar])
++ d.spec.timeSettings.withFrom('now-6h')
++ d.spec.timeSettings.withTo('now')
++ auto.withKind()
++ auto.spec.withFillScreen(false)
++ auto.spec.withMaxColumnCount(3)
++ auto.spec.withItems([layoutItem(name) for name in elementNames])
+```
+
+## Two important builder shapes
+
+### 1. Path mixins
+
+A path mixin returns a fragment already rooted at its owning object path.
+
+For Grafonnet v13, `d.spec.layout.AutoGridLayoutKind.*` and `d.spec.timeSettings.*` contain dashboard path mixins. Add those fragments directly to the dashboard resource.
+
+### 2. Standalone collection-item builders
+
+Some nested namespaces build standalone values intended for a parent array or map.
+
+Examples:
+
+- `d.spec.variables.QueryVariableKind.withKind()` -> standalone variable object
+- `d.spec.variables.DatasourceVariableKind.withKind()` -> standalone variable object
+- `d.spec.layout.AutoGridLayoutKind.spec.items.withKind()` -> standalone AutoGrid item
+- `d.spec.annotations.withKind()` -> standalone annotation item
+
+Compose their nested path mixins into that standalone object, then pass the completed item to the corresponding parent collection setter.
 
 ## How to classify an unfamiliar builder
 
@@ -197,7 +343,7 @@ If it returns something like:
 }
 ```
 
-it is a dashboard path mixin. Add it directly to the dashboard resource.
+it is a dashboard path mixin.
 
 If it returns something like:
 
@@ -211,7 +357,7 @@ or:
 { kind: 'AutoGridLayoutItem' }
 ```
 
-it is a standalone value builder. Compose its nested mixins, then pass the result into the appropriate parent collection setter.
+it is a standalone value builder.
 
 If it returns:
 
@@ -230,7 +376,7 @@ For one field, choose exactly one of these:
 
 Do not combine both routes for the same field.
 
-Examples of suspicious code that require correction or proof from the generated body:
+Suspicious examples that require correction or proof from the generated body:
 
 ```jsonnet
 d.spec.withLayout(d.spec.layout.AutoGridLayoutKind.withKind() + ...)
@@ -241,9 +387,9 @@ item.spec.withElement(item.spec.element.withKind() + ...)
 
 ## Validation
 
-Before integrating a complicated builder chain, render the smallest possible fixture and inspect the shape.
+Before integrating a complicated builder chain, render the smallest possible fixture and inspect the resulting shape.
 
-For AutoGrid, require exactly:
+For AutoGrid, require:
 
 ```json
 {
@@ -258,6 +404,6 @@ For AutoGrid, require exactly:
 }
 ```
 
-for the relevant fragment after composition. There must be no extra `layout.spec.layout`, `layout.AutoGridLayoutKind`, `query.spec.query`, or other duplicate wrapper introduced by builder misuse.
+There must be no extra `layout.spec.layout`, `layout.AutoGridLayoutKind`, `query.spec.query`, or other duplicate wrapper introduced by builder misuse.
 
 The reviewer must `FAIL` source that double-wraps generated path mixins, even if Jsonnet renders successfully.

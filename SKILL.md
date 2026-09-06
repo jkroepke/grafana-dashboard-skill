@@ -39,12 +39,13 @@ Do not duplicate agent definitions for individual runtimes.
 
 - Create or update dashboard source.
 - Publish/write a dashboard only when the user explicitly requests it and writable Grafana dashboard API access is available.
-- Read-only datasource access may be used for discovery and validation.
+- Dashboard Schema V2 server-side dry-run validation is not publication and SHOULD use configured validation-capable Grafana Dashboard resource API access even when publication is not requested.
+- Read-only datasource access may be used for discovery and query validation.
 - Default new dashboards to Dashboard Schema V2.
 - Preserve the schema of an existing dashboard unless migration is requested.
 - Preserve existing dashboard identity, unrelated panels, repository helpers, and dependency pins.
 - Use the repository dashboard location, or `dashboards/<service>.jsonnet` when none exists.
-- The coordinator owns all final dashboard and shared-helper edits and all publish operations.
+- The coordinator owns all final dashboard and shared-helper edits and all real publish operations.
 
 Do not publish before rendering, validation, and independent review are complete.
 
@@ -61,8 +62,12 @@ Before delegation, determine from local evidence:
 - available metric sources
 - fixed selectors required to identify the application
 - configured datasource access method
+- Grafana base URL and configured Dashboard resource API validation access/wrapper when available
+- existing dashboard resource name/UID when applicable
 - whether publication is requested
-- when publication is requested: Grafana base URL, writable authentication method, existing dashboard name/UID when applicable, and folder UID when applicable
+- when publication is requested: writable authentication method and folder UID when applicable
+
+Do not require publication intent before using an already configured Dashboard API credential/wrapper for a non-persisting dry-run validation request.
 
 The Grafana Dashboard resource API namespace is always `default`. Do not ask for, infer, discover, or configure another Dashboard API namespace. This API namespace is unrelated to the dashboard variable named `namespace`.
 
@@ -87,7 +92,7 @@ Every dashboard has these variables in dependency order:
 | `namespace` | application-scoped `kubernetes_namespace` | single, no All |
 | `pod` | application-scoped `kubernetes_pod_name` | multi, All enabled with empty custom All value |
 
-Use `$datasource` for every Prometheus target, variable query, and annotation. Never embed a discovered datasource UID.
+Use `$datasource` for every Prometheus target, variable query, and annotation according to the target/pinned Dashboard V2 datasource-reference model. Never embed a discovered datasource UID.
 
 Application metrics use the target-environment stored labels:
 
@@ -175,7 +180,7 @@ Read local Grafana knowledge only as needed:
 - `knowledge/grafana/variables.md`
 - `knowledge/grafana/annotations.md`
 
-For Dashboard Schema V2, **MUST read `knowledge/grafana/grafonnet-v2.md` before writing the source. MUST use the pinned generated Grafonnet builder whenever one exists. Hand-authored equivalents are forbidden unless the local generated API genuinely has no suitable builder or the repository documents a compatibility workaround for the exact pin.**
+For Dashboard Schema V2, **MUST read `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md` before writing the source. MUST use the pinned generated Grafonnet builder whenever one exists. Hand-authored equivalents are forbidden unless the local generated API genuinely has no suitable builder or the repository documents a compatibility workaround for the exact pin. Use the canonical v13 recipes before inventing another composition pattern.**
 
 When a verified process/container start-timestamp metric exists, read `knowledge/grafana/annotations.md`. Add an annotation only when a sparse event-like query validates without misleading duplicates or flooding; never query a continuously scraped timestamp gauge directly as an annotation.
 
@@ -191,14 +196,20 @@ Give the reviewer:
 - pinned Grafana/Grafonnet versions
 - relevant raw fixture paths
 - read-only datasource access instructions when available
+- Grafana base URL and Dashboard resource API validation access/wrapper instructions when available
+- existing dashboard resource name/UID when applicable
 
-Do not give it analyst conclusions or expected findings. A worker must not approve its own output.
+For Dashboard Schema V2, the reviewer MUST validate the rendered candidate against the real target Grafana with the target-advertised Dashboard resource API dry-run before returning `PASS` when validation-capable API access is configured. Read `knowledge/grafana/grafana-v2-dry-run.md`. For current stable V2 this is `dryRun=All`, not `dryRun=true`, and `fieldValidation=Strict` should be used when advertised by target Swagger.
+
+The dry-run is validation only and must not be reported as publication. If target Grafana is configured for the task but no validation-capable Dashboard API access is available, the reviewer reports the server-side V2 validation gap rather than silently treating static checks as equivalent.
+
+Do not give the reviewer analyst conclusions or expected findings. A worker must not approve its own output.
 
 Fix confirmed findings in the coordinator context and render/review again when the fix can affect dashboard semantics.
 
 ### 7. Publish when requested
 
-Publish only after the dashboard has passed the applicable local validation and independent review.
+Publish only after the dashboard has passed the applicable local validation, target-Grafana dry-run validation, and independent review.
 
 Read:
 
@@ -234,11 +245,11 @@ Confirm methods and request bodies from Swagger before writing. Do not substitut
 
 - New dashboard: use the collection create operation.
 - Existing dashboard: GET it first, preserve identity/folder placement unless intentionally changed, then use the documented replace/update operation.
-- Use the rendered Schema V2 `spec`; do not blindly POST a classic DTO or arbitrary Jsonnet output envelope.
+- Use the rendered Schema V2 resource/spec; do not blindly POST a classic DTO or arbitrary Jsonnet output envelope.
 - Never create a duplicate dashboard because an update failed.
 - Never expose credentials or authorization headers in output.
 
-After writing, GET the resource again through the same API version under `namespaces/default` and verify the returned dashboard name, title, required variables, and expected V2 layout. A write response alone is not sufficient publication verification.
+After writing, GET the resource again through the same API version under `namespaces/default` and verify the returned dashboard name, title, required variables, expected V2 layout, and layout element references. A write response alone is not sufficient publication verification.
 
 ## Context discipline
 
@@ -296,7 +307,7 @@ Read `knowledge/kubernetes/metrics.md` when Kubernetes context is used.
 - Preserve dependency pins.
 - Keep code-managed dashboards non-editable unless repository policy explicitly requires UI editing.
 
-## Local validation
+## Local and target validation
 
 Prefer repository build commands. When applicable, validate with installed local tools:
 
@@ -308,6 +319,8 @@ dashboard-linter lint --strict --config <lint-config> /tmp/dashboard.json
 ```
 
 Use the repository's actual paths and commands when they differ. `jq empty` checks JSON syntax only, not Grafana schema correctness.
+
+For Dashboard Schema V2 with configured target Grafana Dashboard API validation access, server-side dry-run validation is mandatory before review can pass. Use target Swagger, namespace `default`, and `knowledge/grafana/grafana-v2-dry-run.md`. A successful HTTP status alone is insufficient: inspect warnings and the returned resource structure.
 
 When datasource access is available, test representative application, Kubernetes, variable, and annotation queries with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics.
 
@@ -326,6 +339,7 @@ Report only:
 - major panel groups added or changed
 - important omitted signals and why
 - render/schema/lint status
+- target-Grafana Dashboard V2 dry-run validation status when applicable
 - live-query validation status
 - annotation validation status when applicable
 - publish status when requested: API version, dashboard resource name/UID, and verification result (`namespace=default`)

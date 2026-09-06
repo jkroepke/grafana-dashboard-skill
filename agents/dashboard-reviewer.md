@@ -1,6 +1,6 @@
 ---
 name: dashboard-reviewer
-description: Independently review final Grafonnet source and rendered Grafana JSON for schema, variables, selectors, panels, PromQL, annotations, and live-query behavior.
+description: Independently review final Grafonnet source and rendered Grafana JSON for schema, variables, selectors, panels, PromQL, annotations, target-Grafana dry-run admission, and live-query behavior.
 mode: subagent
 ---
 
@@ -22,6 +22,8 @@ Receive:
 - pinned Grafana/Grafonnet versions
 - relevant raw fixture paths
 - configured read-only datasource access instructions when available
+- configured Grafana Dashboard resource API validation access instructions when available
+- existing dashboard resource name/UID when applicable
 - target/pinned panel plugin inventory when available
 
 Read only the knowledge files needed for checks being performed.
@@ -40,7 +42,7 @@ Verify:
 
 For Dashboard Schema V2, review the Grafonnet construction before only inspecting the rendered JSON.
 
-**MUST read `knowledge/grafana/grafonnet-v2.md`, `knowledge/grafana/grafonnet-builder-composition.md`, and `knowledge/grafana/layout-v2.md` for every Dashboard V2 review.** Read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel.
+**MUST read `knowledge/grafana/grafonnet-v2.md`, `knowledge/grafana/grafonnet-builder-composition.md`, `knowledge/grafana/layout-v2.md`, and `knowledge/grafana/grafana-v2-dry-run.md` for every Dashboard V2 review.** Read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel.
 
 ### Mandatory builder enforcement
 
@@ -89,7 +91,7 @@ d.spec.variables.QueryVariableKind.spec.withQuery(q)
 
 when those nested query builders already write to the variable's `spec.query` path. The correct composition is to add the nested query mixins directly to the standalone variable object.
 
-The source must instead use the corresponding generated `g.apps.dashboard.v2` builders with the composition semantics defined by the pinned generated bodies.
+The source must instead use the corresponding generated `g.apps.dashboard.v2` builders with the composition semantics defined by the pinned generated bodies and the canonical recipes in `knowledge/grafana/grafonnet-builder-composition.md`.
 
 Do not fail schema-shaped V2 `PanelKind` / `QueryGroup` internals merely because they are raw objects when the pinned Grafonnet version does not expose typed builders for them. Verify their shape against the pinned Dashboard V2 schema instead.
 
@@ -120,7 +122,30 @@ Reject direct `g.panel.*.new(...)` results inside V2 `spec.elements` unless a ve
 
 If the Grafonnet source appears consistent but the rendered dashboard does not contain matching keys/references, report a Grafonnet builder/composition problem. Inspect mixin usage and the pinned generated API.
 
-If the rendered dashboard contains the expected element key but the resource read back from Grafana does not, report a publication/envelope/API-version problem instead of changing the reference model.
+## Mandatory target-Grafana dry-run
+
+For Dashboard Schema V2, server-side validation against the real target Grafana is mandatory when Dashboard resource API access is configured.
+
+Read `knowledge/grafana/grafana-v2-dry-run.md` and perform the target-advertised dry-run operation before returning `PASS`.
+
+Rules:
+
+1. Inspect target Swagger first. Do not guess API version, route, or dry-run syntax.
+2. Always use Dashboard resource namespace `default`.
+3. For current stable V2, use `dryRun=All`, not `dryRun=true`.
+4. Add `fieldValidation=Strict` when the target advertises it.
+5. New dashboard: dry-run the create operation (`POST`).
+6. Existing dashboard: GET the live resource first, preserve required live metadata/resource version, then dry-run the same replace/update operation (`PUT`) that publication would use.
+7. Submit the rendered candidate resource/spec, not a manually simplified validation DTO.
+8. Inspect the returned resource and warnings, not only the status code.
+9. Re-run the exact layout-reference checks against the dry-run response.
+10. Return `FAIL` on any target schema/admission/conversion error, dropped expected structure, warning about unknown fields, or unresolved returned layout reference.
+
+A dry-run request MUST NOT persist the dashboard and MUST NOT be reported as publication.
+
+If target Grafana is configured for the task but validation-capable Dashboard API access is missing, return `FAIL` with `server-side Dashboard V2 dry-run unavailable` rather than silently approving from static checks alone.
+
+Dry-run does not replace live-query validation, plugin validation, or real post-publication GET verification.
 
 ## Variable and selector checks
 
@@ -129,7 +154,7 @@ Verify:
 - `datasource` exists and is single-value/no All
 - `namespace` is single-value/no All
 - `pod` is multi-value with bounded All behavior
-- `$datasource` is used for all Prometheus consumers
+- `$datasource` is used for all Prometheus consumers according to the target/pinned V2 datasource-reference model
 - no discovered datasource UID is embedded
 - application queries use the target-environment application label contract
 - Kubernetes queries use the Kubernetes label contract
