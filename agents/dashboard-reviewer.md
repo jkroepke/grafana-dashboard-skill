@@ -40,7 +40,7 @@ Verify:
 
 For Dashboard Schema V2, review the Grafonnet construction before only inspecting the rendered JSON.
 
-**MUST read `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/layout-v2.md` for every Dashboard V2 review.** Read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel.
+**MUST read `knowledge/grafana/grafonnet-v2.md`, `knowledge/grafana/grafonnet-builder-composition.md`, and `knowledge/grafana/layout-v2.md` for every Dashboard V2 review.** Read `knowledge/grafana/layout-reference-debugging.md` when layout references are present or Grafana reports a missing panel.
 
 ### Mandatory builder enforcement
 
@@ -51,8 +51,10 @@ For every V2 structure in the Jsonnet source:
 3. if the source hand-authors an equivalent object despite an available builder, return `FAIL`
 4. allow raw schema-shaped Jsonnet only when the pinned Grafonnet API genuinely has no suitable builder or the repository documents a compatibility workaround for the exact pin
 5. require evidence from the local vendored generated API for any claimed builder absence
+6. classify each used builder as a path mixin or standalone value from its generated function body before accepting the composition
+7. return `FAIL` when a path-mixin result is fed back into a parent setter and therefore double-wraps the generated path
 
-This is a correctness rule, not a style recommendation. Successful Jsonnet rendering or schema-shaped JSON does not excuse bypassing an available generated builder.
+This is a correctness rule, not a style recommendation. Successful Jsonnet rendering or schema-shaped JSON does not excuse bypassing an available generated builder or composing it at the wrong level.
 
 Examples that MUST fail when the pinned builder exists:
 
@@ -63,7 +65,31 @@ Examples that MUST fail when the pinned builder exists:
 { kind: 'AnnotationQuery', spec: { ... } }
 ```
 
-The source must instead use the corresponding generated `g.apps.dashboard.v2` builders.
+Examples that MUST fail when the generated methods have the v13 path-mixin shape:
+
+```jsonnet
+local layout =
+  d.spec.layout.AutoGridLayoutKind.withKind()
+  + d.spec.layout.AutoGridLayoutKind.spec.withItems(items);
+
+d.new('x', 'X') + d.spec.withLayout(layout)
+```
+
+The AutoGrid builder result above is already rooted at `spec.layout`; wrapping it in `spec.withLayout(...)` is wrong.
+
+Likewise reject patterns such as:
+
+```jsonnet
+local q =
+  d.spec.variables.QueryVariableKind.spec.query.withKind()
+  + d.spec.variables.QueryVariableKind.spec.query.withGroup('prometheus');
+
+d.spec.variables.QueryVariableKind.spec.withQuery(q)
+```
+
+when those nested query builders already write to the variable's `spec.query` path. The correct composition is to add the nested query mixins directly to the standalone variable object.
+
+The source must instead use the corresponding generated `g.apps.dashboard.v2` builders with the composition semantics defined by the pinned generated bodies.
 
 Do not fail schema-shaped V2 `PanelKind` / `QueryGroup` internals merely because they are raw objects when the pinned Grafonnet version does not expose typed builders for them. Verify their shape against the pinned Dashboard V2 schema instead.
 

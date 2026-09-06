@@ -6,7 +6,7 @@ Default new dashboards to Dashboard Schema V2. Preserve classic schema for exist
 
 Use the pinned generated `grafana/grafonnet` API. Inspect unfamiliar local generated methods instead of guessing signatures or patch shapes.
 
-For Dashboard Schema V2, **MUST read `knowledge/grafana/grafonnet-v2.md` before writing or reviewing the Grafonnet source**. The model's built-in knowledge of Grafonnet may be stale; the local vendored generated API is authoritative.
+For Dashboard Schema V2, **MUST read both `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md` before writing or reviewing the Grafonnet source**. The model's built-in knowledge of Grafonnet may be stale; the local vendored generated API is authoritative.
 
 Do not reject the `grafonnet-latest` import path by name alone. Resolve what the vendored alias and jsonnet-bundler lock actually point to. Preserve the repository import convention and dependency pin.
 
@@ -19,13 +19,33 @@ For Dashboard Schema V2:
 - **MUST use the pinned generated Grafonnet builder whenever that builder exists.**
 - **MUST NOT hand-author an equivalent raw Jsonnet/JSON object merely because its schema shape is known.**
 - **MUST inspect the local vendored generated API before deciding that no builder exists.**
+- **MUST classify the generated builder as a path mixin or standalone value before composing it.**
+- **MUST NOT feed a path-mixin result back into a parent `withX(...)` setter when the generated result already contains that parent path.**
 - Raw schema-shaped Jsonnet is allowed only when the pinned Grafonnet API genuinely has no suitable builder, or when the repository contains a documented compatibility workaround for the exact pinned version.
 - A manual equivalent of an available builder is a correctness failure, not a style preference.
+- A double-wrapped builder result is also a correctness failure, even when Jsonnet renders successfully.
 - Do not patch rendered JSON to compensate for incorrect source construction.
 
 This requirement applies to the V2 resource envelope, metadata, layouts, layout items, element references, variables, annotations, time settings, and every other V2 structure for which the pinned library provides a builder.
 
 Grafonnet v13 notably exposes `spec.withElements(object)` without a typed `PanelKind`/`QueryGroup` constructor. Schema-shaped raw Jsonnet is therefore acceptable for those unmodeled V2 panel internals, but the surrounding dashboard/layout/variable/annotation structures must still use available generated builders.
+
+### Builder composition model
+
+Generated Grafonnet namespaces are not uniformly standalone constructors.
+
+For v13, `d.spec.layout.AutoGridLayoutKind.withKind()` and `d.spec.layout.AutoGridLayoutKind.spec.withItems(...)` are **dashboard path mixins**: their generated bodies already write to `spec.layout`. Compose them directly onto `d.new(...)`. Do not put their result into `d.spec.withLayout(...)`.
+
+By contrast, `d.spec.layout.AutoGridLayoutKind.spec.items.withKind()` builds a standalone `AutoGridLayoutItem`, and `d.spec.variables.QueryVariableKind.withKind()` builds a standalone variable. Compose their nested mixins into those standalone items, then pass the completed items to `withItems(...)` or `withVariables(...)`.
+
+Nested query builders such as `QueryVariableKind.spec.query.withKind()` are path mixins relative to the variable object. Compose them directly into the variable. Do not build that wrapped fragment separately and then pass it to `QueryVariableKind.spec.withQuery(...)`.
+
+Use exactly one composition route for a field:
+
+1. generated path mixins composed directly into the owning object, or
+2. a true standalone inner value passed to a parent `withX(value)` setter.
+
+Never use both routes for the same field. See `knowledge/grafana/grafonnet-builder-composition.md` for canonical AutoGrid, variable, query, annotation, and validation examples.
 
 ## V2 structure
 
@@ -78,6 +98,7 @@ Tabs can have section-local behavior in the schema, but keep the required `datas
 - require every `ElementReference.name = X` to have an exact `spec.elements[X]` key
 - never infer element-reference semantics from the word `uid` in Grafana error text
 - **MUST use the pinned generated layout-item and element-reference builders when they exist; hand-written `{kind: ...}` equivalents are forbidden unless a documented compatibility exception exists**
+- **MUST compose AutoGrid path mixins directly onto the dashboard; do not wrap them again with `spec.withLayout(...)`**
 
 The coordinator owns final layout integration. The panel expert only recommends placement and sizing.
 
@@ -89,6 +110,7 @@ The coordinator owns final layout integration. The panel expert only recommends 
 - use `grafonnet.apps.dashboard.v2` for a Dashboard Schema V2 resource; `grafonnet.dashboard.new(...)` is the classic dashboard surface
 - do not put direct `grafonnet.panel.*.new(...)` results into V2 `spec.elements`
 - **MUST use generated V2 builders where available**
+- classify each unfamiliar builder by its generated return fragment before composing it
 - use schema-shaped raw objects only where the pinned library has no suitable builder, and verify that absence from the local generated API before proceeding
 - create `.libsonnet` helpers only when they materially reduce duplication or safely encapsulate a verified V2 structure
 - keep code-managed dashboards non-editable unless repository policy says otherwise
@@ -100,6 +122,7 @@ Render with repository commands and check:
 - schema version
 - V2 root resource was built from the intended Grafonnet API
 - available generated V2 builders were used instead of manual equivalents
+- no generated path mixin was double-wrapped through a parent setter
 - every element intended as a panel renders with `kind: "Panel"`
 - panel `spec` contains the V2 `data` / `vizConfig` structure required by the pinned schema
 - V2 DataQuery wrappers and datasource references use the pinned V2 shape rather than classic query DTO assumptions
