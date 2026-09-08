@@ -150,7 +150,7 @@ def grafana_version_from_response(response: bytes) -> str:
     return validate_grafana_version("v" + match.group("version"))
 
 
-def read_grafana_version(root: Path, command: str, evidence_directory: Path) -> str:
+def read_grafana_version(root: Path, command: str, evidence_directory: Path, cwd: Path) -> str:
     """Run the preconfigured opaque /version command once."""
     executable = render_executable(root, command)
     marker_path = evidence_directory / "grafana-version-gate.started"
@@ -165,7 +165,7 @@ def read_grafana_version(root: Path, command: str, evidence_directory: Path) -> 
         with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
             result = subprocess.run(
                 [executable],
-                cwd=root,
+                cwd=cwd,
                 stdout=stdout,
                 stderr=stderr,
                 check=False,
@@ -280,12 +280,13 @@ def create_run_contract(args: argparse.Namespace) -> str:
     require(SAFE_COMPONENT_RE.fullmatch(args.run_id) is not None, "run ID is not filesystem-safe")
 
     coordinator = initialize_coordinator(root, args.project_name, args.run_id)
+    workspace = root / "dashboards" / args.project_name / "workspace"
     grafana_version = read_grafana_version(
         root,
         args.grafana_version_command,
         coordinator / "evidence",
+        workspace,
     )
-    workspace = root / "dashboards" / args.project_name / "workspace"
     final_source = repository_path(root, args.final_source, "final source")
     candidate = final_source.with_name(f"{final_source.stem}.candidate.jsonnet")
     if final_source.exists():

@@ -19,6 +19,12 @@ dashboards/<project-name>/workspace/<agent>/<run-id>/
 └── state.yaml   small resumable progress snapshot
 ```
 
+`dashboards/<project-name>/workspace/.env` is the private shared access
+configuration for this run. It is created only by the coordinator through
+`scripts/set_workflow_env`, never appears in artifacts, and is loaded by
+Grafana wrappers when they run from this workspace or a descendant role
+directory.
+
 Initialize the directory with:
 
 ```bash

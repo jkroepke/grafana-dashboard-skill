@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -6,15 +7,20 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 const MAX_OUTPUT_BYTES = 16 * 1024;
+const SAFE_COMPONENT = /^[A-Za-z0-9._-]+$/;
 
 const Action = StringEnum(
-  ["run-contract", "dispatch", "accept", "promote", "failure-report"] as const,
+  ["set-workflow-env", "run-contract", "dispatch", "accept", "promote", "failure-report"] as const,
 );
 
 const OPERATIONS: Record<
-  "run-contract" | "dispatch" | "accept" | "promote" | "failure-report",
+  "set-workflow-env" | "run-contract" | "dispatch" | "accept" | "promote" | "failure-report",
   { script: string; prefix: string[]; suffix?: string[] }
 > = {
+  "set-workflow-env": {
+    script: "scripts/set_workflow_env",
+    prefix: [],
+  },
   "run-contract": {
     script: "scripts/create_coordinator_artifact.py",
     prefix: ["run-contract"],
@@ -55,11 +61,12 @@ function appendBounded(
 async function runOperation(
   action: keyof typeof OPERATIONS,
   args: string[],
+  repositoryRoot: string,
   cwd: string,
   signal: AbortSignal,
 ): Promise<{ code: number; stdout: string; stderr: string; overflow: boolean }> {
   const operation = OPERATIONS[action];
-  const script = resolve(cwd, operation.script);
+  const script = resolve(repositoryRoot, operation.script);
   const argv = [script, ...operation.prefix, ...args, ...(operation.suffix ?? [])];
 
   return await new Promise((resolveResult) => {
@@ -118,7 +125,7 @@ export default function coordinatorControlExtension(pi: ExtensionAPI): void {
     promptSnippet:
       "Use coordinator_control for coordinator-owned workflow execution; never fall back to bash.",
     promptGuidelines: [
-      "coordinator_control is only for run-contract, dispatch, accept, promote, and failure-report operations.",
+      "coordinator_control is only for set-workflow-env, run-contract, dispatch, accept, promote, and failure-report operations.",
       "Never use coordinator_control to reproduce specialist work or inspect specialist-owned content.",
     ],
     parameters: Type.Object({
@@ -135,9 +142,35 @@ export default function coordinatorControlExtension(pi: ExtensionAPI): void {
             "Arguments for the selected fixed workflow operation. No shell parsing is performed.",
         },
       ),
+      projectName: Type.Optional(
+        Type.String({
+          pattern: "^[A-Za-z0-9._-]+$",
+          minLength: 1,
+          maxLength: 128,
+          description: "Required only for set-workflow-env; selects the project workspace.",
+        }),
+      ),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const result = await runOperation(params.action, params.arguments, ctx.cwd, signal);
+      let operationCwd = ctx.cwd;
+      if (params.action === "set-workflow-env") {
+        if (!params.projectName || !SAFE_COMPONENT.test(params.projectName)) {
+          return {
+            content: [{ type: "text", text: "FAIL set-workflow-env: projectName is required" }],
+            details: { action: params.action, exitCode: 2, overflow: false },
+            isError: true,
+          };
+        }
+        operationCwd = resolve(ctx.cwd, "dashboards", params.projectName, "workspace");
+        mkdirSync(operationCwd, { recursive: true, mode: 0o700 });
+      }
+      const result = await runOperation(
+        params.action,
+        params.arguments,
+        ctx.cwd,
+        operationCwd,
+        signal,
+      );
 
       if (result.overflow) {
         return {

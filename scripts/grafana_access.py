@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -17,6 +18,13 @@ from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 UID_RE = re.compile(r"^[A-Za-z0-9_-]{1,160}$")
 LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 PARAMETER_RE = re.compile(r"^[A-Za-z0-9_.\[\]-]{1,64}$")
+ENV_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+ENV_KEYS = frozenset({
+    "GRAFANA_TARGET",
+    "GRAFANA_HTTP_CLIENT",
+    "GRAFANA_HTTP_CLIENT_ARGS_JSON",
+    "GRAFANA_PROMETHEUS_DATASOURCE_UID",
+})
 
 
 class AccessError(ValueError):
@@ -38,9 +46,48 @@ def require(condition: bool, message: str) -> None:
         raise AccessError(message)
 
 
-def grafana_access_from_environment(environment: Mapping[str, str] | None = None) -> GrafanaAccess:
-    """Load trusted wrapper configuration without evaluating shell input."""
-    values = os.environ if environment is None else environment
+def workflow_env_path(cwd: Path | None = None) -> Path | None:
+    """Find the project workspace configuration for the current workflow."""
+    directory = (cwd or Path.cwd()).resolve()
+    for candidate in (directory, *directory.parents):
+        if candidate.name == "workspace" and candidate.parent.parent.name == "dashboards":
+            return candidate / ".env"
+    return None
+
+
+def grafana_env(path: Path | None = None) -> dict[str, str]:
+    """Load the private Grafana configuration for the active workspace."""
+    path = path or workflow_env_path()
+    if path is None:
+        return {}
+    if not path.exists():
+        return {}
+    require(path.is_file() and not path.is_symlink(), "Grafana .env must be a regular file")
+    require(stat.S_IMODE(path.stat().st_mode) & 0o077 == 0, "Grafana .env must not be group/world accessible")
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise AccessError("Grafana .env could not be read") from error
+    values: dict[str, str] = {}
+    for number, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        require(separator and ENV_KEY_RE.fullmatch(key) is not None, f"Grafana .env line {number} is invalid")
+        require(key in ENV_KEYS, f"Grafana .env key {key} is not allowed")
+        require(key not in values and "\x00" not in value, f"Grafana .env line {number} is invalid")
+        values[key] = value
+    return values
+
+
+def grafana_access_from_environment(
+    environment: Mapping[str, str] | None = None,
+    *,
+    env_path: Path | None = None,
+) -> GrafanaAccess:
+    """Load fixed private configuration, allowing trusted process env overrides."""
+    values = {**grafana_env(env_path), **(os.environ if environment is None else environment)}
     target = values.get("GRAFANA_TARGET", "")
     parsed = urlsplit(target)
     require(

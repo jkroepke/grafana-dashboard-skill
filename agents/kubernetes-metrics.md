@@ -2,6 +2,7 @@
 name: kubernetes-metrics
 description: Inventory and categorize Kubernetes workload, resource, capacity, lifecycle, and scrape metrics without designing queries or dashboards.
 mode: subagent
+tools: read, bash
 ---
 
 # Kubernetes Metrics Analyst

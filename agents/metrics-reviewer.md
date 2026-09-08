@@ -2,6 +2,7 @@
 name: metrics-reviewer
 description: Independently verify application, process, and Kubernetes metric inventories and produce the bounded approved metrics contract.
 mode: subagent
+tools: read, bash
 ---
 
 # Metrics Reviewer

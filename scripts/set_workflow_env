@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Set one allowed private Grafana workflow variable in the repository .env."""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from grafana_access import ENV_KEYS, UID_RE, AccessError, grafana_env, workflow_env_path
+
+
+def fail(message: str) -> int:
+    print(f"ERROR workflow-env: {message}", file=sys.stderr)
+    return 2
+
+
+def valid(name: str, value: str) -> bool:
+    if not value or "\x00" in value:
+        return False
+    if name == "GRAFANA_TARGET":
+        parsed = urlsplit(value)
+        return (
+            parsed.scheme in {"http", "https"}
+            and bool(parsed.netloc)
+            and not parsed.query
+            and not parsed.fragment
+        )
+    if name == "GRAFANA_HTTP_CLIENT":
+        return "/" not in value or Path(value).is_absolute()
+    if name == "GRAFANA_HTTP_CLIENT_ARGS_JSON":
+        try:
+            values = json.loads(value)
+        except json.JSONDecodeError:
+            return False
+        return (
+            isinstance(values, list)
+            and len(values) <= 16
+            and all(isinstance(item, str) and len(item) <= 1024 for item in values)
+        )
+    return UID_RE.fullmatch(value) is not None
+
+
+def main() -> int:
+    if len(sys.argv) != 3:
+        return fail("usage: set_workflow_env <name> <value>")
+    name, value = sys.argv[1:]
+    if name not in ENV_KEYS:
+        return fail("environment variable is not allowed")
+    if not valid(name, value):
+        return fail("environment variable value is invalid")
+    path = workflow_env_path()
+    if path is None:
+        return fail("set_workflow_env must run from a dashboard workspace")
+    try:
+        values = grafana_env(path)
+        values[name] = value
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=path.parent, prefix=".env.", delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            os.chmod(temporary_path, 0o600)
+            for key in sorted(values):
+                temporary.write(f"{key}={values[key]}\n")
+        os.replace(temporary_path, path)
+    except (AccessError, OSError) as error:
+        return fail(str(error))
+    print("PASS workflow-env")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

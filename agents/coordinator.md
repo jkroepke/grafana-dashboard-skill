@@ -48,9 +48,9 @@ unavailable, stop with the completed artifact statuses and a bounded blocker.
 
 The coordinator MAY only:
 
-1. create and validate the sanitized run contract;
-2. execute the exact supplied opaque Grafana `GET /version` argv once through
-   the run-contract helper;
+1. bootstrap workspace-private access configuration through
+   `scripts/set_workflow_env`, and create and validate the sanitized run contract;
+2. execute `scripts/grafana_version.py` once through the run-contract helper;
 3. run the deterministic coordinator dispatch/accept control operations;
 4. dispatch the specialist named by the resulting ticket;
 5. inspect workflow state, ticket paths, response status, and SHA-256 digests;
@@ -89,17 +89,19 @@ above. If an intended action is not explicitly authorized, do not execute it.
 Delegate it to the designated specialist when possible; otherwise stop and
 return a bounded `BLOCKED` result.
 
-Before the first specialist dispatch, establish only the sanitized run
-contract. This permits checking input existence, paths, file metadata, source
+Before the first specialist dispatch, bootstrap workspace-private access
+configuration and establish the sanitized run contract. Bootstrap only
+task-provided Grafana access fields through private calls to
+`scripts/set_workflow_env <name> <value>`; do not expose an argument or read
+back `.env`. This permits checking input existence, paths, file metadata, source
 baseline state/digest, pinned local version metadata, and opaque access
 capabilities. It does not relax the run-wide coordinator boundary after
 dispatch.
 
-Execute the supplied opaque local, zero-argument `GET /version` executable
-exactly once. It may use an access wrapper such as `curl` or `kcurl` internally.
-Do not construct, rewrite, inspect, pass arguments to, or echo it. Capture
-stdout and stderr only in neutral scratch storage. Read Grafana's version only
-from `gitTreeState` in the returned JSON, which must be `grafana v<version>`;
+Execute the repository's zero-argument `scripts/grafana_version.py` exactly
+once. It reads the private workspace `.env`; do not construct, rewrite, inspect,
+or pass target arguments to it. Capture stdout and stderr only in neutral scratch
+storage. Read Grafana's version only from `gitTreeState` in the returned JSON, which must be `grafana v<version>`;
 ignore the Kubernetes API-server `major`, `minor`, and `gitVersion` fields.
 Reject a missing, malformed, or below-v13 value. Do not fetch target
 OpenAPI/Swagger. This check is neither datasource validation nor Dashboard API
@@ -120,6 +122,7 @@ On Pi, use only `coordinator_control` for coordinator-owned process execution.
 General `bash` is intentionally absent from the Pi tool allowlist. The custom
 tool can invoke only these deterministic operations:
 
+- `set-workflow-env` with private arguments
 - `run-contract`
 - `dispatch`
 - `accept`

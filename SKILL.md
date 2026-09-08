@@ -109,21 +109,21 @@ Do not publish before rendering, validation, and independent review are complete
 
 ## Coordinator entry gate
 
-The coordinator's only task-specific pre-delegation activity is to create and
-validate the sanitized run contract. It may read the required confidentiality
-and coordinator-control documentation, and may check input paths, file metadata,
+The coordinator's only task-specific pre-delegation activity is to configure
+access with `scripts/set_workflow_env` and create and validate the sanitized run
+contract. It may read the required confidentiality and coordinator-control
+documentation, and check input paths, file metadata,
 source baseline state/digest, pinned-version metadata, and opaque access
 capabilities. It MUST NOT read or interpret raw metric/manifests/dashboard/API
 contents; search them for metric names, labels, query text, panel content, or
 semantics; run datasource probes; or construct any dashboard artifact other
 than the run contract.
 
-The coordinator's sole target-version request is one supplied shell-free,
-opaque, zero-argument executable that performs `GET /version`. It may use a
-local access wrapper such as `kcurl` or `curl` internally, but it must already
-know the target and authentication, exit zero only for HTTP 200, and write the
-JSON response only to stdout. Do not append, construct, or pass target
-arguments. Capture stdout and stderr in neutral scratch files. Parse only `gitTreeState`, which must be
+After access configuration, the coordinator's sole target-version request is
+the repository's shell-free, zero-argument `scripts/grafana_version.py`. It
+exits zero only for HTTP 200 and writes JSON only to stdout. Do not append,
+construct, or pass target arguments. Capture stdout and stderr in neutral scratch
+files. Parse only `gitTreeState`, which must be
 exactly `grafana v<major>[.<minor>[.<patch>]]`; the Kubernetes API-server
 `major`, `minor`, and `gitVersion` fields are not Grafana version evidence.
 Do not fetch, inspect, or cache a target OpenAPI document. Do not invoke the
@@ -157,7 +157,7 @@ Before delegation, locate or record proposed facts and evidence paths without pe
 - proposed fixed-selector references
 - configured datasource access method
 - opaque Grafana Dashboard resource API validation access/wrapper when available
-- the shell-free opaque local `/version` command that emits the version JSON
+- `scripts/grafana_version.py` as the zero-argument `/version` command
 - existing dashboard resource identity when applicable
 - whether publication is requested
 - when publication is requested: writable authentication method and folder placement when applicable
@@ -170,6 +170,10 @@ revision evidence, validates the artifact, and advances coordinator state.
 
 Do not place literal connection details or target identifiers into the shared contract passed to subagents. Provide an opaque access capability/reference instead.
 
+Before any target request, configure access privately with
+`scripts/set_workflow_env`. If the runtime cannot invoke it without exposing
+task-provided access details, stop with `MISSING_PRIVATE_CONFIG_WRITER`.
+
 When the repository wrappers are configured, use
 `scripts/prometheus_reader.py <request-file> <response-file>` for read-only
 Prometheus access and `scripts/grafana_dry_run.py <resource-file>
@@ -180,8 +184,8 @@ supplied opaque wrapper supports the required resource GET and update dry-run,
 including writing the response body to a neutral local file on HTTP failure.
 Otherwise record `dashboard_api_validation: false` in the run contract and do
 not substitute a collection POST or direct request. Their target, datasource selection,
-proxy paths, and credentials are trusted runtime configuration; do not invoke
-the datasource resolver, supply an endpoint or UID, or source configuration.
+proxy paths, and credentials are trusted private configuration; do not invoke
+the datasource resolver, supply an endpoint or UID, or read/source configuration.
 Prometheus requests may use only `query`, `query_range`, `series`, `labels`,
 `label_values`, or `metadata`, with all target-identifying input kept in the
 request file.

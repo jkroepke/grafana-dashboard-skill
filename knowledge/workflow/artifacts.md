@@ -98,16 +98,16 @@ python3 scripts/create_coordinator_artifact.py run-contract \
   --repository-root "$PWD" \
   --project-name <project-name> \
   --run-id <run-id> \
-  --grafana-version-command <opaque-version-command> \
+  --grafana-version-command scripts/grafana_version.py \
   --final-source dashboards/<project-name>/dashboard.jsonnet
 ```
 
 The default render argv is `jsonnet -J vendor {source}`. Use repeated
 `--render-arg` options and `--render-program` only when the repository has a
-different shell-free render command. `--grafana-version-command` is a required
-zero-argument opaque executable, preconfigured to perform `GET /version` and
-return HTTP-200 JSON only on stdout. It may use a local wrapper such as `kcurl`
-internally, but it must already know the target and authentication. The helper
+different shell-free render command. Bootstrap the workspace-private `.env`
+through `scripts/set_workflow_env` before this command. The required
+zero-argument version executable is `scripts/grafana_version.py`; it reads that
+file, performs `GET /version`, and returns HTTP-200 JSON only on stdout. The helper
 executes it once, stores the raw response privately, and extracts Grafana's version only from
 `gitTreeState: "grafana v<version>"`. It ignores `major`, `minor`, and
 `gitVersion`, which may identify the backing Kubernetes API server. Other
@@ -175,17 +175,18 @@ python3 scripts/validate_workflow_artifact.py <run-contract.yaml>
 
 ### Grafana `/version` gate
 
-The task must supply an opaque, shell-free local executable that performs this
-request through its own configured target access:
+The coordinator bootstraps the workspace-private `.env` with
+`scripts/set_workflow_env` and then uses `scripts/grafana_version.py` to perform
+this request:
 
 ```text
 GET <GRAFANA_URL>/version
 ```
 
-The supplied shell-free argv is executed exactly as provided; it may invoke an
-access wrapper such as `curl` or `kcurl`. Exit status `0` must mean it received
-HTTP 200 and emits only the JSON response to stdout. The coordinator executes
-it once before delegation and stores stdout and stderr in neutral scratch files.
+The zero-argument wrapper reads the private configuration and invokes the
+configured client. Exit status `0` must mean it received HTTP 200 and emits only
+the JSON response to stdout. The coordinator executes it once before delegation
+and stores stdout and stderr in neutral scratch files.
 It parses only `gitTreeState`, which must exactly be
 `grafana v<major>[.<minor>[.<patch>]]`; this value supplies
 `schema.grafana_version` and must be v13 or later. Ignore `major`, `minor`,

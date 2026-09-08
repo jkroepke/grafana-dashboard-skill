@@ -2,6 +2,7 @@
 name: dashboard-publisher
 description: Publish an already promoted and independently approved dashboard, then verify target readback without changing source or Prometheus queries.
 mode: subagent
+tools: read, bash
 ---
 
 # Dashboard Publisher

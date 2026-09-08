@@ -2,6 +2,7 @@
 name: dashboard-reviewer
 description: Independently review a staged Grafonnet candidate for approved-query integration, Grafana schema, variables, panels, layout, plugins, and target dry-run admission.
 mode: subagent
+tools: read, bash
 ---
 
 # Grafana Dashboard Reviewer

@@ -23,30 +23,29 @@ Create or update the Grafana dashboard for <application>.
 Metrics dump: <path>
 Kubernetes manifests: <path or none>
 Existing dashboard: <path or none>
-Grafana /version access: <opaque shell-free command argv>
-Grafana/Prometheus access: <opaque local access instructions or none>
+Grafana access bootstrap: <private target and client details>
 Publish: <yes|no>
 Folder placement: <opaque configured reference or none>
 ```
 
 For `Publish: yes`, provide writable Grafana dashboard API access. Prometheus datasource access may remain read-only.
 
-Do not paste target endpoints, host/domain details, credentials, or unrelated resource identifiers into the task prompt. Use an opaque local wrapper/environment reference. Visible command/output redaction is defined in `knowledge/security/output-redaction.md`.
-
-Provide a shell-free, zero-argument opaque executable that performs `GET
-/version` and emits its JSON response to stdout. It may use a local access
-wrapper such as `kcurl` internally, but it must already know the target and
-authentication. The coordinator runs it exactly once and stores the response
-privately. The coordinator extracts the
+Provide target and client details only through the runtime's private task-input
+channel. The coordinator writes them to
+`dashboards/<project-name>/workspace/.env` with `scripts/set_workflow_env`,
+then runs `scripts/grafana_version.py` exactly once. Visible command/output
+redaction is defined in `knowledge/security/output-redaction.md`. The coordinator extracts the
 Grafana version only from `gitTreeState`, which must be `grafana v<version>`;
 it ignores the Kubernetes API-style `major` and `minor` fields and `gitVersion`.
 
 ## Opaque Grafana capabilities
 
-Configure `GRAFANA_TARGET` and, when needed, `GRAFANA_HTTP_CLIENT` plus its
-JSON-array `GRAFANA_HTTP_CLIENT_ARGS_JSON` in the trusted launch environment.
-Do not write or source a repository `.env` file. The provided wrappers keep the
-target, credentials, proxy path, and datasource UID out of agent arguments:
+The coordinator configures `dashboards/<project-name>/workspace/.env` through
+`scripts/set_workflow_env <name> <value>`. It may set `GRAFANA_TARGET`,
+`GRAFANA_HTTP_CLIENT`, `GRAFANA_HTTP_CLIENT_ARGS_JSON`, and
+`GRAFANA_PROMETHEUS_DATASOURCE_UID`; all wrappers load the file automatically.
+Do not shell-source or print it. The provided wrappers keep the target,
+credentials, proxy path, and datasource UID out of later agent arguments:
 
 ```text
 scripts/grafana_version.py

@@ -2,6 +2,7 @@
 name: promql-reviewer
 description: Independently review the exact query pack for PromQL semantics, selectors, result shape, cost, and live datasource behavior without editing queries.
 mode: subagent
+tools: read, bash
 ---
 
 # PromQL Reviewer

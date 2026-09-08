@@ -2,6 +2,7 @@
 name: dashboard-architect
 description: Turn an approved metrics contract into a bounded operational-question and panel plan without writing datasource queries or dashboard source.
 mode: subagent
+tools: read, bash
 ---
 
 # Dashboard Architect

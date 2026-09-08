@@ -2,6 +2,7 @@
 name: application-metrics
 description: Inventory and categorize application and process metrics as evidence-backed facts without designing queries or dashboards.
 mode: subagent
+tools: read, bash
 ---
 
 # Application Metrics Analyst

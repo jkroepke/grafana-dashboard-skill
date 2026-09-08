@@ -2,6 +2,7 @@
 name: promql-builder
 description: Exclusively author and validate every Prometheus panel, variable, and annotation query in a dashboard query pack.
 mode: subagent
+tools: read, bash
 ---
 
 # PromQL Builder

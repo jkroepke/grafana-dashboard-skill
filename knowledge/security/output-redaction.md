@@ -38,6 +38,20 @@ Preferred access patterns, in order:
 2. preconfigured environment variable whose value is not echoed
 3. protected local configuration/credential file read by the command without printing its contents
 
+## Private workflow configuration
+
+Before the version gate, the coordinator may transfer task-provided Grafana
+access fields into `dashboards/<project-name>/workspace/.env` only through
+`scripts/set_workflow_env <name> <value>`. This is the sole permitted writer:
+it accepts only documented `GRAFANA_*` names, writes atomically with mode
+`0600`, and prints no value. The file is ignored by Git and repository wrappers
+load it automatically from their workspace.
+
+The runtime must keep the wrapper arguments private. Never issue this command
+through a shell or tool preview that displays a sensitive value, and never read,
+source, print, hand off, or include `.env` in an artifact. If the runtime cannot
+call the wrapper with private arguments, return `MISSING_PRIVATE_CONFIG_WRITER`.
+
 ## Opaque local access commands
 
 When a target is reachable only through a local command, treat that command as

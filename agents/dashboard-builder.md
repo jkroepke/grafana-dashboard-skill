@@ -2,6 +2,7 @@
 name: dashboard-builder
 description: Build and render a staged Grafonnet dashboard candidate from approved plan and query artifacts without editing final source or query text.
 mode: subagent
+tools: read, bash
 ---
 
 # Dashboard Builder
