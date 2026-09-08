@@ -52,6 +52,11 @@ Act on a decided diagnostic step instead of narrating it repeatedly.
 
 Canonical subagent definitions live in `agents/` and are exposed by the repository symlinks for the primary clients OpenCode and Pi, plus existing compatibility discovery paths.
 
+`coordinator` is the required primary/root agent for this skill. It is not a
+specialist and MUST NOT be invoked as a subagent. OpenCode selects it through
+the repository `opencode.json`. In Pi with `@pi-kaush/pi-agent-mode`, activate
+it with `/agent coordinator` before starting a dashboard task.
+
 Invoke specialists by agent ID:
 
 - `application-metrics`
@@ -66,7 +71,11 @@ Invoke specialists by agent ID:
 
 The repository exposes the skill through `.agents/skills/grafana-dashboard`. Keep the runtime symlink layout intact.
 
-When Pi uses a subagent extension with an agent-scope option, enable project agents (`project` or `both`).
+`@pi-kaush/pi-agent-mode` activates the persistent main-agent role but does not
+provide child-agent delegation. Pi therefore also requires a compatible
+subagent extension for this pipeline. When that extension has an agent-scope
+option, enable project agents (`project` or `both`) so it discovers the
+repository `.pi/agents` definitions.
 
 Do not duplicate agent definitions for individual runtimes.
 
@@ -84,6 +93,23 @@ Do not duplicate agent definitions for individual runtimes.
 - The coordinator owns dispatch, stage state, digest checks, and mechanical promotion of an approved candidate. A fresh `dashboard-publisher` performs explicitly requested publication. The coordinator MUST NOT reconstruct or manually repair dashboard source, PromQL, or API payloads.
 
 Do not publish before rendering, validation, and independent review are complete.
+
+## Coordinator entry gate
+
+The coordinator has exactly one permitted pre-delegation activity: create and
+validate the sanitized run contract. It may check input paths, file metadata,
+source baseline state/digest, pinned-version metadata, and opaque access
+capabilities. It MUST NOT read or interpret raw metric/manifests/dashboard/API
+contents; search them for metric names, labels, query text, panel content, or
+semantics; run datasource probes; or construct any dashboard artifact other
+than the run contract.
+
+Once the run contract passes validation, dispatch `application-metrics` and
+`kubernetes-metrics` immediately and concurrently whenever their respective
+evidence exists. The coordinator performs no overlapping evidence gathering
+while they run. If an analyst, fresh subagent context, or the runtime's
+subagent tool is unavailable, stop with the completed artifact statuses and a
+bounded blocker. Do not substitute coordinator work for the missing stage.
 
 ## Establish the shared contract
 

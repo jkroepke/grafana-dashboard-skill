@@ -37,7 +37,42 @@ metric inventories -> metrics review -> dashboard architecture
 
 `promql-builder` exclusively owns all Prometheus panel, variable, and annotation query text. `dashboard-builder` writes only a staged candidate. The coordinator routes artifact paths and digests, then promotes the exact approved candidate without reconstructing it in the coordinator context. A fresh `dashboard-publisher` performs the optional API write and readback verification.
 
-Canonical agent definitions under `agents/` are exposed to both OpenCode and Pi through the repository discovery symlinks. For Pi subagent extensions with an agent-scope setting, use `project` or `both`.
+## Runtime setup
+
+The project has one primary agent, `coordinator`, and nine specialist
+subagents. The coordinator may create the run contract and route artifacts,
+but may not gather metric semantics, author queries, build, review, or publish
+in place of a specialist.
+
+### OpenCode
+
+The committed `opencode.json` selects `coordinator` as the project default
+agent. The existing `.opencode/agents` symlink exposes the coordinator and all
+specialists. Reload or start a new OpenCode session from the repository so the
+project configuration is applied.
+
+### Pi
+
+Install and reload the persistent main-agent mode:
+
+```bash
+pi install npm:@pi-kaush/pi-agent-mode
+```
+
+Start Pi in this repository, then activate the root role before giving the
+dashboard task:
+
+```text
+/agent coordinator
+```
+
+`@pi-kaush/pi-agent-mode` selects the coordinator and keeps that role active
+for the session. It does not provide a child-agent tool. Install and enable a
+compatible Pi subagent extension as well; configure it to discover project
+agents with `agentScope: "project"` or `"both"`. The repository's
+`.pi/agents` symlink then supplies the same nine specialist definitions used by
+OpenCode. If that tool or a required specialist is unavailable, the
+coordinator must stop rather than gather or implement the missing stage.
 
 ## Dashboard V2 publishing
 
