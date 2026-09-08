@@ -19,14 +19,13 @@ Read:
 
 - `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
-- `knowledge/security/output-redaction.md`
 - `knowledge/grafana/publishing-v2.md`
 - `knowledge/grafana/grafana-v2-dry-run.md`
 
 First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 upstream prose or the complete conversation. It supplies the approved bindings,
-promoted source and final-render evidence, output path, limits, and opaque
+promoted source and final-render evidence, output path, limits, and configured
 writable access.
 
 Use the initialized agent/run workspace. Checkpoint the preflight, request,
@@ -40,13 +39,11 @@ Refuse to publish unless the run contract records Grafana v13+ and Dashboard
 Schema V2. The target must advertise stable Dashboard V2; classic dashboards,
 other structured API versions, and the legacy endpoint are out of scope.
 
-Use the pinned/local stable V2 request model through the opaque access method.
+Use the pinned/local stable V2 request model through the configured access method.
 Do not fetch or inspect target OpenAPI/Swagger. Always use resource namespace
 `default`. Create only when no existing resource identity is recorded;
 otherwise GET and update/replace the existing resource. Never create a
 duplicate to recover from an update failure.
-
-Keep endpoints, target identifiers, authentication material, request/response bodies, and unrelated resources out of visible commands and output. Store raw target evidence only in neutral scratch files.
 
 After the write, GET the same resource and verify the expected title, required variables, schema/layout structure, and reviewed content identity. An HTTP success without readback verification is a failure.
 

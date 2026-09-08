@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set one allowed private Grafana workflow variable in the repository .env."""
+"""Set one allowed Grafana workflow variable in the workspace .env."""
 
 from __future__ import annotations
 

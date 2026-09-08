@@ -93,7 +93,7 @@ Use the repository's configured authenticated wrapper/mechanism instead of inven
 When diagnosing a failure, use an opaque wrapper that preserves the complete
 response body and headers even on an HTTP error. See
 `knowledge/grafana/v2-validation-errors.md`. If the configured wrapper does
-not offer that capability, retain its sanitized failure locally and stop rather
+not offer that capability, retain its failure locally and stop rather
 than constructing a direct request.
 
 ## Existing dashboard

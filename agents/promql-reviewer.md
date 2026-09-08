@@ -19,7 +19,6 @@ Read:
 
 - `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
-- `knowledge/security/output-redaction.md`
 - only the `knowledge/promql/` files relevant to expressions in the pack
 - `knowledge/grafana/variables.md` for variable queries
 - `knowledge/grafana/annotations.md` for annotation queries
@@ -27,7 +26,7 @@ Read:
 First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 builder conclusions or the complete conversation. It supplies the approved
-bindings, targeted evidence, output path, limits, and opaque datasource access.
+bindings, targeted evidence, output path, limits, and configured datasource access.
 
 Use the initialized agent/run workspace. Review one query record at a time,
 checkpoint its result/finding as a bounded YAML file with `yq`, and update
@@ -50,7 +49,7 @@ Validate all input digests. Independently check:
 - annotation event sparsity and sample-time semantics
 - live behavior with one pod, multiple pods, and All where supported
 
-HTTP success or PromQL syntax alone is not a pass. Keep raw responses in scratch files and surface only sanitized evidence in the review artifact.
+HTTP success or PromQL syntax alone is not a pass. Keep raw responses in scratch files and include the relevant evidence in the review artifact.
 
 For a configured `scripts/prometheus_reader.py` capability, write the approved
 query request and response paths in the assigned workspace and invoke only

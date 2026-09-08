@@ -19,7 +19,6 @@ Read:
 
 - `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
-- `knowledge/security/output-redaction.md`
 - `knowledge/grafana/panel-selection.md`
 - `knowledge/grafana/variables.md`
 - `knowledge/grafana/layout-v2.md`
@@ -30,7 +29,7 @@ First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 raw metrics, upstream prose, or the complete conversation. It supplies the
 approved bindings, existing source, output/candidate/render paths, pinned
-versions, repository build commands, limits, and opaque capabilities.
+versions, repository build commands, limits, and configured capabilities.
 
 Use the initialized agent/run workspace. Checkpoint each construction unit
 and validation result as a small YAML record with `yq`, updating `state.yaml`

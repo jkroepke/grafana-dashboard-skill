@@ -5,21 +5,21 @@ cache, not the system of record.
 
 ## Required layout
 
-The coordinator selects a filesystem-safe `<project-name>` and a neutral
-`<run-id>`. Every role works below its own directory:
+The coordinator selects filesystem-safe `<project-name>` and `<run-id>` values.
+Every role works below its own directory:
 
 ```text
 dashboards/<project-name>/workspace/<agent>/<run-id>/
 ├── inbox/       immutable job tickets from the coordinator
 ├── records/     small structured findings, one logical item per YAML file
 │   └── done/    completed metric-family work items; never reprocess these
-├── evidence/    raw or sanitized evidence kept out of YAML records
+├── evidence/    raw evidence kept out of YAML records
 ├── outbox/      completed stage artifact or failure report
 ├── tmp/         incomplete files; never hand these to another stage
 └── state.yaml   small resumable progress snapshot
 ```
 
-`dashboards/<project-name>/workspace/.env` is the private shared access
+`dashboards/<project-name>/workspace/.env` is the shared access
 configuration for this run. It is created only by the coordinator through
 `scripts/set_workflow_env`, never appears in artifacts, and is loaded by
 Grafana wrappers when they run from this workspace or a descendant role
@@ -176,10 +176,6 @@ yq eval '.' "$draft" >/dev/null
 mv "$draft" "$final"
 unset RECORD_ID RECORD_TYPE
 ```
-
-Never place sensitive values directly in a visible command. When a record needs
-target-derived content, load it from an already-written private local evidence
-file and emit only the permitted sanitized projection.
 
 Update the progress snapshot after the record is durable:
 

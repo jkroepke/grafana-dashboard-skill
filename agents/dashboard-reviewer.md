@@ -13,22 +13,12 @@ Independently approve or reject the exact staged dashboard candidate and rendere
 
 Do not edit source, rendered JSON, query packs, shared helpers, or final dashboard files. Do not publish. Temporary scratch files and non-persisting target dry-run requests are allowed.
 
-## Confidentiality
-
-MUST read `knowledge/security/output-redaction.md` before any target access, diagnostic command, or output.
-
-- Use only opaque preconfigured access references in visible commands.
-- Never expose endpoints, host/domain information, organization/customer identifiers, cluster/environment names, dashboard/resource identifiers, credentials, or session material.
-- Keep complete target responses in neutral scratch files and surface only sanitized findings.
-- Visible target-information leakage is an independent `FAIL`.
-
 ## Required inputs
 
 Read:
 
 - `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
-- `knowledge/security/output-redaction.md`
 - `knowledge/grafana/variables.md`
 - `knowledge/grafana/layout-v2.md`
 - `knowledge/grafana/grafonnet-v2.md`, `knowledge/grafana/grafonnet-builder-composition.md`, and `knowledge/grafana/grafana-v2-dry-run.md`
@@ -40,7 +30,7 @@ First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 upstream conclusions, raw metric dumps, or the complete conversation. It
 supplies the approved bindings, candidate/rendered evidence, pinned versions,
-output path, limits, and opaque target access.
+output path, limits, and configured target access.
 
 Use the initialized agent/run workspace. Checkpoint each independent check,
 finding, and target-validation result in its own bounded YAML file with `yq`,
@@ -114,9 +104,9 @@ dispatch. Do not fall back to a collection POST.
 
 On failure, preserve the full target error in a scratch file when the configured
 wrapper supplies it. Use the diagnostic references, one changed candidate per
-probe, a compact sanitized ledger, and no more than six isolation probes only
+probe, a compact ledger, and no more than six isolation probes only
 when the wrapper supports error capture and the needed probe operations.
-Otherwise record the sanitized wrapper failure and route it back without direct
+Otherwise record the wrapper failure and route it back without direct
 target access. Do not infer an unsupported layout or server bug from CUE
 alternative-branch conflicts, add union-arm wrappers, disable strict validation,
 or patch rendered JSON.

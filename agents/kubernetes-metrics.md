@@ -19,14 +19,13 @@ Read:
 
 - `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
-- `knowledge/security/output-redaction.md`
 - `knowledge/kubernetes/metrics.md`
 
 First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 or copy the complete conversation. It supplies the relevant evidence, exact
 workload/container identity, run-contract and `application-metrics` bindings,
-namespace-scope reference and digest, output path, limits, and opaque discovery
+namespace-scope reference and digest, output path, limits, and configured discovery
 access.
 
 Do not start Kubernetes discovery until the completed application artifact and
@@ -41,7 +40,7 @@ alternation containing only the supplied namespace values for multiple
 namespaces. When request or matcher-size limits require batching, split only
 the supplied set into bounded batches and union the resulting facts; each batch
 remains namespace-scoped. Keep namespace values in local evidence/request files
-and out of visible output. If the application scope is missing, empty, invalid,
+in local evidence. If the application scope is missing, empty, invalid,
 or cannot be applied by the available access method, return a bounded failure
 report instead of widening discovery.
 

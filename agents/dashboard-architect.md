@@ -19,7 +19,6 @@ Read:
 
 - `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
-- `knowledge/security/output-redaction.md`
 - `knowledge/grafana/panel-selection.md`
 - `knowledge/grafana/layout-v2.md` only when layout constraints materially affect the plan
 

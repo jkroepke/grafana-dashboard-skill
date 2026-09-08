@@ -23,22 +23,20 @@ Create or update the Grafana dashboard for <application>.
 Metrics dump: <path>
 Kubernetes manifests: <path or none>
 Existing dashboard: <path or none>
-Grafana access bootstrap: <private target and client details>
+Grafana access bootstrap: <target and client details>
 Publish: <yes|no>
-Folder placement: <opaque configured reference or none>
+Folder placement: <configured reference or none>
 ```
 
 For `Publish: yes`, provide writable Grafana dashboard API access. Prometheus datasource access may remain read-only.
 
-Provide target and client details only through the runtime's private task-input
-channel. The coordinator writes them to
+Provide target and client details in the task. The coordinator writes them to
 `dashboards/<project-name>/workspace/.env` with `scripts/set_workflow_env`,
-then runs `scripts/grafana_version.py` exactly once. Visible command/output
-redaction is defined in `knowledge/security/output-redaction.md`. The coordinator extracts the
+then runs `scripts/grafana_version.py` exactly once. The coordinator extracts the
 Grafana version only from `gitTreeState`, which must be `grafana v<version>`;
 it ignores the Kubernetes API-style `major` and `minor` fields and `gitVersion`.
 
-## Opaque Grafana capabilities
+## Grafana capabilities
 
 The coordinator configures `dashboards/<project-name>/workspace/.env` through
 `scripts/set_workflow_env <name> <value>`. It may set `GRAFANA_TARGET`,

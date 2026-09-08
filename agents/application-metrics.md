@@ -19,12 +19,11 @@ Read:
 
 - `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
-- `knowledge/security/output-redaction.md`
 
 First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 or copy the complete conversation. It supplies the assigned metric evidence,
-run-contract binding, output path, limits, and opaque discovery access.
+run-contract binding, output path, limits, and configured discovery access.
 
 Use the initialized agent/run workspace. Treat `records/pending/` as the
 metric-family work queue and `records/done/` as its completed queue. Process

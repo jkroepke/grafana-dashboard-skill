@@ -19,14 +19,13 @@ Read:
 
 - `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
-- `knowledge/security/output-redaction.md`
 - `knowledge/kubernetes/metrics.md` when Kubernetes capabilities are present
 
 First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 analyst prose or the complete conversation. It supplies the run-contract and
 shortlist bindings, raw evidence, existing dashboard source/render evidence,
-output path, limits, and opaque discovery access.
+output path, limits, and configured discovery access.
 
 Use the initialized agent/run workspace. Review one shortlist record at a
 time and immediately checkpoint its approved, rejected, not-considered, or

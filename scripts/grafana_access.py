@@ -1,4 +1,4 @@
-"""Opaque Grafana access helpers for capability-specific wrappers."""
+"""Grafana access helpers for capability-specific wrappers."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ ENV_KEYS = frozenset({
 
 
 class AccessError(ValueError):
-    """Raised when an opaque Grafana access capability cannot be used."""
+    """Raised when a configured Grafana access capability cannot be used."""
 
 
 @dataclass(frozen=True)
@@ -56,7 +56,7 @@ def workflow_env_path(cwd: Path | None = None) -> Path | None:
 
 
 def grafana_env(path: Path | None = None) -> dict[str, str]:
-    """Load the private Grafana configuration for the active workspace."""
+    """Load the Grafana configuration for the active workspace."""
     path = path or workflow_env_path()
     if path is None:
         return {}
@@ -86,7 +86,7 @@ def grafana_access_from_environment(
     *,
     env_path: Path | None = None,
 ) -> GrafanaAccess:
-    """Load fixed private configuration, allowing trusted process env overrides."""
+    """Load workspace configuration, allowing process environment overrides."""
     values = {**grafana_env(env_path), **(os.environ if environment is None else environment)}
     target = values.get("GRAFANA_TARGET", "")
     parsed = urlsplit(target)

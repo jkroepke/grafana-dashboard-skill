@@ -495,7 +495,7 @@ Required inputs: `run-contract`, `dashboard-plan`, `query-pack`, `query-review`,
 
 ## Failure report
 
-When a normal artifact cannot be produced, first write one or more sanitized
+When a normal artifact cannot be produced, first write one or more
 evidence files below the relevant agent workspace, then create
 `failure-report.yaml` with:
 
@@ -506,7 +506,7 @@ python3 scripts/create_coordinator_artifact.py failure-report \
   --failed-stage <agent-id> \
   --owner <agent-id-or-USER> \
   --code <stable-code> \
-  --summary '<sanitized summary>' \
+  --summary '<summary>' \
   --evidence evidence/<neutral-file>
 ```
 
@@ -517,7 +517,7 @@ The helper produces an artifact at most 16 KiB, containing only:
   "failed_stage": "<agent id>",
   "owner": "<agent id or USER>",
   "code": "<stable code>",
-  "summary": "<concise sanitized blocker>",
+  "summary": "<concise blocker>",
   "evidence_refs": ["<up to three neutral references>"]
 }
 ```

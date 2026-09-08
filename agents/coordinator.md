@@ -48,8 +48,8 @@ unavailable, stop with the completed artifact statuses and a bounded blocker.
 
 The coordinator MAY only:
 
-1. bootstrap workspace-private access configuration through
-   `scripts/set_workflow_env`, and create and validate the sanitized run contract;
+1. bootstrap workspace access configuration through
+   `scripts/set_workflow_env`, and create and validate the run contract;
 2. execute `scripts/grafana_version.py` once through the run-contract helper;
 3. run the deterministic coordinator dispatch/accept control operations;
 4. dispatch the specialist named by the resulting ticket;
@@ -69,7 +69,7 @@ the workflow. In particular, the coordinator MUST NOT:
 
 - read, search, inspect, or interpret metric dumps, manifests, datasource
   responses, existing dashboard source, candidate dashboard source, rendered
-  dashboard content, or target API responses except the privately captured
+  dashboard content, or target API responses except the captured
   `/version` result handled by the run-contract helper;
 - discover metric names, labels, selectors, queries, panels, or dashboard
   semantics;
@@ -89,17 +89,17 @@ above. If an intended action is not explicitly authorized, do not execute it.
 Delegate it to the designated specialist when possible; otherwise stop and
 return a bounded `BLOCKED` result.
 
-Before the first specialist dispatch, bootstrap workspace-private access
-configuration and establish the sanitized run contract. Bootstrap only
-task-provided Grafana access fields through private calls to
-`scripts/set_workflow_env <name> <value>`; do not expose an argument or read
-back `.env`. This permits checking input existence, paths, file metadata, source
-baseline state/digest, pinned local version metadata, and opaque access
+Before the first specialist dispatch, bootstrap workspace access
+configuration and establish the run contract. Bootstrap only
+task-provided Grafana access fields through calls to
+`scripts/set_workflow_env <name> <value>`. This permits checking input existence,
+paths, file metadata, source
+baseline state/digest, pinned local version metadata, and configured access
 capabilities. It does not relax the run-wide coordinator boundary after
 dispatch.
 
 Execute the repository's zero-argument `scripts/grafana_version.py` exactly
-once. It reads the private workspace `.env`; do not construct, rewrite, inspect,
+once. It reads the workspace `.env`; do not construct, rewrite, inspect,
 or pass target arguments to it. Capture stdout and stderr only in neutral scratch
 storage. Read Grafana's version only from `gitTreeState` in the returned JSON, which must be `grafana v<version>`;
 ignore the Kubernetes API-server `major`, `minor`, and `gitVersion` fields.
@@ -113,8 +113,8 @@ and exposes a non-empty namespace-scope evidence reference, digest, and count.
 Then pass that completed artifact as a direct input and pass the exact scope
 reference/digest in the Kubernetes ticket. The Kubernetes stage must not run if
 the scope is absent or invalid. Do no overlapping investigation while either
-analyst runs. Pass only sanitized paths, expected digests, assigned output
-paths, required contract fields, and opaque access references.
+analyst runs. Pass paths, expected digests, assigned output paths, required
+contract fields, and configured access references.
 
 ## Coordinator tool boundary
 
@@ -122,7 +122,7 @@ On Pi, use only `coordinator_control` for coordinator-owned process execution.
 General `bash` is intentionally absent from the Pi tool allowlist. The custom
 tool can invoke only these deterministic operations:
 
-- `set-workflow-env` with private arguments
+- `set-workflow-env`
 - `run-contract`
 - `dispatch`
 - `accept`
@@ -171,7 +171,5 @@ application-metrics
 - Do not publish unless the optional `dashboard-publisher` stage is requested
   and all prerequisite gates pass.
 
-Read `knowledge/security/output-redaction.md` before any target access,
-specialist handoff containing target context, or visible completion output.
 Use files for substantial handoffs and return only the artifact-control-plane
 status required by the workflow.

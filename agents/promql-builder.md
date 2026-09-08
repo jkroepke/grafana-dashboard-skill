@@ -19,7 +19,6 @@ Read:
 
 - `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
-- `knowledge/security/output-redaction.md`
 - only the relevant files under `knowledge/promql/`
 - `knowledge/grafana/variables.md` for variable queries
 - `knowledge/grafana/annotations.md` when annotations are planned
@@ -27,7 +26,7 @@ Read:
 First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 raw dumps or the complete conversation. It supplies the approved bindings,
-existing source/render evidence, output path, limits, and opaque datasource
+existing source/render evidence, output path, limits, and configured datasource
 access. Use only the selector contract in `metrics-contract`; run-contract
 proposals are not authoritative.
 
@@ -58,7 +57,7 @@ same counter assumption. Return `NEEDS_EVIDENCE` for the type/semantics conflict
 
 For required variables, author the exact Prometheus variable-query text and record the target/pinned query-model fields such as query type and editor reference. For annotations, author only event-like queries whose sample-time behavior is understood. Every Prometheus datasource query consumes the declared budget.
 
-HTTP success alone is not validation. Record sanitized evidence references for errors/warnings, series count, returned label keys, duplicates, representative values, and one/multiple/All pod behavior where applicable. Keep raw responses on disk.
+HTTP success alone is not validation. Record evidence references for errors/warnings, series count, returned label keys, duplicates, representative values, and one/multiple/All pod behavior where applicable. Keep raw responses on disk.
 
 ## Artifact and response
 

@@ -12,7 +12,7 @@ Create or update only Dashboard Schema V2 Grafonnet dashboard resources for Graf
 This skill is V2-only and requires Grafana v13+.
 
 - Require a verified Grafana version in `v<major>[.<minor>[.<patch>]]` form, with major version 13 or higher, before dispatching any specialist.
-- Require a successful opaque `GET /version` check whose `gitTreeState` reports Grafana v13 or later. Ignore its Kubernetes API-style `major`, `minor`, and `gitVersion` fields.
+- Require a successful configured `GET /version` check whose `gitTreeState` reports Grafana v13 or later. Ignore its Kubernetes API-style `major`, `minor`, and `gitVersion` fields.
 - Create, update, validate, and publish only Dashboard Schema V2 resources (`apiVersion: dashboard.grafana.app/v2`, `kind: Dashboard`).
 - Do not create, update, convert, validate, or publish classic dashboard JSON. An existing source is assessed by the designated specialist stages; if it renders to a non-V2 dashboard, stop. Classic-to-V2 migration is outside this workflow.
 
@@ -29,25 +29,6 @@ This workflow runs air-gapped with a 256k context limit.
   use it for YAML tickets, checkpoints, state, and stage artifacts. Checked-in
   automation may be implemented in Python; non-YAML outputs use their native
   tools.
-
-## Confidentiality
-
-**MUST read `knowledge/security/output-redaction.md` before any target-system access, specialist handoff containing target context, or visible completion output.**
-
-Sensitive target information may be used internally when required to perform the task, but MUST NOT appear in visible agent text, subagent output, visible shell commands, command previews, diagnostic ledgers, review findings, or completion summaries.
-
-Treat target connection details, host/domain information, organization/customer identifiers, cluster/environment names, dashboard/resource identifiers, unrelated discovered resource IDs, local paths revealing target identity, and all authentication/session material as sensitive.
-
-Hard rules:
-
-- Never place a literal target endpoint in a visible command. Use an already configured opaque wrapper/environment reference whose value is not echoed.
-- Never assign a sensitive endpoint/identifier value in the same visible command that uses it.
-- Never print resolved connection variables, credential files, tokens, cookies, authorization headers, or netrc contents.
-- Never repeat sensitive literals merely because they appeared in input, previous output, an API response, or an error body.
-- Keep raw target responses in local scratch files; surface only sanitized fields/evidence.
-- Do not print unrelated dashboard/resource IDs while probing target examples.
-- Use placeholders such as `<TARGET>`, `<DASHBOARD_ID>`, `<RESOURCE_ID>`, `<CLUSTER>`, `<ENVIRONMENT>`, and `<APPLICATION>` in visible prose/commands when a role label is needed.
-- A technically correct dashboard that leaks target information in the visible transcript is a failed workflow.
 
 ## Execution discipline
 
@@ -110,10 +91,10 @@ Do not publish before rendering, validation, and independent review are complete
 ## Coordinator entry gate
 
 The coordinator's only task-specific pre-delegation activity is to configure
-access with `scripts/set_workflow_env` and create and validate the sanitized run
-contract. It may read the required confidentiality and coordinator-control
-documentation, and check input paths, file metadata,
-source baseline state/digest, pinned-version metadata, and opaque access
+access with `scripts/set_workflow_env` and create and validate the run
+contract. It may read the required coordinator-control documentation and check
+input paths, file metadata,
+source baseline state/digest, pinned-version metadata, and configured access
 capabilities. It MUST NOT read or interpret raw metric/manifests/dashboard/API
 contents; search them for metric names, labels, query text, panel content, or
 semantics; run datasource probes; or construct any dashboard artifact other
@@ -144,7 +125,7 @@ the missing stage.
 Before delegation, locate or record proposed facts and evidence paths without performing metric semantics or dashboard construction in the coordinator context:
 
 - application/workload identity
-- filesystem-safe project name, neutral run ID, and the absolute
+- filesystem-safe project name, run ID, and the absolute
   `dashboards/<project-name>/workspace` path
 - candidate container and sidecar evidence
 - verified Grafana version (`v13+`) and Dashboard Schema V2 compatibility
@@ -156,7 +137,7 @@ Before delegation, locate or record proposed facts and evidence paths without pe
 - available metric-source paths/access capabilities
 - proposed fixed-selector references
 - configured datasource access method
-- opaque Grafana Dashboard resource API validation access/wrapper when available
+- configured Grafana Dashboard resource API validation access/wrapper when available
 - `scripts/grafana_version.py` as the zero-argument `/version` command
 - existing dashboard resource identity when applicable
 - whether publication is requested
@@ -168,11 +149,9 @@ YAML with an ad hoc `yq` expression. The helper records the source baseline,
 requires an executable render command, resolves locally locked Grafonnet
 revision evidence, validates the artifact, and advances coordinator state.
 
-Do not place literal connection details or target identifiers into the shared contract passed to subagents. Provide an opaque access capability/reference instead.
+Provide configured access capability references in the shared contract.
 
-Before any target request, configure access privately with
-`scripts/set_workflow_env`. If the runtime cannot invoke it without exposing
-task-provided access details, stop with `MISSING_PRIVATE_CONFIG_WRITER`.
+Before any target request, configure access with `scripts/set_workflow_env`.
 
 When the repository wrappers are configured, use
 `scripts/prometheus_reader.py <request-file> <response-file>` for read-only
@@ -180,11 +159,11 @@ Prometheus access and `scripts/grafana_dry_run.py <resource-file>
 <response-file>` for a new-dashboard Dashboard V2 create dry-run. The supplied
 dry-run script does not validate an existing resource update. Treat Dashboard
 API validation as configured for an existing dashboard only when a separately
-supplied opaque wrapper supports the required resource GET and update dry-run,
-including writing the response body to a neutral local file on HTTP failure.
+supplied configured wrapper supports the required resource GET and update dry-run,
+including writing the response body to a local file on HTTP failure.
 Otherwise record `dashboard_api_validation: false` in the run contract and do
 not substitute a collection POST or direct request. Their target, datasource selection,
-proxy paths, and credentials are trusted private configuration; do not invoke
+proxy paths, and credentials are configured runtime settings; do not invoke
 the datasource resolver, supply an endpoint or UID, or read/source configuration.
 Prometheus requests may use only `query`, `query_range`, `series`, `labels`,
 `label_values`, or `metadata`, with all target-identifying input kept in the
@@ -257,8 +236,8 @@ reading assignments. Use `coordinator_stage.py accept` to verify its bounded
 response, artifact, and digest. Use a fresh specialist instance at every
 author/reviewer boundary. Do not create recursive subagent trees.
 
-The ticket contains only neutral paths, expected digests, sanitized fields,
-opaque access references, and transitive validation paths. Support artifacts
+The ticket contains paths, expected digests, configured access references, and
+transitive validation paths. Support artifacts
 are validator-only unless they are direct role inputs.
 
 The mandatory state machine is:
@@ -300,7 +279,7 @@ separate artifacts.
 Analysts MUST NOT write final or candidate PromQL, variable queries, annotation queries, operational panel plans, or dashboard source. Large catalogs and raw evidence remain on disk; their visible response contains only stage status, artifact path, and digest.
 
 For large Prometheus/OpenMetrics exposition, the analyst streams the configured
-opaque reader or local evidence through `scripts/snapshot_metrics.py` on stdin.
+configured reader or local evidence through `scripts/snapshot_metrics.py` on stdin.
 The helper has no network, credential, or input-file interface and writes small
 per-family YAML snapshots without exposing raw sample or label values to agent
 context. The analyst inspects those snapshots selectively. Both metric analysts
@@ -323,7 +302,7 @@ It writes operational question IDs, allowed metric IDs, desired result shapes, c
 
 ### 4. Exclusive PromQL construction
 
-Dispatch `promql-builder` with only the approved metrics contract and dashboard plan, existing dashboard source/render paths when updating, relevant targeted evidence, and opaque read-only datasource access. It obtains selector, population, and scrape-timing facts only from the approved metrics contract and its evidence references, never from run-contract proposals.
+Dispatch `promql-builder` with only the approved metrics contract and dashboard plan, existing dashboard source/render paths when updating, relevant targeted evidence, and configured read-only datasource access. It obtains selector, population, and scrape-timing facts only from the approved metrics contract and its evidence references, never from run-contract proposals.
 
 `promql-builder` is the only agent allowed to author or change any final Prometheus datasource query text. This includes all panel targets, Prometheus variable queries, and Prometheus annotation queries. Straightforward and difficult queries have the same owner. No analyst, architect, dashboard builder, reviewer, or coordinator may add, repair, normalize, or optimize them.
 
@@ -331,7 +310,7 @@ The builder writes a bounded `query-pack.yaml`. Discovery and validation probes 
 
 ### 5. Independent PromQL review
 
-Dispatch a fresh `promql-reviewer` with the exact query pack and digest, its approved inputs, targeted evidence, and opaque read-only datasource access.
+Dispatch a fresh `promql-reviewer` with the exact query pack and digest, its approved inputs, targeted evidence, and configured read-only datasource access.
 
 The reviewer validates every query rather than a representative subset. It writes findings but never replacement expressions. A query failure returns to `promql-builder`; any revised query pack requires a new PromQL review.
 
@@ -347,11 +326,11 @@ The builder MUST read `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana
 
 ### 7. Independent dashboard review
 
-Dispatch a fresh `dashboard-reviewer` with the candidate source, rendered JSON, build manifest, dashboard plan, query pack, query-review artifact, expected digests, pinned versions, and opaque target validation access.
+Dispatch a fresh `dashboard-reviewer` with the candidate source, rendered JSON, build manifest, dashboard plan, query pack, query-review artifact, expected digests, pinned versions, and configured target validation access.
 
 The reviewer checks Grafonnet/source composition, rendered schema, variables, visualization plugins, panels, layout, annotations, and exact integration of every approved query. It does not repeat semantic PromQL ownership and never writes a replacement query or source patch.
 
-It MUST perform the stable V2 Dashboard resource API dry-run when validation-capable access is configured for the exact create or update operation. A target failure follows `knowledge/grafana/v2-validation-errors.md`; use `knowledge/grafana/diagnostic-execution.md` only when the opaque wrapper preserves the failure response and supports the required probe operations. Otherwise retain the sanitized wrapper failure as the validation result and route it back without attempting direct target requests. Dry-run validation is not publication.
+It MUST perform the stable V2 Dashboard resource API dry-run when validation-capable access is configured for the exact create or update operation. A target failure follows `knowledge/grafana/v2-validation-errors.md`; use `knowledge/grafana/diagnostic-execution.md` only when the configured wrapper preserves the failure response and supports the required probe operations. Otherwise retain the wrapper failure as the validation result and route it back without attempting direct target requests. Dry-run validation is not publication.
 
 Route dashboard-source findings to `dashboard-builder`. A finding requiring query changes invalidates query review and returns to `promql-builder`. A worker never approves its own output.
 
@@ -363,7 +342,7 @@ If the final destination changed concurrently, stop rather than overwrite it. Th
 
 ### 9. Publish when requested
 
-Dispatch a fresh `dashboard-publisher`. Publish only after the dashboard has passed the applicable local validation, target-Grafana dry-run validation, confidentiality review, independent review, exact final-path render verification, and mechanical promotion. The publisher may construct API requests and verify the readback, but it MUST NOT change source or query text.
+Dispatch a fresh `dashboard-publisher`. Publish only after the dashboard has passed the applicable local validation, target-Grafana dry-run validation, independent review, exact final-path render verification, and mechanical promotion. The publisher may construct API requests and verify the readback, but it MUST NOT change source or query text.
 
 Read:
 
@@ -383,7 +362,6 @@ For stable V2 the resource operations are collection create, resource GET, and r
 - Existing dashboard: GET it first, preserve identity/folder placement unless intentionally changed, then use the documented replace/update operation.
 - Use the rendered Schema V2 resource/spec; do not blindly POST a classic DTO or arbitrary Jsonnet output envelope.
 - Never create a duplicate dashboard because an update failed.
-- Never expose target endpoint details, resource identifiers, credentials, or authorization/session material in visible output.
 
 After writing, the publisher GETs the resource again through the same API version under `namespaces/default` and verifies the returned dashboard title, required variables, expected V2 layout, and layout element references. A write response alone is not sufficient publication verification.
 
@@ -395,7 +373,6 @@ After writing, the publisher GETs the resource again through the same API versio
   small immutable `inbox/job.yaml`; create and validate it with
   `scripts/coordinator_stage.py`, then give the model only its agent ID and that
   ticket path/digest.
-- Sanitize target-specific context before handoff; use opaque access references.
 - Every agent treats context as disposable and its assigned workspace as durable
   memory. It writes one bounded YAML record as soon as each logical item is
   resolved, then updates `state.yaml`; it never accumulates a complete result in
@@ -496,11 +473,9 @@ Do not replace the configured local command with direct `curl`, a guessed
 targets that are reachable only through a local proxy, tunnel, or authenticated
 helper.
 
-Every target-access command MUST follow `knowledge/security/output-redaction.md`. Use an opaque configured target reference and never expose the resolved endpoint or target identifiers in the visible transcript.
+If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` before changing source. Read `knowledge/grafana/diagnostic-execution.md` and use bounded target-side isolation only when the configured wrapper preserves the failed response and supports those probe operations. Otherwise retain the wrapper failure locally and return it as a validation failure; do not bypass the wrapper with a direct request. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Do not disable strict validation or invent union-wrapper fields as a workaround.
 
-If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` before changing source. Read `knowledge/grafana/diagnostic-execution.md` and use bounded target-side isolation only when the opaque wrapper preserves the failed response and supports those probe operations. Otherwise retain the sanitized wrapper failure locally and return it as a validation failure; do not bypass the wrapper with a direct request. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Do not disable strict validation or invent union-wrapper fields as a workaround.
-
-When datasource access is available, `promql-reviewer` tests every approved application, Kubernetes, variable, and annotation query with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics. Sanitize all surfaced evidence.
+When datasource access is available, `promql-reviewer` tests every approved application, Kubernetes, variable, and annotation query with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics.
 
 For every Dashboard V2 Prometheus `QueryVariable`, inspect the rendered plugin-specific query payload. On the documented v13 pin, require non-empty `spec.query.spec.query`, the expected `qryType`, and the Prometheus variable-editor `refId`. Do not accept `spec.query.spec.expr` as a substitute. Target schema admission alone is insufficient because the generic DataQuery schema does not prove that the Prometheus variable editor can deserialize the plugin payload.
 
@@ -514,7 +489,7 @@ If live datasource access is unavailable, mark live-query and annotation validat
 
 Report only:
 
-- source paths changed, sanitized if they reveal target identity
+- source paths changed
 - schema
 - major panel groups added or changed using generic descriptions
 - important omitted signals and why
@@ -523,5 +498,3 @@ Report only:
 - live-query validation status
 - annotation validation status when applicable
 - publish verification status when requested
-
-Never include target endpoints, host/domain data, organization/customer identifiers, cluster/environment names, dashboard/resource IDs, credentials, or session/auth material in completion output.
