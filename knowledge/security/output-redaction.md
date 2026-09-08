@@ -38,6 +38,20 @@ Preferred access patterns, in order:
 2. preconfigured environment variable whose value is not echoed
 3. protected local configuration/credential file read by the command without printing its contents
 
+## Opaque local access commands
+
+When a target is reachable only through a local command, treat that command as
+the access boundary. Receive its shell-free argv as an opaque task input; never
+replace it with direct `curl`, a guessed URL, or an environment/configuration
+scan. It must already know the target and authentication and must receive no
+endpoint, credential, or target-identifier argument.
+
+For Dashboard V2 OpenAPI discovery, the command runs once. Its exit status `0`
+must mean it received HTTP 200 and writes the document to stdout. Redirect
+stdout and stderr to neutral scratch files, inspect only the required structural
+fields locally, and record a sanitized status. Do not echo the command's
+resolved configuration, stdout, or stderr into visible tool output.
+
 Never use or enable shell tracing for target-access commands. Avoid `set -x`, `env`, `printenv`, `echo "$TOKEN"`, `echo "$URL"`, `cat` of credential files, or equivalent output that reveals values.
 
 If a wrapper requires a URL argument, construct it from an already configured non-echoed variable. Do not paste the literal target into the command transcript.

@@ -25,11 +25,21 @@ If the target Swagger exposes no dry-run mechanism, return `FAIL` with the valid
 
 ## Source of truth
 
-Inspect the target Grafana Swagger first:
+The coordinator's run contract must first contain the cached V2 OpenAPI
+capability result. The coordinator obtains it by executing the configured local
+access command, which reaches this discovery document without receiving the
+target URL as an argument:
 
 ```text
-<GRAFANA_URL>/swagger?api=dashboard.grafana.app-v2
+<GRAFANA_URL>/openapi/v3/apis/dashboard.grafana.app/v2
 ```
+
+Use the target-advertised operations and schemas from that document. It is a
+one-time coordinator discovery check, not a replacement for this reviewer's
+dry-run. Do not rediscover it in this stage or bypass the configured local
+command with direct network access. If a target supplies only an opaque Swagger
+wrapper, use that target-advertised contract after the run contract records the
+resulting capability gap; never guess a route or API version.
 
 If the target uses another structured version such as `v2beta1`, use that target version instead.
 

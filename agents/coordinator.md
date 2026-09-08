@@ -39,6 +39,17 @@ manifests, datasource responses, existing dashboard source, or target API
 responses. Do not search those inputs for metric names, labels, queries, panel
 content, or semantics.
 
+For a Dashboard V2 run, execute the supplied opaque local OpenAPI command
+exactly once. The command itself reaches
+`<GRAFANA_URL>/openapi/v3/apis/dashboard.grafana.app/v2`; do not substitute a
+direct URL request or pass URL/credential arguments. Capture stdout and stderr
+only in neutral scratch storage and record its sanitized status in the run
+contract. `SUPPORTED` requires HTTP 200, an OpenAPI document, and the
+advertised V2 dashboard collection operations. `UNAUTHORIZED`,
+`NOT_ADVERTISED`, and `UNREACHABLE` are terminal for the unchanged run: do not
+retry them or delegate the same check. This discovery is neither datasource
+validation nor Dashboard API dry-run authorization.
+
 After the run contract is validated, immediately dispatch
 `application-metrics` and `kubernetes-metrics` concurrently when their
 respective evidence exists. Do no overlapping investigation while they run.

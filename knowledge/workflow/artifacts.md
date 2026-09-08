@@ -97,6 +97,7 @@ The coordinator writes a `run-contract` artifact, at most 16 KiB, with `status: 
   "capabilities": {
     "datasource_access": true,
     "dashboard_api_validation": true,
+    "dashboard_v2_openapi": "SUPPORTED",
     "publish_requested": false
   },
   "selector_proposals": {}
@@ -114,6 +115,43 @@ Validate:
 ```bash
 python3 scripts/validate_workflow_artifact.py <run-contract.json>
 ```
+
+### Dashboard V2 OpenAPI capability
+
+For `schema.dashboard: "V2"`, the task must supply an opaque, shell-free local
+command that performs this request through its own configured target access:
+
+```text
+<GRAFANA_URL>/openapi/v3/apis/dashboard.grafana.app/v2
+```
+
+The command accepts no URL, credential, or target identifier arguments. Exit
+status `0` must mean the command received HTTP 200 and emits the OpenAPI
+document only to stdout. The coordinator executes that supplied command exactly
+once before delegation, storing stdout and stderr in neutral scratch files; it
+must not use direct `curl` or discover connection configuration. It checks only
+that the captured JSON is an OpenAPI v3 document and advertises the Dashboard
+V2 collection operations. The contract records only
+`capabilities.dashboard_v2_openapi`:
+
+| Status | Meaning |
+| --- | --- |
+| `SUPPORTED` | HTTP 200 OpenAPI document advertises Dashboard V2 collection operations. |
+| `NOT_CONFIGURED` | No opaque Dashboard API access/wrapper was supplied. |
+| `UNAUTHORIZED` | Access reached the target but cannot read the OpenAPI document. |
+| `NOT_ADVERTISED` | The target did not advertise this V2 document. |
+| `UNREACHABLE` | Target access failed before discovery completed. |
+| `NOT_APPLICABLE` | The dashboard schema is not V2. |
+
+If the wrapper exposes a sanitized HTTP classification, use `UNAUTHORIZED` or
+`NOT_ADVERTISED` as appropriate. Otherwise a non-zero command exit is
+`UNREACHABLE`; preserve the raw failure privately and do not infer a URL,
+credential, or retry strategy from it.
+
+The coordinator does not retry an unchanged result. `SUPPORTED` is discovery
+only: it neither proves a Prometheus datasource is usable nor proves that the
+credential can create/update with `dryRun=All`. A V2 run with
+`dashboard_api_validation: true` must have `dashboard_v2_openapi: "SUPPORTED"`.
 
 ## Metric shortlists
 

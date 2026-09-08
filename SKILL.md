@@ -104,6 +104,20 @@ contents; search them for metric names, labels, query text, panel content, or
 semantics; run datasource probes; or construct any dashboard artifact other
 than the run contract.
 
+For a Dashboard V2 run, one exception is permitted solely to establish the
+Dashboard API capability: execute the supplied opaque local OpenAPI command
+once. That command, not the coordinator, reaches
+`<GRAFANA_URL>/openapi/v3/apis/dashboard.grafana.app/v2`. It receives no URL,
+credential, or target identifier as an argument. Its exit status `0` must mean
+it received HTTP 200 and wrote the OpenAPI document to stdout. This is not a
+dashboard read, datasource probe, or dry-run. Capture stdout and stderr in
+neutral scratch files; record only the sanitized capability result in the run
+contract. A `SUPPORTED` result requires that successful command result, an
+OpenAPI document, and the advertised Dashboard V2 collection operations. Do not invoke
+the same command again during the run. Record `UNAUTHORIZED`,
+`NOT_ADVERTISED`, or `UNREACHABLE` as a terminal result unless the configured
+access or target changes.
+
 Once the run contract passes validation, dispatch `application-metrics` and
 `kubernetes-metrics` immediately and concurrently whenever their respective
 evidence exists. The coordinator performs no overlapping evidence gathering
@@ -127,6 +141,7 @@ Before delegation, locate or record proposed facts and evidence paths without pe
 - proposed fixed-selector references
 - configured datasource access method
 - opaque Grafana Dashboard resource API validation access/wrapper when available
+- for Dashboard V2, the shell-free opaque local command that emits the V2 OpenAPI document and its one-time cached discovery status
 - existing dashboard resource identity when applicable
 - whether publication is requested
 - when publication is requested: writable authentication method and folder placement when applicable
@@ -134,6 +149,13 @@ Before delegation, locate or record proposed facts and evidence paths without pe
 Do not place literal connection details or target identifiers into the shared contract passed to subagents. Provide an opaque access capability/reference instead.
 
 Do not require publication intent before using an already configured Dashboard API credential/wrapper for a non-persisting dry-run validation request.
+
+`dashboard_v2_openapi: SUPPORTED` establishes that the target advertises the
+Dashboard V2 API and supplies the target contract. It does **not** establish
+that the credential may create or update a dashboard, even with `dryRun=All`;
+the later reviewer dry-run is the permission/admission check. A Prometheus
+datasource is a separate capability from Dashboard V2 and must not be inferred
+from this OpenAPI result.
 
 The Grafana Dashboard resource API namespace is always `default`. Do not ask for, infer, discover, or configure another Dashboard API namespace. This API namespace is unrelated to the dashboard variable named `namespace`.
 
@@ -370,7 +392,19 @@ dashboard-linter lint --strict --config <lint-config> /tmp/dashboard.json
 
 Use the repository's actual paths and commands when they differ. `jq empty` checks JSON syntax only, not Grafana schema correctness.
 
-For Dashboard Schema V2 with configured target Grafana Dashboard API validation access, server-side dry-run validation is mandatory before review can pass. Use target Swagger, namespace `default`, and `knowledge/grafana/grafana-v2-dry-run.md`. A successful HTTP status alone is insufficient: inspect warnings and the returned resource structure.
+For Dashboard Schema V2 with configured target Grafana Dashboard API validation access, server-side dry-run validation is mandatory before review can pass. Use the target-advertised OpenAPI contract, namespace `default`, and `knowledge/grafana/grafana-v2-dry-run.md`. A successful HTTP status alone is insufficient: inspect warnings and the returned resource structure.
+
+For V2, use the coordinator's cached
+`/openapi/v3/apis/dashboard.grafana.app/v2` result as the first target-contract
+check. A missing, unauthorized, or unreachable OpenAPI result is not retried
+by other stages; it is an explicit validation gap. The reviewer uses the
+advertised operation to perform the one required dry-run when validation access
+is available.
+
+Do not replace the configured local command with direct `curl`, a guessed
+`GRAFANA_URL`, or an environment scan. The command is the access boundary for
+targets that are reachable only through a local proxy, tunnel, or authenticated
+helper.
 
 Every target-access command MUST follow `knowledge/security/output-redaction.md`. Use an opaque configured target reference and never expose the resolved endpoint or target identifiers in the visible transcript.
 

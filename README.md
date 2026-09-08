@@ -24,6 +24,12 @@ For `Publish: yes`, provide writable Grafana dashboard API access. Prometheus da
 
 Do not paste target endpoints, host/domain details, credentials, or unrelated resource identifiers into the task prompt. Use an opaque local wrapper/environment reference. Visible command/output redaction is defined in `knowledge/security/output-redaction.md`.
 
+For a Dashboard V2 target that is reachable only through a local command,
+provide the shell-free opaque command that emits
+`/openapi/v3/apis/dashboard.grafana.app/v2` to stdout. It must already know the
+target and authentication; the coordinator runs it once, stores its output
+privately, and never replaces it with a direct URL request.
+
 The Grafana Dashboard resource namespace is always `default`. Do not provide or derive another API namespace.
 
 The mandatory pipeline is:

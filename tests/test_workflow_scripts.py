@@ -133,6 +133,7 @@ class WorkflowScriptsTest(unittest.TestCase):
             capabilities={
                 "datasource_access": False,
                 "dashboard_api_validation": False,
+                "dashboard_v2_openapi": "NOT_CONFIGURED",
                 "publish_requested": False,
             },
             selector_proposals={},
@@ -756,6 +757,13 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.write("outside-run", run)
         result = self.run_tool(VALIDATOR, self.paths["outside-run"], expected=1)
         self.assertIn("inside repository_root", result.stderr)
+
+    def test_run_contract_requires_supported_openapi_for_v2_api_validation(self) -> None:
+        run = json.loads(self.paths["run-contract"].read_text(encoding="utf-8"))
+        run["capabilities"]["dashboard_api_validation"] = True
+        self.write("v2-openapi-gap", run)
+        result = self.run_tool(VALIDATOR, self.paths["v2-openapi-gap"], expected=1)
+        self.assertIn("requires supported Dashboard V2 OpenAPI", result.stderr)
 
     def test_parity_rejects_swapped_consumer_text(self) -> None:
         rendered = json.loads((self.root / "rendered.json").read_text(encoding="utf-8"))

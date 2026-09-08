@@ -277,10 +277,25 @@ def validate_run_contract(data: dict[str, Any]) -> None:
     require(limits["changed_queries"] <= limits["total_queries"], "changed_queries exceeds total_queries")
 
     capabilities = strict_object(data["capabilities"], {
-        "datasource_access", "dashboard_api_validation", "publish_requested"
+        "datasource_access", "dashboard_api_validation", "dashboard_v2_openapi",
+        "publish_requested"
     }, "capabilities")
-    for name, value in capabilities.items():
+    for name in {"datasource_access", "dashboard_api_validation", "publish_requested"}:
+        value = capabilities[name]
         require(isinstance(value, bool), f"capabilities.{name} must be boolean")
+    openapi_status = enum(capabilities["dashboard_v2_openapi"], {
+        "SUPPORTED", "NOT_CONFIGURED", "UNAUTHORIZED", "NOT_ADVERTISED",
+        "UNREACHABLE", "NOT_APPLICABLE",
+    }, "capabilities.dashboard_v2_openapi")
+    if schema["dashboard"] == "V2":
+        require(openapi_status != "NOT_APPLICABLE",
+                "V2 dashboard requires a Dashboard V2 OpenAPI capability result")
+        if capabilities["dashboard_api_validation"]:
+            require(openapi_status == "SUPPORTED",
+                    "configured dashboard API validation requires supported Dashboard V2 OpenAPI")
+    else:
+        require(openapi_status == "NOT_APPLICABLE",
+                "non-V2 dashboard requires dashboard_v2_openapi NOT_APPLICABLE")
     require(isinstance(data["selector_proposals"], dict), "selector_proposals must be an object")
 
 
