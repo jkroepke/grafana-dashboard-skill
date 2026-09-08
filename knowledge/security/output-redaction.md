@@ -47,11 +47,12 @@ scan. Execute the supplied argv as provided; it may invoke an access wrapper
 such as `curl` or `kcurl` and contain its required opaque arguments. Never echo
 the resolved argv, target, credential, or target identifier.
 
-For Grafana `/version`, the opaque command runs once. Its exit status `0` must
-mean it received HTTP 200 and writes the JSON response to stdout. Redirect
-stdout and stderr to neutral scratch files, inspect only `gitTreeState` locally,
-and do not echo the command's resolved configuration, stdout, or stderr into
-visible tool output.
+For Grafana `/version`, use a preconfigured zero-argument opaque executable;
+do not construct its endpoint or supply target arguments. It runs once. Its
+exit status `0` must mean it received HTTP 200 and writes the JSON response to
+stdout. Redirect stdout and stderr to neutral scratch files, inspect only
+`gitTreeState` locally, and do not echo the command's resolved configuration,
+stdout, or stderr into visible tool output.
 
 Never use or enable shell tracing for target-access commands. Avoid `set -x`, `env`, `printenv`, `echo "$TOKEN"`, `echo "$URL"`, `cat` of credential files, or equivalent output that reveals values.
 

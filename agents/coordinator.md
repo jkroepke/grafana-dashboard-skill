@@ -94,15 +94,15 @@ baseline state/digest, pinned local version metadata, and opaque access
 capabilities. It does not relax the run-wide coordinator boundary after
 dispatch.
 
-Execute the supplied opaque local `GET /version` command argv exactly once.
-Execute its program and arguments exactly as supplied; access wrappers such as
-`curl` or `kcurl` are permitted only inside that supplied argv. Do not
-construct, rewrite, or echo that argv. Capture stdout and stderr only in neutral
-scratch storage. Read Grafana's version only from `gitTreeState` in the returned
-JSON, which must be `grafana v<version>`; ignore the Kubernetes API-server
-`major`, `minor`, and `gitVersion` fields. Reject a missing, malformed, or
-below-v13 value. Do not fetch target OpenAPI/Swagger. This check is neither
-datasource validation nor Dashboard API dry-run authorization.
+Execute the supplied opaque local, zero-argument `GET /version` executable
+exactly once. It may use an access wrapper such as `curl` or `kcurl` internally.
+Do not construct, rewrite, inspect, pass arguments to, or echo it. Capture
+stdout and stderr only in neutral scratch storage. Read Grafana's version only
+from `gitTreeState` in the returned JSON, which must be `grafana v<version>`;
+ignore the Kubernetes API-server `major`, `minor`, and `gitVersion` fields.
+Reject a missing, malformed, or below-v13 value. Do not fetch target
+OpenAPI/Swagger. This check is neither datasource validation nor Dashboard API
+dry-run authorization.
 
 After the run contract is validated, dispatch `application-metrics` first. Do
 not dispatch `kubernetes-metrics` until the application artifact has validated

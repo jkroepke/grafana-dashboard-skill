@@ -118,11 +118,11 @@ semantics; run datasource probes; or construct any dashboard artifact other
 than the run contract.
 
 The coordinator's sole target-version request is one supplied shell-free,
-opaque command argv that performs `GET /version`. Execute its program and
-arguments exactly as supplied; local access wrappers such as `kcurl` or `curl`
-are permitted. It must already know the target and authentication, exit zero
-only for HTTP 200, and write the JSON response only to stdout. Capture stdout
-and stderr in neutral scratch files. Parse only `gitTreeState`, which must be
+opaque, zero-argument executable that performs `GET /version`. It may use a
+local access wrapper such as `kcurl` or `curl` internally, but it must already
+know the target and authentication, exit zero only for HTTP 200, and write the
+JSON response only to stdout. Do not append, construct, or pass target
+arguments. Capture stdout and stderr in neutral scratch files. Parse only `gitTreeState`, which must be
 exactly `grafana v<major>[.<minor>[.<patch>]]`; the Kubernetes API-server
 `major`, `minor`, and `gitVersion` fields are not Grafana version evidence.
 Do not fetch, inspect, or cache a target OpenAPI document. Do not invoke the

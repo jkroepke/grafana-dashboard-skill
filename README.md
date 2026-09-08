@@ -33,11 +33,11 @@ For `Publish: yes`, provide writable Grafana dashboard API access. Prometheus da
 
 Do not paste target endpoints, host/domain details, credentials, or unrelated resource identifiers into the task prompt. Use an opaque local wrapper/environment reference. Visible command/output redaction is defined in `knowledge/security/output-redaction.md`.
 
-Provide a shell-free opaque command argv that performs `GET /version` and emits
-its JSON response to stdout. The supplied program and arguments are executed
-as provided, so a local access wrapper such as `kcurl` or `curl` is permitted.
-It must already know the target and authentication; the coordinator runs it
-exactly once and stores the response privately. The coordinator extracts the
+Provide a shell-free, zero-argument opaque executable that performs `GET
+/version` and emits its JSON response to stdout. It may use a local access
+wrapper such as `kcurl` internally, but it must already know the target and
+authentication. The coordinator runs it exactly once and stores the response
+privately. The coordinator extracts the
 Grafana version only from `gitTreeState`, which must be `grafana v<version>`;
 it ignores the Kubernetes API-style `major` and `minor` fields and `gitVersion`.
 

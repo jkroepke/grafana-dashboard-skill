@@ -1197,7 +1197,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         render_tool.chmod(0o755)
         version_tool = helper_root / "grafana-version-tool"
         version_tool.write_text(
-            "#!/bin/sh\ntest \"$1\" = /version || exit 1\nprintf '%s\\n' '{\"gitTreeState\":\"grafana v13.2.1\"}'\n",
+            "#!/bin/sh\ntest \"$#\" = 0 || exit 1\nprintf x >> \"$0.invocations\"\nprintf '%s\\n' '{\"gitTreeState\":\"grafana v13.2.1\"}'\n",
             encoding="utf-8",
         )
         version_tool.chmod(0o755)
@@ -1229,10 +1229,8 @@ class WorkflowScriptsTest(unittest.TestCase):
                 "demo-project",
                 "--run-id",
                 "run-1",
-                "--grafana-version-program",
+                "--grafana-version-command",
                 str(version_tool),
-                "--grafana-version-arg",
-                "/version",
                 "--final-source",
                 "dashboards/demo-project/dashboard.jsonnet",
                 "--render-program",
@@ -1245,7 +1243,8 @@ class WorkflowScriptsTest(unittest.TestCase):
         )
         self.assertEqual(0, create_run.returncode, create_run.stdout + create_run.stderr)
         repeated_run = subprocess.run(create_run.args, capture_output=True, text=True, check=False)
-        self.assertEqual(0, repeated_run.returncode, repeated_run.stdout + repeated_run.stderr)
+        self.assertEqual(1, repeated_run.returncode, repeated_run.stdout + repeated_run.stderr)
+        self.assertIn("already invoked", repeated_run.stderr)
         conflicting_run = subprocess.run(
             [*create_run.args, "--datasource-access"],
             capture_output=True,
@@ -1253,7 +1252,8 @@ class WorkflowScriptsTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(1, conflicting_run.returncode, conflicting_run.stdout + conflicting_run.stderr)
-        self.assertIn("refusing to replace immutable artifact", conflicting_run.stderr)
+        self.assertIn("already invoked", conflicting_run.stderr)
+        self.assertEqual("x", Path(f"{version_tool}.invocations").read_text(encoding="utf-8"))
         coordinator = (
             helper_root / "dashboards/demo-project/workspace/coordinator/run-1"
         )

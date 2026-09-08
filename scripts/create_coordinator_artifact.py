@@ -150,17 +150,21 @@ def grafana_version_from_response(response: bytes) -> str:
     return validate_grafana_version("v" + match.group("version"))
 
 
-def read_grafana_version(
-    root: Path, program: str, command_args: list[str], evidence_directory: Path
-) -> str:
-    """Run the opaque /version wrapper once and retain its raw response privately."""
-    executable = render_executable(root, program)
+def read_grafana_version(root: Path, command: str, evidence_directory: Path) -> str:
+    """Run the preconfigured opaque /version command once."""
+    executable = render_executable(root, command)
+    marker_path = evidence_directory / "grafana-version-gate.started"
+    try:
+        with marker_path.open("x", encoding="utf-8") as marker:
+            marker.write("started\n")
+    except FileExistsError as error:
+        raise CreationError("Grafana /version command was already invoked for this run") from error
     stdout_path = evidence_directory / "grafana-version.json"
     stderr_path = evidence_directory / "grafana-version.stderr"
     try:
         with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
             result = subprocess.run(
-                [executable, *command_args],
+                [executable],
                 cwd=root,
                 stdout=stdout,
                 stderr=stderr,
@@ -274,15 +278,11 @@ def create_run_contract(args: argparse.Namespace) -> str:
     require(root.is_dir() and not root.is_symlink(), "repository root must be a regular directory")
     require(SAFE_COMPONENT_RE.fullmatch(args.project_name) is not None, "project name is not filesystem-safe")
     require(SAFE_COMPONENT_RE.fullmatch(args.run_id) is not None, "run ID is not filesystem-safe")
-    require(len(args.grafana_version_arg) <= 31, "Grafana /version command has too many arguments")
-    require(all(len(argument) <= 1024 for argument in args.grafana_version_arg),
-            "Grafana /version command argument is too long")
 
     coordinator = initialize_coordinator(root, args.project_name, args.run_id)
     grafana_version = read_grafana_version(
         root,
-        args.grafana_version_program,
-        args.grafana_version_arg,
+        args.grafana_version_command,
         coordinator / "evidence",
     )
     workspace = root / "dashboards" / args.project_name / "workspace"
@@ -438,8 +438,7 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--project-name", required=True)
     run.add_argument("--run-id", required=True)
     run.add_argument("--final-source", required=True)
-    run.add_argument("--grafana-version-program", required=True)
-    run.add_argument("--grafana-version-arg", action="append", default=[])
+    run.add_argument("--grafana-version-command", required=True)
     run.add_argument("--grafonnet-revision")
     run.add_argument("--render-program", default="jsonnet")
     run.add_argument("--render-arg", action="append")

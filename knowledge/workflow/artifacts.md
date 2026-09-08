@@ -98,25 +98,23 @@ python3 scripts/create_coordinator_artifact.py run-contract \
   --repository-root "$PWD" \
   --project-name <project-name> \
   --run-id <run-id> \
-  --grafana-version-program <opaque-version-wrapper> \
+  --grafana-version-command <opaque-version-command> \
   --final-source dashboards/<project-name>/dashboard.jsonnet
 ```
 
 The default render argv is `jsonnet -J vendor {source}`. Use repeated
 `--render-arg` options and `--render-program` only when the repository has a
-different shell-free render command. `--grafana-version-program` is a required
-opaque executable. Pass any supplied shell-free wrapper arguments with repeated
-`--grafana-version-arg`; tools such as `curl` or `kcurl` are permitted. The
-complete supplied argv must perform `GET /version` and return HTTP-200 JSON
-only on stdout. The helper executes it once, stores the raw response privately,
-and extracts Grafana's version only from
+different shell-free render command. `--grafana-version-command` is a required
+zero-argument opaque executable, preconfigured to perform `GET /version` and
+return HTTP-200 JSON only on stdout. It may use a local wrapper such as `kcurl`
+internally, but it must already know the target and authentication. The helper
+executes it once, stores the raw response privately, and extracts Grafana's version only from
 `gitTreeState: "grafana v<version>"`. It ignores `major`, `minor`, and
 `gitVersion`, which may identify the backing Kubernetes API server. Other
 capability flags are opt-in. The helper
 infers the source baseline and a unique locally locked and vendored Grafonnet
 revision, writes immutable YAML through `yq`, validates it, and updates the
-coordinator state. It refuses an unavailable render executable or a conflicting
-existing artifact.
+coordinator state. A repeated version-gate attempt for the same run is refused.
 
 The resulting artifact is at most 16 KiB, with `status: PASS`, `inputs: {}`, and:
 
