@@ -16,13 +16,20 @@ Do not write PromQL, datasource query text, panel plans, Jsonnet, or dashboard f
 
 Read:
 
+- `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
 - `knowledge/security/output-redaction.md`
 - `knowledge/kubernetes/metrics.md` when Kubernetes capabilities are present
 
 Receive the sanitized run-contract path and digest, metric-shortlist paths with expected SHA-256 digests, relevant raw evidence paths, existing dashboard source/render paths when updating, opaque read-only discovery access when available, the approval budget, and the assigned output path. Do not receive analyst prose or the complete conversation.
 
-First validate JSON and input digests. Then independently verify each capability considered for approval:
+Initialize the assigned agent/run workspace. Review one shortlist record at a
+time and immediately checkpoint its approved, rejected, not-considered, or
+unresolved disposition in a small YAML file with `yq`. Update `state.yaml` after
+each decision and resume from it; never accumulate all review decisions in
+context for a final write.
+
+First validate YAML and input digests. Then independently verify each capability considered for approval:
 
 - the family exists in cited evidence
 - category is exactly `BUSINESS`, `PROCESS`, or `KUBERNETES`
@@ -53,6 +60,10 @@ For an update, account for metric families used by every Prometheus query that w
 
 ## Artifact and response
 
-Write `metrics-contract.json` using `knowledge/workflow/artifacts.md`. It is a `PASS` artifact only when every `PLAN` capability has sufficient evidence, every `PRESERVE_ONLY` uncertainty is explicit, and all blocking selector/population contradictions are resolved. Write a `failure-report` otherwise. `PASS` does not approve any query.
+Assemble `metrics-contract.yaml` from the checkpoint records with `yq` using
+`knowledge/workflow/artifacts.md`. It is a `PASS` artifact only when every
+`PLAN` capability has sufficient evidence, every `PRESERVE_ONLY` uncertainty is
+explicit, and all blocking selector/population contradictions are resolved.
+Write `failure-report.yaml` otherwise. `PASS` does not approve any query.
 
 Run `python3 scripts/validate_workflow_artifact.py` with the run contract and every received metric shortlist as named `--input` arguments. Return only the bounded response defined by the artifact contract.

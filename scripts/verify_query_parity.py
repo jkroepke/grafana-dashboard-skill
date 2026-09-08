@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
+import validate_workflow_artifact as artifact
+
 
 Locator = tuple[str, str, Optional[str]]
 
@@ -32,14 +34,22 @@ def require(condition: bool, message: str) -> None:
         raise ParityError(message)
 
 
-def read_json(path: Path) -> tuple[bytes, dict[str, Any]]:
+def read_artifact(path: Path) -> tuple[bytes, dict[str, Any]]:
     try:
-        raw = path.read_bytes()
-        value = json.loads(raw)
-    except (OSError, json.JSONDecodeError) as error:
-        raise ParityError(f"cannot read valid JSON from {path}: {error}") from error
+        raw, value = artifact.read_artifact(path)
+    except artifact.ArtifactError as error:
+        raise ParityError(str(error)) from error
     require(isinstance(value, dict), f"{path} root must be an object")
     return raw, value
+
+
+def read_rendered_json(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_bytes())
+    except (OSError, json.JSONDecodeError) as error:
+        raise ParityError(f"cannot read rendered dashboard JSON from {path}: {error}") from error
+    require(isinstance(value, dict), f"{path} root must be an object")
+    return value
 
 
 def sha256(raw: bytes) -> str:
@@ -302,9 +312,9 @@ def main() -> int:
     parser.add_argument("rendered_dashboard", type=Path)
     args = parser.parse_args()
     try:
-        pack_raw, pack = read_json(args.query_pack)
-        _, review = read_json(args.query_review)
-        _, rendered = read_json(args.rendered_dashboard)
+        pack_raw, pack = read_artifact(args.query_pack)
+        _, review = read_artifact(args.query_review)
+        rendered = read_rendered_json(args.rendered_dashboard)
         require(review.get("artifact_type") == "query-review" and review.get("status") == "PASS",
                 "query review must be a PASS query-review artifact")
         require(review.get("query_pack_sha256") == sha256(pack_raw),

@@ -30,11 +30,11 @@ def require(condition: bool, message: str) -> None:
 def checked(
     path: Path, bindings: dict[str, Path], supports: dict[str, Path] | None = None
 ) -> tuple[bytes, dict]:
-    raw, data = artifact.read_json(path)
+    raw, data = artifact.read_artifact(path)
     arguments = [f"{name}={input_path}" for name, input_path in bindings.items()]
     support_arguments = [f"{name}={input_path}" for name, input_path in (supports or {}).items()]
     inputs, _ = artifact.load_and_bind_inputs(data, arguments, support_arguments)
-    artifact.validate_artifact(data, len(raw), inputs)
+    artifact.validate_artifact(data, len(raw), inputs, path)
     return raw, data
 
 

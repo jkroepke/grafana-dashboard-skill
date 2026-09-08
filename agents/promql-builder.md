@@ -16,6 +16,7 @@ Do not design layout, write Jsonnet/dashboard source, approve your own query pac
 
 Read:
 
+- `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
 - `knowledge/security/output-redaction.md`
 - only the relevant files under `knowledge/promql/`
@@ -24,7 +25,12 @@ Read:
 
 Receive the sanitized run-contract path and digest, metrics-contract and dashboard-plan paths with expected digests, existing dashboard source/render paths when updating, opaque read-only datasource access when available, query budget, and assigned query-pack path. Use only the approved selector contract inside `metrics-contract`; run-contract selector proposals are not authoritative. Do not receive raw dumps or the complete conversation unless a targeted evidence file is explicitly required.
 
-Validate input JSON and digests first. For every planned query:
+Initialize the assigned agent/run workspace. Author and validate exactly one
+query at a time, immediately checkpointing the complete query record as a small
+YAML file with `yq` and updating `state.yaml`. Resume from those files; never
+hold the complete query pack in context or emit it in one large write.
+
+Validate input YAML and digests first. For every planned query:
 
 1. identify the approved metric IDs and actual type/lifecycle
 2. apply the exact stored-label or Kubernetes selector contract
@@ -50,10 +56,12 @@ HTTP success alone is not validation. Record sanitized evidence references for e
 
 ## Artifact and response
 
-Write `query-pack.json` using `knowledge/workflow/artifacts.md`. Exactly one record owns each stable query ID. Do not return query text in your response.
+Assemble `query-pack.yaml` from the per-query records with `yq` using
+`knowledge/workflow/artifacts.md`. Exactly one record owns each stable query ID.
+Do not return query text in your response.
 
 For updates, include every Prometheus datasource query that will remain in the final dashboard, even when its text is preserved unchanged. Explicitly non-Prometheus consumers remain outside the pack and are immutable in this workflow. Do not allow legacy Prometheus panel, variable, or annotation expressions to bypass query review.
 
-Write a `PASS` query pack only when every required query is semantically usable. Otherwise write a bounded `failure-report`; use blocker code `NEEDS_EVIDENCE` when required evidence is absent. Use `UNVERIFIED` per query when live access is unavailable, without presenting it as live validation.
+Write a `PASS` query pack only when every required query is semantically usable. Otherwise write a bounded `failure-report.yaml`; use blocker code `NEEDS_EVIDENCE` when required evidence is absent. Use `UNVERIFIED` per query when live access is unavailable, without presenting it as live validation.
 
 Run `python3 scripts/validate_workflow_artifact.py` with the required run-contract, metrics-contract, and dashboard-plan `--input` arguments and coordinator-supplied shortlist paths as `--support`. Support paths exist only for recursive validation; do not read their bodies. Return only the bounded response defined by the artifact contract.

@@ -16,11 +16,23 @@ Do not analyze business semantics. Do not write PromQL, Grafana variable or anno
 
 Read:
 
+- `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
 - `knowledge/security/output-redaction.md`
 - `knowledge/kubernetes/metrics.md`
 
 Receive only the relevant manifests/workload identity, container set, sanitized run-contract path and digest, local metric evidence paths, assigned output artifact path, and opaque discovery access when available. Do not request or copy the complete conversation.
+
+Initialize the assigned agent/run workspace. Process one metric family or one
+population fact at a time, immediately checkpoint it as a bounded YAML record
+with `yq`, and update `state.yaml`. Never retain the complete inventory in
+context for a final write; resume from the snapshot queue.
+
+For a large Prometheus/OpenMetrics exposition, pipe the configured opaque reader
+or redirect local evidence into `scripts/snapshot_metrics.py`, assigning
+`records/exposition` as its output directory and a neutral source reference.
+The helper accepts metrics only through stdin. Inspect its family snapshots
+selectively and do not load the raw exposition into context.
 
 Use only locally documented or observed sources such as kube-state-metrics, kubelet/cAdvisor, scrape metadata, verified scheduler metrics, and verified recording rules. Availability remains `UNVERIFIED` until supported by local or live evidence.
 
@@ -50,6 +62,8 @@ Surface verified container/process start-timestamp metrics as capabilities. Reco
 
 ## Artifact and response
 
-Write the assigned `kubernetes-metrics` shortlist JSON using `knowledge/workflow/artifacts.md`. Inventory entries MUST contain no query text. Preserve the full catalog and large evidence in neutral scratch files.
+Assemble the assigned `kubernetes-metrics.yaml` shortlist from the small records
+with `yq` using `knowledge/workflow/artifacts.md`. Inventory entries MUST contain
+no query text. Preserve large evidence in neutral evidence files.
 
-Run `python3 scripts/validate_workflow_artifact.py <artifact.json> --input run-contract=<run-contract.json>`. If the shortlist cannot be produced, validate a `failure-report` instead. Return only the bounded response defined by the artifact contract.
+Run `python3 scripts/validate_workflow_artifact.py <artifact.yaml> --input run-contract=<run-contract.yaml>`. If the shortlist cannot be produced, validate a `failure-report.yaml` instead. Return only the bounded response defined by the artifact contract.

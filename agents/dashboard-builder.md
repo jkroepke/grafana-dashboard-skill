@@ -16,6 +16,7 @@ Write only the coordinator-assigned candidate source and scratch/build artifacts
 
 Read:
 
+- `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
 - `knowledge/security/output-redaction.md`
 - `knowledge/grafana/panel-selection.md`
@@ -25,6 +26,11 @@ Read:
 - `knowledge/grafana/annotations.md` only when the approved query pack contains annotations
 
 Receive only the sanitized run-contract path and digest; approved metrics-contract, dashboard-plan, query-pack, and query-review paths with expected SHA-256 digests; existing source path when updating; assigned candidate/render/build-manifest paths; pinned versions; and repository build commands. Do not receive raw metrics, analyst reports, query-builder prose, or the complete conversation.
+
+Initialize the assigned agent/run workspace. Checkpoint each construction unit
+and validation result as a small YAML record with `yq`, updating `state.yaml`
+before moving on. Keep rendered JSON and command outputs in `evidence/`. Resume
+from the filesystem; never retain the whole construction history in context.
 
 Refuse to build unless the metrics contract, plan, and query review are `PASS` and all digests match.
 
@@ -55,8 +61,8 @@ Format and render the candidate with repository commands. Parse rendered JSON an
 - no unplanned panels or queries
 - every explicitly non-Prometheus panel, variable, and annotation consumer is unchanged from the rendered baseline; adding, changing, or removing one is `BLOCKED`
 
-Run `python3 scripts/verify_candidate_render.py <run-contract.json> <dashboard-build.json>`, `python3 scripts/verify_dashboard_contract.py <rendered-dashboard.json>`, `python3 scripts/verify_query_parity.py <query-pack.json> <query-review.json> <rendered-dashboard.json>`, and `python3 scripts/verify_non_prometheus_preservation.py <rendered-dashboard.json> [--baseline <baseline-render.json>]`. Because the build manifest is needed for the first command, write it to its assigned path, run all verifiers, and rewrite only its check statuses if necessary. A failure is a build `FAIL`, never permission to edit an approved expression.
+Run `python3 scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml>`, `python3 scripts/verify_dashboard_contract.py <rendered-dashboard.json>`, `python3 scripts/verify_query_parity.py <query-pack.yaml> <query-review.yaml> <rendered-dashboard.json>`, and `python3 scripts/verify_non_prometheus_preservation.py <rendered-dashboard.json> [--baseline <baseline-render.json>]`. Because the build manifest is needed for the first command, assemble it with `yq`, run all verifiers, and update only its check statuses if necessary. A failure is a build `FAIL`, never permission to edit an approved expression.
 
-Write a `PASS` `dashboard-build.json` using `knowledge/workflow/artifacts.md`, including all input/output digests and baseline final-source digest, only after local checks pass. Write a `failure-report` for a failed or blocked build.
+Write a `PASS` `dashboard-build.yaml` using `knowledge/workflow/artifacts.md`, including all input/output digests and baseline final-source digest, only after local checks pass. Write `failure-report.yaml` for a failed or blocked build.
 
 Run `python3 scripts/validate_workflow_artifact.py` with the required run-contract, metrics-contract, dashboard-plan, query-pack, and query-review `--input` arguments and coordinator-supplied shortlist paths as `--support`. Support paths exist only for recursive validation; do not read their bodies. Return only the bounded response defined by the artifact contract.

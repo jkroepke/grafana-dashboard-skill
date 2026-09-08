@@ -25,6 +25,7 @@ MUST read `knowledge/security/output-redaction.md` before any target access, dia
 
 Read:
 
+- `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
 - `knowledge/security/output-redaction.md`
 - `knowledge/grafana/variables.md`
@@ -35,6 +36,11 @@ Read:
 - `knowledge/grafana/annotations.md` when annotations are present
 
 Receive only the sanitized run-contract, dashboard-plan, query-pack, query-review, build-manifest, candidate-source, and rendered-JSON paths with expected SHA-256 digests; pinned versions; opaque target access; and the assigned review path. Do not receive analyst/builder conclusions, raw metric dumps, or the complete conversation.
+
+Initialize the assigned agent/run workspace. Checkpoint each independent check,
+finding, and target-validation result in its own bounded YAML file with `yq`,
+then update `state.yaml`. Keep complete responses in `evidence/` and resume from
+the queue instead of accumulating the review in context.
 
 Refuse review unless upstream artifacts are `PASS`, all digests match, and the candidate has not changed since the build manifest was written.
 
@@ -50,7 +56,7 @@ Treat the approved query pack as immutable. Exhaustively extract every Prometheu
 - every preserved legacy expression in an updated dashboard is represented in the approved pack
 - the query-review digest approves the exact current query-pack digest
 
-Independently run `python3 scripts/verify_candidate_render.py <run-contract.json> <dashboard-build.json>`, `python3 scripts/verify_dashboard_contract.py <rendered-dashboard.json>`, `python3 scripts/verify_query_parity.py <query-pack.json> <query-review.json> <rendered-dashboard.json>`, and `python3 scripts/verify_non_prometheus_preservation.py <rendered-dashboard.json> [--baseline <baseline-render.json>]`. If the pinned representation uses another field for Prometheus text, require the verifier to cover it before review can pass.
+Independently run `python3 scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml>`, `python3 scripts/verify_dashboard_contract.py <rendered-dashboard.json>`, `python3 scripts/verify_query_parity.py <query-pack.yaml> <query-review.yaml> <rendered-dashboard.json>`, and `python3 scripts/verify_non_prometheus_preservation.py <rendered-dashboard.json> [--baseline <baseline-render.json>]`. If the pinned representation uses another field for Prometheus text, require the verifier to cover it before review can pass.
 
 Do not repeat semantic PromQL review and do not propose replacement query text. A semantic/query-text correction is classified `QUERY_PACK_CHANGE_REQUIRED` and must return through the coordinator to `promql-builder`, followed by a new PromQL review and rebuild.
 
@@ -92,7 +98,10 @@ On failure, preserve the full target error in a scratch file and follow the requ
 
 ## Artifact and response
 
-Write `dashboard-review.json` using `knowledge/workflow/artifacts.md`. Bind the decision to the exact build-manifest, candidate-source, rendered-JSON, and query-pack digests. Limit findings to the declared cap.
+Assemble `dashboard-review.yaml` from the checkpointed results with `yq` using
+`knowledge/workflow/artifacts.md`. Bind the decision to the exact build-manifest,
+candidate-source, rendered-JSON, and query-pack digests. Limit findings to the
+declared cap.
 
 Classify each finding by owner:
 

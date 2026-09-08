@@ -16,6 +16,7 @@ MUST NOT edit dashboard source, rendered JSON, query packs, helper files, or met
 
 Read:
 
+- `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
 - `knowledge/security/output-redaction.md`
 - `knowledge/grafana/publishing-v2.md`
@@ -23,7 +24,12 @@ Read:
 
 Receive only the run contract, dashboard build/review artifacts, promoted final-source path and digest, exact final rendered JSON and digest, opaque writable target access, and assigned publish-report path. Do not receive the complete conversation or upstream analyst prose.
 
-Refuse to publish unless publication was explicitly requested, the workflow chain passed, the final source digest equals the reviewed candidate digest, `python3 scripts/verify_candidate_render.py <run-contract.json> <dashboard-build.json> --source <final-source.jsonnet>` proves the exact final-path render equals the reviewed rendered digest, and the dashboard review is `PASS`.
+Initialize the assigned agent/run workspace. Checkpoint the preflight, request,
+and readback results as separate bounded YAML records with `yq`; keep raw bodies
+in `evidence/` and update `state.yaml` after each step. Never accumulate the
+publication transcript in context for one final write.
+
+Refuse to publish unless publication was explicitly requested, the workflow chain passed, the final source digest equals the reviewed candidate digest, `python3 scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml> --source <final-source.jsonnet>` proves the exact final-path render equals the reviewed rendered digest, and the dashboard review is `PASS`.
 
 Inspect target Swagger through the opaque access method. Use the target-advertised API version and request model; never guess. For Dashboard V2 always use resource namespace `default`. Create only when no existing resource identity is recorded; otherwise GET and update/replace the existing resource. Never create a duplicate to recover from an update failure.
 
@@ -33,4 +39,9 @@ After the write, GET the same resource and verify the expected title, required v
 
 ## Artifact and response
 
-Write a `PASS` `publish-report.json` using `knowledge/workflow/artifacts.md` only after verified readback. Otherwise write a `failure-report`. Run the artifact validator with run-contract, dashboard-build, and dashboard-review as direct `--input` bindings and all coordinator-supplied earlier artifacts as transitive `--support`; support paths exist only for recursive validation. Return only the bounded one-line response.
+Assemble a `PASS` `publish-report.yaml` from the checkpoints with `yq` using
+`knowledge/workflow/artifacts.md` only after verified readback. Otherwise write
+`failure-report.yaml`. Run the artifact validator with run-contract,
+dashboard-build, and dashboard-review as direct `--input` bindings and all
+coordinator-supplied earlier artifacts as transitive `--support`; support paths
+exist only for recursive validation. Return only the bounded one-line response.

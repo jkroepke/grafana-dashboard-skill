@@ -6,10 +6,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 
 MAX_BYTES = {
@@ -187,12 +191,22 @@ def sha256_bytes(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
-def read_json(path: Path) -> tuple[bytes, dict[str, Any]]:
+def read_artifact(path: Path) -> tuple[bytes, dict[str, Any]]:
+    """Read a workflow artifact in the required YAML format through yq v4."""
+    require(path.suffix == ".yaml", f"workflow artifact must use a .yaml filename: {path}")
     try:
         raw = path.read_bytes()
-        value = json.loads(raw)
+        converted = subprocess.run(
+            ["yq", "eval", "-o=json", ".", str(path)],
+            capture_output=True,
+            check=False,
+        )
+        require(converted.returncode == 0, f"cannot read valid YAML from {path}")
+        value = json.loads(converted.stdout)
+    except FileNotFoundError as error:
+        raise ArtifactError("Mike Farah yq v4 is required to read YAML artifacts") from error
     except (OSError, json.JSONDecodeError) as error:
-        raise ArtifactError(f"cannot read valid JSON from {path}: {error}") from error
+        raise ArtifactError(f"cannot read valid YAML from {path}: {error}") from error
     require(isinstance(value, dict), f"{path} root must be an object")
     return raw, value
 
@@ -216,13 +230,50 @@ def validate_envelope(data: dict[str, Any], raw_size: int) -> str:
     return artifact_type
 
 
+def grafonnet_dependencies(repository_root: Path) -> list[tuple[str, Path]]:
+    lock_path = repository_root / "jsonnetfile.lock.json"
+    if not lock_path.is_file():
+        return []
+    try:
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ArtifactError(f"cannot read {lock_path}: {error}") from error
+    dependencies: list[tuple[str, Path]] = []
+    for item in lock.get("dependencies", []):
+        git = item.get("source", {}).get("git", {})
+        remote = git.get("remote")
+        revision = item.get("version")
+        if not isinstance(remote, str) or not isinstance(revision, str):
+            continue
+        parsed = urlparse(remote)
+        normalized = f"{parsed.netloc}{parsed.path}".removesuffix(".git").strip("/")
+        if normalized != "github.com/grafana/grafonnet":
+            continue
+        subdir = git.get("subdir", "")
+        require(isinstance(subdir, str), "Grafonnet lock subdir must be a string")
+        dependencies.append((revision, repository_root / "vendor" / normalized / subdir))
+    return dependencies
+
+
+def require_render_executable(program: str, cwd: Path) -> None:
+    if "/" in program:
+        executable = Path(program)
+        if not executable.is_absolute():
+            executable = cwd / executable
+        require(executable.is_file() and os.access(executable, os.X_OK),
+                f"render executable is unavailable: {program}")
+    else:
+        require(shutil.which(program) is not None, f"render executable is unavailable: {program}")
+
+
 def validate_run_contract(data: dict[str, Any]) -> None:
     require(data["inputs"] == {}, "run-contract inputs must be empty")
     repository_root = Path(text(data["repository_root"], "repository_root", 2048))
     require(repository_root.is_absolute(), "repository_root must be absolute")
     require(repository_root.is_dir() and not repository_root.is_symlink(),
             "repository_root must identify a regular directory")
-    text(data["workspace"], "workspace", 1024)
+    workspace = Path(text(data["workspace"], "workspace", 1024))
+    require(workspace.is_absolute(), "workspace must be absolute")
     source = strict_object(data["source"], {
         "final_path", "candidate_path", "baseline_state", "baseline_sha256"
     }, "source")
@@ -238,6 +289,16 @@ def validate_run_contract(data: dict[str, Any]) -> None:
         candidate_path.resolve(strict=False).relative_to(resolved_root)
     except ValueError as error:
         raise ArtifactError("source paths must be inside repository_root") from error
+    try:
+        workspace_relative = workspace.resolve(strict=False).relative_to(resolved_root)
+    except ValueError as error:
+        raise ArtifactError("workspace must be inside repository_root") from error
+    require(
+        len(workspace_relative.parts) == 3
+        and workspace_relative.parts[0] == "dashboards"
+        and workspace_relative.parts[2] == "workspace",
+        "workspace must be dashboards/<project-name>/workspace inside repository_root",
+    )
     require(final_path != candidate_path, "candidate and final paths must differ")
     require(final_path.parent == candidate_path.parent, "candidate must be beside final source")
     require(final_path.suffix == ".jsonnet", "final source must be a .jsonnet file")
@@ -247,7 +308,16 @@ def validate_run_contract(data: dict[str, Any]) -> None:
     baseline = digest(source["baseline_sha256"], "source.baseline_sha256", nullable=True)
     require((state == "ABSENT" and baseline is None) or (state == "PRESENT" and baseline is not None),
             "baseline state and digest disagree")
-    text(data["rendered_candidate_path"], "rendered_candidate_path", 2048)
+    rendered_candidate_path = Path(text(
+        data["rendered_candidate_path"], "rendered_candidate_path", 2048
+    ))
+    expected_render_directory = workspace / "dashboard-builder" / data["run_id"] / "evidence"
+    require(
+        rendered_candidate_path.is_absolute()
+        and rendered_candidate_path.parent == expected_render_directory
+        and rendered_candidate_path.suffix == ".json",
+        "rendered_candidate_path must be a JSON file in the dashboard-builder run evidence directory",
+    )
 
     render = strict_object(data["render"], {"cwd", "argv", "timeout_seconds"}, "render")
     render_cwd = Path(text(render["cwd"], "render.cwd", 2048))
@@ -264,11 +334,20 @@ def validate_run_contract(data: dict[str, Any]) -> None:
             "render.argv must contain exactly one standalone {source} argument")
     require(sum(len(item) for item in argv) <= 4096, "render.argv exceeds 4096 characters")
     integer(render["timeout_seconds"], "render.timeout_seconds", 1, 300)
+    require_render_executable(argv[0], render_cwd)
 
     schema = strict_object(data["schema"], {"dashboard", "grafana_version", "grafonnet_revision"}, "schema")
     enum(schema["dashboard"], {"V2", "CLASSIC"}, "schema.dashboard")
     text(schema["grafana_version"], "schema.grafana_version", 128, nullable=True)
-    text(schema["grafonnet_revision"], "schema.grafonnet_revision", 256, nullable=True)
+    revision = text(schema["grafonnet_revision"], "schema.grafonnet_revision", 256, nullable=True)
+    dependencies = grafonnet_dependencies(resolved_root)
+    if dependencies:
+        require(revision is not None,
+                "schema.grafonnet_revision is required when Grafonnet is locked locally")
+        matches = [path for locked_revision, path in dependencies if locked_revision == revision]
+        require(matches, "schema.grafonnet_revision is absent from jsonnetfile.lock.json")
+        require(any(path.is_dir() for path in matches),
+                "schema.grafonnet_revision is not vendored locally")
 
     limits = strict_object(data["limits"], set(HARD_LIMITS), "limits")
     for name, hard_maximum in HARD_LIMITS.items():
@@ -856,6 +935,46 @@ def validate_failure_report(data: dict[str, Any]) -> None:
     string_array(data["evidence_refs"], "evidence_refs", 3, item_max=512)
 
 
+def evidence_reference_values(value: Any) -> list[str]:
+    references: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "evidence_ref" and isinstance(item, str):
+                references.append(item)
+            elif key == "evidence_refs" and isinstance(item, list):
+                references.extend(reference for reference in item if isinstance(reference, str))
+            else:
+                references.extend(evidence_reference_values(item))
+    elif isinstance(value, list):
+        for item in value:
+            references.extend(evidence_reference_values(item))
+    return references
+
+
+def evidence_path(reference: str, artifact_path: Path) -> Path:
+    raw_path = reference.split("#", 1)[0]
+    line_match = re.fullmatch(r"(.+):([1-9][0-9]*)", raw_path)
+    if line_match is not None:
+        raw_path = line_match.group(1)
+    path = Path(raw_path)
+    if not path.is_absolute():
+        base = artifact_path.parent.parent if artifact_path.parent.name == "outbox" else artifact_path.parent
+        path = base / path
+    return path.resolve(strict=False)
+
+
+def validate_evidence_references(data: dict[str, Any], artifact_path: Path, run: dict[str, Any]) -> None:
+    repository_root = Path(run["repository_root"]).resolve()
+    for reference in evidence_reference_values(data):
+        path = evidence_path(reference, artifact_path)
+        try:
+            path.relative_to(repository_root)
+        except ValueError as error:
+            raise ArtifactError(f"evidence reference escapes repository root: {reference}") from error
+        require(path.is_file() and not path.is_symlink(),
+                f"evidence reference does not identify a regular file: {reference}")
+
+
 def validate_publish_report(
     data: dict[str, Any], inputs: dict[str, dict[str, Any]], run: dict[str, Any]
 ) -> None:
@@ -930,8 +1049,9 @@ def load_and_bind_inputs(
     artifacts: dict[str, dict[str, Any]] = {}
     actual_digests: dict[str, str] = {}
     raw_sizes: dict[str, int] = {}
+    artifact_paths: dict[str, Path] = {}
     for name, path in (supplied_paths | support_paths).items():
-        raw, artifact = read_json(path)
+        raw, artifact = read_artifact(path)
         require(artifact.get("artifact_type") == name,
                 f"input {name} points to artifact_type {artifact.get('artifact_type')!r}")
         validate_envelope(artifact, len(raw))
@@ -944,6 +1064,7 @@ def load_and_bind_inputs(
         artifacts[name] = artifact
         actual_digests[name] = actual
         raw_sizes[name] = len(raw)
+        artifact_paths[name] = path
 
     required_support: set[str] = set()
     visited: set[str] = set()
@@ -965,7 +1086,7 @@ def load_and_bind_inputs(
                     f"nested input digest mismatch: {name} -> {dependency}")
             validate_input(dependency)
             nested[dependency] = artifacts[dependency]
-        validate_artifact(current, raw_sizes[name], nested)
+        validate_artifact(current, raw_sizes[name], nested, artifact_paths[name])
         visiting.remove(name)
         visited.add(name)
 
@@ -976,7 +1097,12 @@ def load_and_bind_inputs(
     return artifacts, actual_digests
 
 
-def validate_artifact(data: dict[str, Any], raw_size: int, inputs: dict[str, dict[str, Any]]) -> None:
+def validate_artifact(
+    data: dict[str, Any],
+    raw_size: int,
+    inputs: dict[str, dict[str, Any]],
+    artifact_path: Path,
+) -> None:
     artifact_type = validate_envelope(data, raw_size)
     run = data if artifact_type == "run-contract" else inputs.get("run-contract")
     if artifact_type != "run-contract":
@@ -1002,6 +1128,8 @@ def validate_artifact(data: dict[str, Any], raw_size: int, inputs: dict[str, dic
         validate_publish_report(data, inputs, run)
     else:
         validate_failure_report(data)
+    if artifact_type != "run-contract":
+        validate_evidence_references(data, artifact_path, run)
 
 
 def main() -> int:
@@ -1011,10 +1139,10 @@ def main() -> int:
     parser.add_argument("--support", action="append", default=[], metavar="TYPE=PATH")
     args = parser.parse_args()
     try:
-        raw, data = read_json(args.artifact)
+        raw, data = read_artifact(args.artifact)
         validate_envelope(data, len(raw))
         inputs, _ = load_and_bind_inputs(data, args.input, args.support)
-        validate_artifact(data, len(raw), inputs)
+        validate_artifact(data, len(raw), inputs, args.artifact)
     except (ArtifactError, KeyError, TypeError) as error:
         print(f"FAIL {error}", file=sys.stderr)
         return 1

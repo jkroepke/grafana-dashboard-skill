@@ -18,10 +18,25 @@ DASHBOARD_CONTRACT = REPOSITORY / "scripts" / "verify_dashboard_contract.py"
 RESPONSE_VALIDATOR = REPOSITORY / "scripts" / "validate_stage_response.py"
 NON_PROMETHEUS = REPOSITORY / "scripts" / "verify_non_prometheus_preservation.py"
 RENDER_VERIFIER = REPOSITORY / "scripts" / "verify_candidate_render.py"
+INIT_WORKSPACE = REPOSITORY / "scripts" / "init_agent_workspace.sh"
+VALIDATE_WORKSPACE = REPOSITORY / "scripts" / "validate_agent_workspace.sh"
+CREATE_COORDINATOR_ARTIFACT = REPOSITORY / "scripts" / "create_coordinator_artifact.py"
 
 
 def digest(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def load_artifact(path: Path) -> dict:
+    result = subprocess.run(
+        ["yq", "eval", "-o=json", ".", str(path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(result.stdout + result.stderr)
+    return json.loads(result.stdout)
 
 
 class WorkflowScriptsTest(unittest.TestCase):
@@ -35,8 +50,20 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.temporary.cleanup()
 
     def write(self, name: str, value: object) -> Path:
-        path = self.root / f"{name}.json"
-        path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        is_artifact = isinstance(value, dict) and "artifact_type" in value
+        path = self.root / f"{name}.{'yaml' if is_artifact else 'json'}"
+        if is_artifact:
+            result = subprocess.run(
+                ["yq", "eval", "-p=json", "-o=yaml", "."],
+                input=json.dumps(value, sort_keys=True),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            path.write_text(result.stdout, encoding="utf-8")
+        else:
+            path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         self.paths[name] = path
         return path
 
@@ -77,7 +104,7 @@ class WorkflowScriptsTest(unittest.TestCase):
             if name in visited:
                 return
             visited.add(name)
-            artifact_value = json.loads(self.paths[name].read_text(encoding="utf-8"))
+            artifact_value = load_artifact(self.paths[name])
             for dependency in artifact_value["inputs"]:
                 if dependency not in direct_names:
                     required.add(dependency)
@@ -91,9 +118,15 @@ class WorkflowScriptsTest(unittest.TestCase):
         return arguments
 
     def _write_valid_pipeline(self) -> None:
+        (self.root / "metrics.ndjson").write_text("{}\n", encoding="utf-8")
+        (self.root / "publish-evidence.json").write_text("{}\n", encoding="utf-8")
         final_source = self.root / "dashboard.jsonnet"
         candidate_source = self.root / "dashboard.candidate.jsonnet"
-        rendered = self.root / "rendered.json"
+        workspace = self.root / "dashboards" / "test-project" / "workspace"
+        workspace.mkdir(parents=True)
+        rendered = workspace / "dashboard-builder" / "test-run" / "evidence" / "rendered.json"
+        rendered.parent.mkdir(parents=True)
+        self.rendered_path = rendered
         candidate_source.write_text("{ candidate: true }\n", encoding="utf-8")
 
         limits = {
@@ -110,7 +143,7 @@ class WorkflowScriptsTest(unittest.TestCase):
             "PASS",
             {},
             repository_root=str(self.root),
-            workspace=str(self.root / "work"),
+            workspace=str(workspace),
             source={
                 "final_path": str(final_source),
                 "candidate_path": str(candidate_source),
@@ -527,7 +560,7 @@ class WorkflowScriptsTest(unittest.TestCase):
             "query-review": "query-review",
             "dashboard-build": "dashboard-build",
         })
-        self.run_tool(PARITY, self.paths["query-pack"], self.paths["query-review"], self.root / "rendered.json")
+        self.run_tool(PARITY, self.paths["query-pack"], self.paths["query-review"], self.rendered_path)
         chain_arguments = [
             CHAIN,
             self.paths["run-contract"],
@@ -560,7 +593,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         })
 
     def test_closed_plan_rejects_hidden_query_payload(self) -> None:
-        plan = json.loads(self.paths["dashboard-plan"].read_text(encoding="utf-8"))
+        plan = load_artifact(self.paths["dashboard-plan"])
         plan["payload"] = "rate(fake_total[5m])"
         self.write("bad-plan", plan)
         result = self.run_tool(
@@ -576,7 +609,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("extra=['payload']", result.stderr)
 
     def test_pass_review_with_finding_is_rejected(self) -> None:
-        review = json.loads(self.paths["query-review"].read_text(encoding="utf-8"))
+        review = load_artifact(self.paths["query-review"])
         review["findings"] = [{
             "query_id": "T001",
             "code": "BAD_RATE",
@@ -603,7 +636,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("zero findings", result.stderr)
 
     def test_plan_rejects_orphaned_question(self) -> None:
-        plan = json.loads(self.paths["dashboard-plan"].read_text(encoding="utf-8"))
+        plan = load_artifact(self.paths["dashboard-plan"])
         orphan = copy.deepcopy(plan["questions"][0])
         orphan["id"] = "Q002"
         orphan["text"] = "Which planned question was not assigned?"
@@ -622,7 +655,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("every planned question must be assigned", result.stderr)
 
     def test_query_pack_rejects_literal_datasource(self) -> None:
-        pack = json.loads(self.paths["query-pack"].read_text(encoding="utf-8"))
+        pack = load_artifact(self.paths["query-pack"])
         pack["queries"][0]["datasource_ref"] = "literal-datasource-uid"
         self.write("literal-datasource-pack", pack)
         result = self.run_tool(
@@ -640,25 +673,25 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("datasource_ref must be ${datasource}", result.stderr)
 
     def test_total_suffix_does_not_override_declared_gauge(self) -> None:
-        app = json.loads(self.paths["application-metrics"].read_text(encoding="utf-8"))
+        app = load_artifact(self.paths["application-metrics"])
         source_metric = app["metrics"][0]
         source_metric["family"] = "http_requests_total"
         source_metric["members"] = ["http_requests_total"]
         source_metric["type"] = "gauge"
         gauge_app = self.write("gauge-application-metrics", app)
 
-        metrics = json.loads(self.paths["metrics-contract"].read_text(encoding="utf-8"))
+        metrics = load_artifact(self.paths["metrics-contract"])
         metrics["inputs"]["application-metrics"] = digest(gauge_app)
         approved = metrics["approved"][0]
         approved["family"] = "http_requests_total"
         approved["type"] = "gauge"
         gauge_metrics = self.write("gauge-metrics-contract", metrics)
 
-        plan = json.loads(self.paths["dashboard-plan"].read_text(encoding="utf-8"))
+        plan = load_artifact(self.paths["dashboard-plan"])
         plan["inputs"]["metrics-contract"] = digest(gauge_metrics)
         gauge_plan = self.write("gauge-dashboard-plan", plan)
 
-        pack = json.loads(self.paths["query-pack"].read_text(encoding="utf-8"))
+        pack = load_artifact(self.paths["query-pack"])
         pack["inputs"]["metrics-contract"] = digest(gauge_metrics)
         pack["inputs"]["dashboard-plan"] = digest(gauge_plan)
         for query in pack["queries"]:
@@ -681,7 +714,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("counter-only function but no referenced metric has a counter-compatible type", result.stderr)
 
     def test_revision_four_is_rejected(self) -> None:
-        plan = json.loads(self.paths["dashboard-plan"].read_text(encoding="utf-8"))
+        plan = load_artifact(self.paths["dashboard-plan"])
         plan["revision"] = 4
         self.write("revision-four-plan", plan)
         result = self.run_tool(
@@ -697,7 +730,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("revision must be <= 3", result.stderr)
 
     def test_new_dashboard_rejects_preserved_change_label(self) -> None:
-        plan = json.loads(self.paths["dashboard-plan"].read_text(encoding="utf-8"))
+        plan = load_artifact(self.paths["dashboard-plan"])
         plan["questions"][0]["change"] = "PRESERVED"
         self.write("false-preserved-plan", plan)
         result = self.run_tool(
@@ -713,7 +746,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("must be NEW without a baseline", result.stderr)
 
     def test_metrics_contract_rejects_invented_label(self) -> None:
-        metrics = json.loads(self.paths["metrics-contract"].read_text(encoding="utf-8"))
+        metrics = load_artifact(self.paths["metrics-contract"])
         metrics["approved"][0]["identity_labels"].append("invented_label")
         self.write("invented-label-metrics", metrics)
         result = self.run_tool(
@@ -728,10 +761,10 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("introduces labels absent", result.stderr)
 
     def test_downstream_validation_recursively_rejects_invalid_input_body(self) -> None:
-        plan = json.loads(self.paths["dashboard-plan"].read_text(encoding="utf-8"))
+        plan = load_artifact(self.paths["dashboard-plan"])
         plan["hidden"] = "invalid"
         invalid_plan = self.write("invalid-upstream-plan", plan)
-        pack = json.loads(self.paths["query-pack"].read_text(encoding="utf-8"))
+        pack = load_artifact(self.paths["query-pack"])
         pack["inputs"]["dashboard-plan"] = digest(invalid_plan)
         downstream = self.write("downstream-pack", pack)
         result = self.run_tool(
@@ -750,7 +783,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("extra=['hidden']", result.stderr)
 
     def test_run_contract_confines_source_to_repository(self) -> None:
-        run = json.loads(self.paths["run-contract"].read_text(encoding="utf-8"))
+        run = load_artifact(self.paths["run-contract"])
         outside = self.root.parent / "outside-dashboard.jsonnet"
         run["source"]["final_path"] = str(outside)
         run["source"]["candidate_path"] = str(self.root.parent / "outside-dashboard.candidate.jsonnet")
@@ -765,8 +798,78 @@ class WorkflowScriptsTest(unittest.TestCase):
         result = self.run_tool(VALIDATOR, self.paths["v2-openapi-gap"], expected=1)
         self.assertIn("requires supported Dashboard V2 OpenAPI", result.stderr)
 
+    def test_run_contract_requires_project_workspace_layout(self) -> None:
+        run = load_artifact(self.paths["run-contract"])
+        run["workspace"] = str(self.root / "work")
+        self.write("invalid-workspace-run", run)
+        result = self.run_tool(
+            VALIDATOR,
+            self.paths["invalid-workspace-run"],
+            expected=1,
+        )
+        self.assertIn("dashboards/<project-name>/workspace", result.stderr)
+
+    def test_run_contract_requires_render_executable(self) -> None:
+        run = load_artifact(self.paths["run-contract"])
+        run["render"]["argv"][0] = "definitely-not-an-installed-render-tool"
+        self.write("missing-render-tool-run", run)
+        result = self.run_tool(VALIDATOR, self.paths["missing-render-tool-run"], expected=1)
+        self.assertIn("render executable is unavailable", result.stderr)
+
+    def test_run_contract_requires_locked_and_vendored_grafonnet_revision(self) -> None:
+        lock = {
+            "version": 1,
+            "dependencies": [{
+                "source": {"git": {
+                    "remote": "https://github.com/grafana/grafonnet.git",
+                    "subdir": "gen/grafonnet-v13.0.0",
+                }},
+                "version": "locked-revision",
+                "sum": "unused",
+            }],
+            "legacyImports": False,
+        }
+        (self.root / "jsonnetfile.lock.json").write_text(json.dumps(lock), encoding="utf-8")
+        vendor = self.root / "vendor/github.com/grafana/grafonnet/gen/grafonnet-v13.0.0"
+        vendor.mkdir(parents=True)
+
+        run = load_artifact(self.paths["run-contract"])
+        run["schema"]["grafonnet_revision"] = "wrong-revision"
+        self.write("wrong-pin-run", run)
+        result = self.run_tool(VALIDATOR, self.paths["wrong-pin-run"], expected=1)
+        self.assertIn("absent from jsonnetfile.lock.json", result.stderr)
+
+        run["schema"]["grafonnet_revision"] = "locked-revision"
+        self.write("locked-pin-run", run)
+        self.run_tool(VALIDATOR, self.paths["locked-pin-run"])
+
+        vendor.rmdir()
+        result = self.run_tool(VALIDATOR, self.paths["locked-pin-run"], expected=1)
+        self.assertIn("not vendored locally", result.stderr)
+
+    def test_failure_report_requires_existing_evidence_file(self) -> None:
+        report = self.envelope(
+            "failure-report",
+            "BLOCKED",
+            {"run-contract": digest(self.paths["run-contract"])},
+            failed_stage="application-metrics",
+            owner="USER",
+            code="MISSING_INPUT",
+            summary="Required input is unavailable.",
+            evidence_refs=["evidence/missing.yaml"],
+        )
+        self.write("missing-evidence-report", report)
+        result = self.run_tool(
+            VALIDATOR,
+            self.paths["missing-evidence-report"],
+            "--input",
+            f"run-contract={self.paths['run-contract']}",
+            expected=1,
+        )
+        self.assertIn("evidence reference does not identify a regular file", result.stderr)
+
     def test_parity_rejects_swapped_consumer_text(self) -> None:
-        rendered = json.loads((self.root / "rendered.json").read_text(encoding="utf-8"))
+        rendered = json.loads(self.rendered_path.read_text(encoding="utf-8"))
         panel_spec = rendered["spec"]["elements"]["P001"]["spec"]["data"]["spec"]["queries"][0]["spec"]["query"]["spec"]
         variable_spec = rendered["spec"]["variables"][1]["spec"]["query"]["spec"]
         panel_spec["expr"], variable_spec["query"] = variable_spec["query"], panel_spec["expr"]
@@ -781,10 +884,10 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("query consumer mismatch", result.stderr)
 
     def test_classic_parity_ignores_explicit_loki_consumer(self) -> None:
-        pack = json.loads(self.paths["query-pack"].read_text(encoding="utf-8"))
+        pack = load_artifact(self.paths["query-pack"])
         pack["queries"][0]["consumer_locator"]["name"] = "panel-1"
         classic_pack = self.write("classic-pack", pack)
-        review = json.loads(self.paths["query-review"].read_text(encoding="utf-8"))
+        review = load_artifact(self.paths["query-review"])
         review["query_pack_sha256"] = digest(classic_pack)
         review["inputs"]["query-pack"] = digest(classic_pack)
         classic_review = self.write("classic-review", review)
@@ -858,10 +961,10 @@ class WorkflowScriptsTest(unittest.TestCase):
     def test_chain_rejects_render_unrelated_to_candidate(self) -> None:
         candidate = self.root / "dashboard.candidate.jsonnet"
         candidate.write_text('{"unrelated": true}', encoding="utf-8")
-        build = json.loads(self.paths["dashboard-build"].read_text(encoding="utf-8"))
+        build = load_artifact(self.paths["dashboard-build"])
         build["candidate_sha256"] = digest(candidate)
         self.write("dashboard-build", build)
-        review = json.loads(self.paths["dashboard-review"].read_text(encoding="utf-8"))
+        review = load_artifact(self.paths["dashboard-review"])
         review["inputs"]["dashboard-build"] = digest(self.paths["dashboard-build"])
         review["build_manifest_sha256"] = digest(self.paths["dashboard-build"])
         review["candidate_sha256"] = digest(candidate)
@@ -884,18 +987,18 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertFalse((self.root / "dashboard.jsonnet").exists())
 
     def test_chain_rejects_unplanned_queryless_panel(self) -> None:
-        rendered_path = self.root / "rendered.json"
+        rendered_path = self.rendered_path
         rendered = json.loads(rendered_path.read_text(encoding="utf-8"))
         rendered["spec"]["elements"]["P999"] = {"kind": "Panel", "spec": {"title": "Unplanned"}}
         rendered_json = json.dumps(rendered)
         rendered_path.write_text(rendered_json, encoding="utf-8")
         candidate = self.root / "dashboard.candidate.jsonnet"
         candidate.write_text(rendered_json, encoding="utf-8")
-        build = json.loads(self.paths["dashboard-build"].read_text(encoding="utf-8"))
+        build = load_artifact(self.paths["dashboard-build"])
         build["candidate_sha256"] = digest(candidate)
         build["rendered_sha256"] = digest(rendered_path)
         self.write("dashboard-build", build)
-        review = json.loads(self.paths["dashboard-review"].read_text(encoding="utf-8"))
+        review = load_artifact(self.paths["dashboard-review"])
         review["inputs"]["dashboard-build"] = digest(self.paths["dashboard-build"])
         review["build_manifest_sha256"] = digest(self.paths["dashboard-build"])
         review["candidate_sha256"] = digest(candidate)
@@ -930,7 +1033,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("must be the promoted final source", result.stderr)
 
     def test_dashboard_contract_rejects_missing_variable_qry_type(self) -> None:
-        rendered = json.loads((self.root / "rendered.json").read_text(encoding="utf-8"))
+        rendered = json.loads(self.rendered_path.read_text(encoding="utf-8"))
         del rendered["spec"]["variables"][1]["spec"]["query"]["spec"]["qryType"]
         bad = self.write("missing-qry-type", rendered)
         result = self.run_tool(DASHBOARD_CONTRACT, bad, expected=1)
@@ -940,10 +1043,16 @@ class WorkflowScriptsTest(unittest.TestCase):
         digest_value = "sha256:" + "a" * 64
         valid = self.root / "response.txt"
         valid.write_text(
-            f"PASS promql-reviewer artifact=work/query-review.json sha256={digest_value}\n",
+            f"PASS promql-reviewer artifact=work/query-review.yaml sha256={digest_value}\n",
             encoding="utf-8",
         )
         self.run_tool(RESPONSE_VALIDATOR, valid)
+        valid.write_text(
+            f"PASS promql-reviewer artifact=work/query-review.json sha256={digest_value}\n",
+            encoding="utf-8",
+        )
+        result = self.run_tool(RESPONSE_VALIDATOR, valid, expected=1)
+        self.assertIn("must use a .yaml filename", result.stderr)
         valid.write_text("PASS promql-reviewer\nextra context\n", encoding="utf-8")
         result = self.run_tool(RESPONSE_VALIDATOR, valid, expected=1)
         self.assertIn("one line", result.stderr)
@@ -974,7 +1083,7 @@ class WorkflowScriptsTest(unittest.TestCase):
             },
             dashboard_review_sha256=digest(self.paths["dashboard-review"]),
             promoted_source_sha256=digest(self.root / "dashboard.candidate.jsonnet"),
-            rendered_sha256=digest(self.root / "rendered.json"),
+            rendered_sha256=digest(self.rendered_path),
             operation="CREATE",
             write_status="PASS",
             readback_status="PASS",
@@ -995,6 +1104,256 @@ class WorkflowScriptsTest(unittest.TestCase):
             expected=1,
         )
         self.assertIn("publication was not requested", result.stderr)
+
+    def test_agent_workspace_is_initialized_as_resumable_yaml(self) -> None:
+        arguments = [
+            str(INIT_WORKSPACE),
+            str(self.root),
+            "demo-project",
+            "run-1",
+            "application-metrics",
+        ]
+        first = subprocess.run(arguments, capture_output=True, text=True, check=False)
+        self.assertEqual(0, first.returncode, first.stdout + first.stderr)
+        agent_root = (
+            self.root / "dashboards" / "demo-project" / "workspace"
+            / "application-metrics" / "run-1"
+        )
+        for directory in {"inbox", "records", "evidence", "outbox", "tmp"}:
+            self.assertTrue((agent_root / directory).is_dir())
+        state_path = agent_root / "state.yaml"
+        state_raw = state_path.read_bytes()
+        converted = subprocess.run(
+            ["yq", "eval", "-o=json", ".", str(state_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, converted.returncode, converted.stdout + converted.stderr)
+        state = json.loads(converted.stdout)
+        self.assertEqual("application-metrics", state["agent"])
+        self.assertEqual("run-1", state["run_id"])
+        self.assertEqual("read-inbox", state["next_action"])
+
+        second = subprocess.run(arguments, capture_output=True, text=True, check=False)
+        self.assertEqual(0, second.returncode, second.stdout + second.stderr)
+        self.assertEqual(state_raw, state_path.read_bytes())
+
+        validation = subprocess.run(
+            [str(VALIDATE_WORKSPACE), str(agent_root)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, validation.returncode, validation.stdout + validation.stderr)
+
+    def test_agent_workspace_rejects_oversized_record(self) -> None:
+        initialized = subprocess.run(
+            [
+                str(INIT_WORKSPACE),
+                str(self.root),
+                "demo-project",
+                "run-2",
+                "application-metrics",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, initialized.returncode, initialized.stdout + initialized.stderr)
+        agent_root = Path(initialized.stdout.strip())
+        record_dir = agent_root / "records" / "metrics"
+        record_dir.mkdir()
+        (record_dir / "0001-M001.yaml").write_text(
+            "id: M001\nhelp: " + "x" * 8200 + "\n",
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [str(VALIDATE_WORKSPACE), str(agent_root)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertIn("exceeds 8192 bytes", result.stderr)
+
+    def test_coordinator_helpers_create_valid_terminal_artifacts_and_state(self) -> None:
+        helper_root = self.root / "helper-repository"
+        helper_root.mkdir()
+        render_tool = helper_root / "render-tool"
+        render_tool.write_text("#!/bin/sh\ncat \"$1\"\n", encoding="utf-8")
+        render_tool.chmod(0o755)
+        lock = {
+            "version": 1,
+            "dependencies": [{
+                "source": {"git": {
+                    "remote": "https://github.com/grafana/grafonnet.git",
+                    "subdir": "gen/grafonnet-v13.0.0",
+                }},
+                "version": "helper-revision",
+                "sum": "unused",
+            }],
+            "legacyImports": False,
+        }
+        (helper_root / "jsonnetfile.lock.json").write_text(json.dumps(lock), encoding="utf-8")
+        (helper_root / "vendor/github.com/grafana/grafonnet/gen/grafonnet-v13.0.0").mkdir(
+            parents=True
+        )
+
+        create_run = subprocess.run(
+            [
+                sys.executable,
+                str(CREATE_COORDINATOR_ARTIFACT),
+                "run-contract",
+                "--repository-root",
+                str(helper_root),
+                "--project-name",
+                "demo-project",
+                "--run-id",
+                "run-1",
+                "--final-source",
+                "dashboards/demo-project/dashboard.jsonnet",
+                "--render-program",
+                str(render_tool),
+                "--render-arg={source}",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, create_run.returncode, create_run.stdout + create_run.stderr)
+        repeated_run = subprocess.run(create_run.args, capture_output=True, text=True, check=False)
+        self.assertEqual(0, repeated_run.returncode, repeated_run.stdout + repeated_run.stderr)
+        conflicting_run = subprocess.run(
+            [*create_run.args, "--datasource-access"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(1, conflicting_run.returncode, conflicting_run.stdout + conflicting_run.stderr)
+        self.assertIn("refusing to replace immutable artifact", conflicting_run.stderr)
+        coordinator = (
+            helper_root / "dashboards/demo-project/workspace/coordinator/run-1"
+        )
+        run_contract = coordinator / "outbox/run-contract.yaml"
+        run = load_artifact(run_contract)
+        self.assertEqual("helper-revision", run["schema"]["grafonnet_revision"])
+        state = load_artifact(coordinator / "state.yaml")
+        self.assertEqual("IN_PROGRESS", state["status"])
+
+        evidence = coordinator / "evidence/runtime-capabilities.yaml"
+        evidence.write_text("available: false\n", encoding="utf-8")
+        create_failure = subprocess.run(
+            [
+                sys.executable,
+                str(CREATE_COORDINATOR_ARTIFACT),
+                "failure-report",
+                "--run-contract",
+                str(run_contract),
+                "--status",
+                "BLOCKED",
+                "--failed-stage",
+                "application-metrics",
+                "--owner",
+                "USER",
+                "--code",
+                "MISSING_SPECIALIST_RUNTIME",
+                "--summary",
+                "Required specialist runtime is unavailable.",
+                "--evidence",
+                "evidence/runtime-capabilities.yaml",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, create_failure.returncode, create_failure.stdout + create_failure.stderr)
+        repeated_failure = subprocess.run(
+            create_failure.args,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(
+            0,
+            repeated_failure.returncode,
+            repeated_failure.stdout + repeated_failure.stderr,
+        )
+        validation = subprocess.run(
+            [str(VALIDATE_WORKSPACE), str(coordinator)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, validation.returncode, validation.stdout + validation.stderr)
+        state = load_artifact(coordinator / "state.yaml")
+        self.assertEqual("BLOCKED", state["status"])
+        self.assertEqual("complete", state["next_action"])
+
+        subprocess.run(
+            ["yq", "eval", "-i", '.status = "READY"', str(coordinator / "state.yaml")],
+            check=True,
+        )
+        validation = subprocess.run(
+            [str(VALIDATE_WORKSPACE), str(coordinator)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(1, validation.returncode, validation.stdout + validation.stderr)
+        self.assertIn("does not match terminal", validation.stderr)
+
+    def test_validator_rejects_json_stage_artifact(self) -> None:
+        json_pack = self.root / "query-pack.json"
+        json_pack.write_text(
+            json.dumps(load_artifact(self.paths["query-pack"])),
+            encoding="utf-8",
+        )
+        result = self.run_tool(
+            VALIDATOR,
+            json_pack,
+            "--input",
+            f"run-contract={self.paths['run-contract']}",
+            "--input",
+            f"metrics-contract={self.paths['metrics-contract']}",
+            "--input",
+            f"dashboard-plan={self.paths['dashboard-plan']}",
+            *self.support_arguments({"run-contract", "metrics-contract", "dashboard-plan"}),
+            expected=1,
+        )
+        self.assertIn("must use a .yaml filename", result.stderr)
+
+    def test_validator_rejects_yml_stage_artifact(self) -> None:
+        yml_pack = self.root / "query-pack.yml"
+        yml_pack.write_bytes(self.paths["query-pack"].read_bytes())
+        result = self.run_tool(
+            VALIDATOR,
+            yml_pack,
+            "--input",
+            f"run-contract={self.paths['run-contract']}",
+            "--input",
+            f"metrics-contract={self.paths['metrics-contract']}",
+            "--input",
+            f"dashboard-plan={self.paths['dashboard-plan']}",
+            *self.support_arguments({"run-contract", "metrics-contract", "dashboard-plan"}),
+            expected=1,
+        )
+        self.assertIn("must use a .yaml filename", result.stderr)
+
+    def test_query_parity_rejects_json_pack_artifact(self) -> None:
+        json_pack = self.root / "parity-query-pack.json"
+        json_pack.write_text(
+            json.dumps(load_artifact(self.paths["query-pack"])),
+            encoding="utf-8",
+        )
+        result = self.run_tool(
+            PARITY,
+            json_pack,
+            self.paths["query-review"],
+            self.rendered_path,
+            expected=1,
+        )
+        self.assertIn("must use a .yaml filename", result.stderr)
 
 
 if __name__ == "__main__":

@@ -32,10 +32,13 @@ def main() -> int:
     if match is None:
         print("FAIL stage response does not match the required grammar", file=sys.stderr)
         return 1
-    status, _, field, _, _ = match.groups()
+    status, _, field, artifact_path, _ = match.groups()
     expected_field = "report" if status in {"FAIL", "BLOCKED"} else "artifact"
     if field != expected_field:
         print(f"FAIL {status} response must use {expected_field}=", file=sys.stderr)
+        return 1
+    if not artifact_path.endswith(".yaml"):
+        print("FAIL workflow artifact path must use a .yaml filename", file=sys.stderr)
         return 1
     print("PASS stage response")
     return 0

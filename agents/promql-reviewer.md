@@ -16,6 +16,7 @@ Do not write replacement expressions, edit the query pack, design panels/layout,
 
 Read:
 
+- `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
 - `knowledge/security/output-redaction.md`
 - only the `knowledge/promql/` files relevant to expressions in the pack
@@ -23,6 +24,11 @@ Read:
 - `knowledge/grafana/annotations.md` for annotation queries
 
 Receive the sanitized run-contract, metrics-contract, dashboard-plan, and query-pack paths with expected SHA-256 digests; targeted evidence paths; opaque read-only datasource access when available; and the assigned review path. Do not receive builder conclusions or the complete conversation.
+
+Initialize the assigned agent/run workspace. Review one query record at a time,
+checkpoint its result/finding as a bounded YAML file with `yq`, and update
+`state.yaml`. Resume from the queue; never retain every query or finding in
+context for a final write.
 
 Validate all input digests. Independently check:
 
@@ -44,7 +50,10 @@ HTTP success or PromQL syntax alone is not a pass. Keep raw responses in scratch
 
 ## Artifact and response
 
-Write `query-review.json` using `knowledge/workflow/artifacts.md`. Bind the decision to the exact query-pack digest. Findings state the defect and required semantics/evidence but MUST NOT contain a corrected query.
+Assemble `query-review.yaml` from the per-query review records with `yq` using
+`knowledge/workflow/artifacts.md`. Bind the decision to the exact query-pack
+digest. Findings state the defect and required semantics/evidence but MUST NOT
+contain a corrected query.
 
 Return `PASS` only when there are no findings and all mandatory validation available to the task has completed. When live access is unavailable, record the live-validation gap explicitly according to the task's policy.
 

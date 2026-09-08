@@ -3,3 +3,5 @@ jsonnetfile.json
 jsonnetfile.lock.json
 vendor
 .idea
+.eval
+dashboards/*/workspace/

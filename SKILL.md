@@ -16,6 +16,10 @@ This workflow runs air-gapped with a 256k context limit.
 - Treat unknown facts as unknown. Do not invent metrics, labels, workload names, recording rules, Grafonnet methods, schema fields, API routes, or credentials.
 - Prefer file paths and targeted excerpts over copying large inputs into agent contexts.
 - Leave raw metrics dumps and large query responses on disk.
+- Mike Farah `yq` v4 is required for direct agent-authored YAML writes. Agents
+  use it for YAML tickets, checkpoints, state, and stage artifacts. Checked-in
+  automation may be implemented in Python; non-YAML outputs use their native
+  tools.
 
 ## Confidentiality
 
@@ -88,7 +92,8 @@ Do not duplicate agent definitions for individual runtimes.
 - Default new dashboards to Dashboard Schema V2.
 - Preserve the schema of an existing dashboard unless migration is requested.
 - Preserve existing dashboard identity, unrelated panels, repository helpers, and dependency pins.
-- Use the repository dashboard location, or `dashboards/<service>.jsonnet` when none exists.
+- Use the repository dashboard location, or
+  `dashboards/<project-name>/dashboard.jsonnet` when none exists.
 - `dashboard-builder` owns the single staged dashboard candidate. This workflow version does not stage helper edits, and it never writes the final destination.
 - The coordinator owns dispatch, stage state, digest checks, and mechanical promotion of an approved candidate. A fresh `dashboard-publisher` performs explicitly requested publication. The coordinator MUST NOT reconstruct or manually repair dashboard source, PromQL, or API payloads.
 
@@ -130,6 +135,8 @@ bounded blocker. Do not substitute coordinator work for the missing stage.
 Before delegation, locate or record proposed facts and evidence paths without performing metric semantics or dashboard construction in the coordinator context:
 
 - application/workload identity
+- filesystem-safe project name, neutral run ID, and the absolute
+  `dashboards/<project-name>/workspace` path
 - candidate container and sidecar evidence
 - Grafana version and dashboard schema
 - Grafonnet revision
@@ -145,6 +152,12 @@ Before delegation, locate or record proposed facts and evidence paths without pe
 - existing dashboard resource identity when applicable
 - whether publication is requested
 - when publication is requested: writable authentication method and folder placement when applicable
+
+Create the coordinator run contract with
+`scripts/create_coordinator_artifact.py run-contract`; do not reconstruct its
+YAML with an ad hoc `yq` expression. The helper records the source baseline,
+requires an executable render command, resolves locally locked Grafonnet
+revision evidence, validates the artifact, and advances coordinator state.
 
 Do not place literal connection details or target identifiers into the shared contract passed to subagents. Provide an opaque access capability/reference instead.
 
@@ -206,7 +219,18 @@ Read `knowledge/grafana/variables.md` when implementing or reviewing variables.
 
 For every dashboard source creation or update, the following isolated-agent pipeline is mandatory. If the runtime cannot provide fresh subagent contexts or a required agent is unavailable, stop with the completed artifact statuses; the coordinator MUST NOT absorb the missing stage. A reviewer-only read-only inspection is allowed only when that reviewer's complete prerequisite artifact chain already exists; otherwise it is an informal inspection and cannot issue a gate status. No source change may bypass staged construction and review.
 
-Read `knowledge/workflow/artifacts.md` before dispatch. Use its bounded file artifacts, digest-bound approvals, response limits, default budgets, and promotion gate. Do not create recursive subagent trees. The coordinator performs all dispatch and passes only neutral paths, expected digests, the sanitized fields required by the stage, opaque access references, and transitive artifact paths needed by recursive validation. Support artifacts are validator-only unless they are also direct role inputs. Use a fresh agent instance for every author/reviewer boundary.
+Read `knowledge/workflow/workspace.md` and `knowledge/workflow/artifacts.md`
+before dispatch. Initialize every role below
+`dashboards/<project-name>/workspace/<agent>/<run-id>/`. Use small YAML
+checkpoints as the work queue and bounded digest-bound YAML stage artifacts as
+the gates. Before each dispatch, the coordinator creates the role's immutable
+`inbox/job.yaml` with `yq`. The agent prompt contains only the agent ID, ticket
+path, and ticket digest; artifact bodies and task notes are not copied into the
+prompt. Do not create recursive subagent trees. The ticket contains only neutral
+paths, expected digests, sanitized fields required by the stage, opaque access
+references, and transitive artifact paths needed by recursive validation.
+Support artifacts are validator-only unless they are also direct role inputs.
+Use a fresh agent instance for every author/reviewer boundary.
 
 The mandatory state machine is:
 
@@ -224,17 +248,29 @@ application-metrics + kubernetes-metrics
 
 Any upstream artifact change invalidates every downstream approval derived from its previous digest.
 
+When a stage cannot produce its normal artifact, create the terminal report
+with `scripts/create_coordinator_artifact.py failure-report`. Every supplied
+evidence reference must identify an existing regular file inside the repository.
+The helper validates the report and marks coordinator state `FAIL` or `BLOCKED`
+with `next_action: complete`.
+
 ### 1. Metric inventories
 
 Run `application-metrics` and `kubernetes-metrics` concurrently when both evidence sets exist. They inventory observed facts and categorize capabilities as `BUSINESS`, `PROCESS`, or `KUBERNETES` in separate artifacts.
 
 Analysts MUST NOT write final or candidate PromQL, variable queries, annotation queries, operational panel plans, or dashboard source. Large catalogs and raw evidence remain on disk; their visible response contains only stage status, artifact path, and digest.
 
+For large Prometheus/OpenMetrics exposition, the analyst streams the configured
+opaque reader or local evidence through `scripts/snapshot_metrics.py` on stdin.
+The helper has no network, credential, or input-file interface and writes small
+per-family YAML snapshots without exposing raw sample or label values to agent
+context. The analyst inspects those snapshots selectively.
+
 ### 2. Independent metrics review
 
 Dispatch `metrics-reviewer` with the inventory artifacts, expected digests, targeted raw evidence, selector facts, existing dashboard source/render paths when updating, and approved-metric budget. It independently verifies types, units, labels, lifecycle, population, availability, cardinality, supported semantics, and dependencies of every existing Prometheus query that will remain.
 
-Only its bounded `metrics-contract.json` may supply metrics to downstream stages. It authors no datasource query text. On failure, route evidence defects to the owning analyst; do not repair the contract in the coordinator.
+Only its bounded `metrics-contract.yaml` may supply metrics to downstream stages. It authors no datasource query text. On failure, route evidence defects to the owning analyst; do not repair the contract in the coordinator.
 
 ### 3. Dashboard architecture
 
@@ -248,7 +284,7 @@ Dispatch `promql-builder` with only the approved metrics contract and dashboard 
 
 `promql-builder` is the only agent allowed to author or change any final Prometheus datasource query text. This includes all panel targets, Prometheus variable queries, and Prometheus annotation queries. Straightforward and difficult queries have the same owner. No analyst, architect, dashboard builder, reviewer, or coordinator may add, repair, normalize, or optimize them.
 
-The builder writes a bounded `query-pack.json`. Discovery and validation probes by other roles are evidence only and MUST NOT be copied into dashboard artifacts.
+The builder writes a bounded `query-pack.yaml`. Discovery and validation probes by other roles are evidence only and MUST NOT be copied into dashboard artifacts.
 
 ### 5. Independent PromQL review
 
@@ -310,9 +346,18 @@ After writing, the publisher GETs the resource again through the same API versio
 
 - Do not give subagents the complete conversation.
 - Do not give subagents the complete `SKILL.md`; their registered agent definition is their role contract.
-- Give each subagent only the approved upstream artifact paths/digests, shared-contract fields, and local files needed for its task.
+- Queue each subagent's approved upstream paths/digests and assignments in its
+  small immutable `inbox/job.yaml`; give the model only that ticket path/digest.
 - Sanitize target-specific context before handoff; use opaque access references.
-- Metric analysts parse large dumps once and write file-backed inventories; the coordinator never imports their contents into conversation.
+- Every agent treats context as disposable and its assigned workspace as durable
+  memory. It writes one bounded YAML record as soon as each logical item is
+  resolved, then updates `state.yaml`; it never accumulates a complete result in
+  context for one large final write.
+- Agents assemble their stage artifact from the small records with `yq`. They
+  resume from `state.yaml` and load only targeted records, never the whole work
+  history. The coordinator never imports record bodies into conversation.
+- Metric analysts parse large dumps once and checkpoint each family separately;
+  the coordinator never imports their inventories into conversation.
 - Do not paste complete Grafana frames or API responses into the coordinator context.
 - Store all substantial stage results and raw requests/responses in files. Agent responses obey the status/path/digest limit in `knowledge/workflow/artifacts.md`.
 - Keep rejected alternatives out of the coordinator context unless they expose a correctness issue.
@@ -385,9 +430,9 @@ Prefer repository build commands. When applicable, validate with installed local
 
 ```bash
 jsonnetfmt -i <dashboard.jsonnet>
-jsonnet -J vendor <dashboard.jsonnet> > /tmp/dashboard.json
-jq empty /tmp/dashboard.json
-dashboard-linter lint --strict --config <lint-config> /tmp/dashboard.json
+jsonnet -J vendor <dashboard.jsonnet> > <dashboard-builder-run-dir>/evidence/rendered.json
+jq empty <dashboard-builder-run-dir>/evidence/rendered.json
+dashboard-linter lint --strict --config <lint-config> <dashboard-builder-run-dir>/evidence/rendered.json
 ```
 
 Use the repository's actual paths and commands when they differ. `jq empty` checks JSON syntax only, not Grafana schema correctness.

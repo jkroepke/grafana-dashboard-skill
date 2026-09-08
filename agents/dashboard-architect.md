@@ -16,12 +16,18 @@ Do not write PromQL, variable queries, annotation queries, Jsonnet, rendered JSO
 
 Read:
 
+- `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
 - `knowledge/security/output-redaction.md`
 - `knowledge/grafana/panel-selection.md`
 - `knowledge/grafana/layout-v2.md` only when layout constraints materially affect the plan
 
 Receive the sanitized run-contract path and digest, approved metrics-contract path and digest, existing-dashboard path when updating, declared budgets, and assigned output path. Do not receive raw dumps, analyst prose, or the complete conversation.
+
+Initialize the assigned agent/run workspace. Checkpoint each question, panel,
+consumer, and omission as its own bounded YAML record with `yq`, updating
+`state.yaml` after each decision. Resume from these files and never retain the
+complete plan in context for one final write.
 
 Validate the contract digest before planning. Select operational questions in this order:
 
@@ -38,6 +44,9 @@ Required dashboard variables and annotations are plan items whose query text wil
 
 ## Artifact and response
 
-Write a `PASS` `dashboard-plan.json` using `knowledge/workflow/artifacts.md`. When a required question cannot be supported or the plan cannot fit the declared budgets without losing the user's objective, write a `failure-report` instead.
+Assemble a `PASS` `dashboard-plan.yaml` from the small records with `yq` using
+`knowledge/workflow/artifacts.md`. When a required question cannot be supported
+or the plan cannot fit the declared budgets without losing the user's objective,
+write `failure-report.yaml` instead.
 
 Run `python3 scripts/validate_workflow_artifact.py` with the required run-contract and metrics-contract `--input` arguments and coordinator-supplied shortlist paths as `--support`. Support paths exist only for recursive validation; do not read their bodies. Return only the bounded response defined by the artifact contract.

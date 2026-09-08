@@ -81,9 +81,9 @@ def main() -> int:
     parser.add_argument("--source", type=Path)
     args = parser.parse_args()
     try:
-        run_raw, run = artifact.read_json(args.run_contract)
-        artifact.validate_artifact(run, len(run_raw), {})
-        build_raw, build = artifact.read_json(args.dashboard_build)
+        run_raw, run = artifact.read_artifact(args.run_contract)
+        artifact.validate_artifact(run, len(run_raw), {}, args.run_contract)
+        build_raw, build = artifact.read_artifact(args.dashboard_build)
         artifact.validate_envelope(build, len(build_raw))
         require(build["inputs"].get("run-contract") == artifact.sha256_bytes(run_raw),
                 "dashboard build does not bind the supplied run contract")
