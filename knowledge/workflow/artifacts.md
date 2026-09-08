@@ -205,11 +205,36 @@ credential can create/update with `dryRun=All`. A V2 run with
 ## Metric shortlists
 
 `application-metrics` and `kubernetes-metrics` each write at most 64 KiB and 48
-records in `metrics`. During discovery they write one YAML file per metric family
-under `records/metrics/`, update `state.yaml`, and assemble the bounded shortlist
-with `yq`. `catalog_ref` may reference an index for additional small YAML
-records. Retrieve records selectively; do not load the full catalog into an
-agent context.
+records in `metrics`. `application-metrics` runs first and additionally writes
+one immutable local scope evidence file containing the exact non-empty namespace
+set represented by verified application stored series. Its artifact includes:
+
+```yaml
+namespace_scope:
+  evidence_ref: <absolute local scope-evidence path>
+  sha256: sha256:<digest of that exact file>
+  namespace_count: <positive integer>
+```
+
+The namespace values themselves are never included in an artifact. The
+`kubernetes-metrics` artifact requires `application-metrics` as a direct input
+and repeats the exact `namespace_scope_ref` and `namespace_scope_sha256`; the
+validator requires both to match the application artifact. The Kubernetes agent
+uses that set, including every member when it contains multiple namespaces, for
+every discovery request. During discovery analysts write one YAML file per
+metric family under `records/metrics/`, update `state.yaml`, and assemble the
+bounded shortlist with `yq`. `catalog_ref` may reference an index for
+additional small YAML records. Retrieve records selectively; do not load the
+full catalog into an agent context.
+
+```yaml
+# kubernetes-metrics.yaml
+inputs:
+  run-contract: sha256:<digest>
+  application-metrics: sha256:<digest>
+namespace_scope_ref: <the exact application namespace_scope.evidence_ref>
+namespace_scope_sha256: sha256:<the exact application namespace_scope.sha256>
+```
 
 Each metric record has exactly:
 

@@ -44,8 +44,10 @@ TYPE_FIELDS = {
         "repository_root", "workspace", "source", "rendered_candidate_path", "render",
         "schema", "limits", "capabilities", "selector_proposals",
     },
-    "application-metrics": {"catalog_ref", "metrics", "omission_counts"},
-    "kubernetes-metrics": {"catalog_ref", "metrics", "omission_counts"},
+    "application-metrics": {"catalog_ref", "metrics", "omission_counts", "namespace_scope"},
+    "kubernetes-metrics": {
+        "catalog_ref", "metrics", "omission_counts", "namespace_scope_ref", "namespace_scope_sha256",
+    },
     "metrics-contract": {"approved", "rejected", "not_considered", "selector_contract", "unresolved"},
     "dashboard-plan": {"panel_groups", "questions", "panels", "required_consumers", "omissions", "budgets"},
     "query-pack": {"queries", "live_validation"},
@@ -415,7 +417,17 @@ def validate_metric_record(record: Any, where: str, artifact_type: str) -> None:
     string_array(item["limitations"], f"{where}.limitations", 6, item_max=256)
 
 
-def validate_metric_shortlist(data: dict[str, Any], artifact_type: str) -> None:
+def validate_namespace_scope(value: Any, where: str) -> dict[str, Any]:
+    item = strict_object(value, {"evidence_ref", "sha256", "namespace_count"}, where)
+    text(item["evidence_ref"], f"{where}.evidence_ref", 1024)
+    digest(item["sha256"], f"{where}.sha256")
+    integer(item["namespace_count"], f"{where}.namespace_count", 1)
+    return item
+
+
+def validate_metric_shortlist(
+    data: dict[str, Any], artifact_type: str, inputs: dict[str, dict[str, Any]], artifact_path: Path
+) -> None:
     text(data["catalog_ref"], "catalog_ref", 1024, nullable=True)
     records = array(data["metrics"], "metrics", 48)
     ids: set[str] = set()
@@ -428,6 +440,22 @@ def validate_metric_shortlist(data: dict[str, Any], artifact_type: str) -> None:
     for name, count in data["omission_counts"].items():
         identifier(name, f"omission_counts key {name!r}")
         integer(count, f"omission_counts.{name}", 0)
+    if artifact_type == "application-metrics":
+        scope = validate_namespace_scope(data["namespace_scope"], "namespace_scope")
+        scope_path = evidence_path(scope["evidence_ref"], artifact_path)
+        require(scope["sha256"] == file_digest(scope_path, "application namespace scope"),
+                "namespace_scope.sha256 does not match namespace_scope.evidence_ref")
+        return
+
+    scope_ref = text(data["namespace_scope_ref"], "namespace_scope_ref", 1024)
+    scope_digest = data["namespace_scope_sha256"]
+    digest(scope_digest, "namespace_scope_sha256")
+    application = inputs["application-metrics"]
+    application_scope = application["namespace_scope"]
+    require(scope_digest == application_scope["sha256"],
+            "Kubernetes namespace scope digest does not match application namespace scope")
+    require(scope_ref == application_scope["evidence_ref"],
+            "Kubernetes namespace scope reference does not match application namespace scope")
 
 
 def validate_selector_contract(value: Any) -> None:
@@ -1003,7 +1031,7 @@ def expected_input_names(artifact_type: str, declared: set[str]) -> None:
     exact = {
         "run-contract": set(),
         "application-metrics": {"run-contract"},
-        "kubernetes-metrics": {"run-contract"},
+        "kubernetes-metrics": {"run-contract", "application-metrics"},
         "dashboard-plan": {"run-contract", "metrics-contract"},
         "query-pack": {"run-contract", "metrics-contract", "dashboard-plan"},
         "query-review": {"run-contract", "metrics-contract", "dashboard-plan", "query-pack"},
@@ -1111,7 +1139,7 @@ def validate_artifact(
     if artifact_type == "run-contract":
         validate_run_contract(data)
     elif artifact_type in {"application-metrics", "kubernetes-metrics"}:
-        validate_metric_shortlist(data, artifact_type)
+        validate_metric_shortlist(data, artifact_type, inputs, artifact_path)
     elif artifact_type == "metrics-contract":
         validate_metrics_contract(data, inputs, run["limits"])
     elif artifact_type == "dashboard-plan":

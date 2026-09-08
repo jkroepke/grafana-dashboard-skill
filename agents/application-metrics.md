@@ -52,6 +52,21 @@ contradiction in `limitations`; it is never silently rewritten to `counter`.
 Missing `TYPE` means `unknown`. Numeric samples, monotonic-looking samples, HELP
 text, and names alone do not prove counter semantics.
 
+Before completing the inventory, discover the exact affected Kubernetes
+namespace set from verified application stored-series labels. This discovery is
+mandatory even when raw exporter exposition does not expose those stored labels:
+use the configured opaque datasource access or other verified stored-series
+evidence. Never infer namespaces from a workload name, pod-name pattern, or a
+cluster-wide Kubernetes metric. Preserve the exact non-empty set only in one
+local, absolute-path namespace-scope evidence file; do not put namespace values
+in the visible response or the shortlist. The file may contain more than one
+namespace and is the sole authority for downstream Kubernetes discovery.
+
+Publish its path, digest, and count as `namespace_scope` in the application
+artifact. The scope evidence is immutable after this stage. If no namespace can
+be verified, return a bounded failure report; do not permit an unscoped
+Kubernetes inventory.
+
 Keep exposition labels separate from verified stored scrape labels. Stored labels supplied in the run contract may be valid even when absent from a raw exposition dump.
 
 Classify domain/application metric families as `BUSINESS` and runtime/process/GC/runtime-library families as `PROCESS` from observed semantics only. Do not rank panels, formulate operational questions, or invent HTTP or database semantics.

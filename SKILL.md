@@ -123,12 +123,15 @@ the same command again during the run. Record `UNAUTHORIZED`,
 `NOT_ADVERTISED`, or `UNREACHABLE` as a terminal result unless the configured
 access or target changes.
 
-Once the run contract passes validation, dispatch `application-metrics` and
-`kubernetes-metrics` immediately and concurrently whenever their respective
-evidence exists. The coordinator performs no overlapping evidence gathering
-while they run. If an analyst, fresh subagent context, or the runtime's
-subagent tool is unavailable, stop with the completed artifact statuses and a
-bounded blocker. Do not substitute coordinator work for the missing stage.
+Once the run contract passes validation, dispatch `application-metrics` first.
+It must produce a validated, non-empty application namespace-scope evidence
+reference before `kubernetes-metrics` can start. Dispatch `kubernetes-metrics`
+only with the application artifact as a direct input and with that exact scope
+reference and digest in its ticket. The coordinator performs no overlapping
+evidence gathering while either analyst runs. If an analyst, fresh subagent
+context, or the runtime's subagent tool is unavailable, stop with the completed
+artifact statuses and a bounded blocker. Do not substitute coordinator work for
+the missing stage.
 
 ## Establish the shared contract
 
@@ -235,7 +238,8 @@ Use a fresh agent instance for every author/reviewer boundary.
 The mandatory state machine is:
 
 ```text
-application-metrics + kubernetes-metrics
+application-metrics
+  -> kubernetes-metrics (exact application namespace scope)
   -> metrics-reviewer PASS
   -> dashboard-architect PASS
   -> promql-builder PASS
@@ -256,7 +260,16 @@ with `next_action: complete`.
 
 ### 1. Metric inventories
 
-Run `application-metrics` and `kubernetes-metrics` concurrently when both evidence sets exist. They inventory observed facts and categorize capabilities as `BUSINESS`, `PROCESS`, or `KUBERNETES` in separate artifacts.
+Run `application-metrics` first. It discovers the exact non-empty namespace set
+represented by verified application stored series and records that set only in
+local namespace-scope evidence. Then run `kubernetes-metrics` with the
+completed application artifact as a direct input. It may cover one or multiple
+namespaces, but every Kubernetes discovery request must be limited to that
+exact set; it must never perform an unconditional cluster-wide scrape or query.
+If the scope cannot be verified or applied, stop the Kubernetes stage with a
+bounded failure report rather than widening it. The analysts inventory observed
+facts and categorize capabilities as `BUSINESS`, `PROCESS`, or `KUBERNETES` in
+separate artifacts.
 
 Analysts MUST NOT write final or candidate PromQL, variable queries, annotation queries, operational panel plans, or dashboard source. Large catalogs and raw evidence remain on disk; their visible response contains only stage status, artifact path, and digest.
 

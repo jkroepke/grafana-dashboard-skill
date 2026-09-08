@@ -79,6 +79,15 @@ After dispatch, only the assigned specialist writes in `records/`, `evidence/`,
 Downstream stages read approved `outbox/` artifacts and selected record files;
 they never edit them.
 
+`application-metrics` runs before `kubernetes-metrics`. The application stage
+stores the exact non-empty namespace set in a local scope evidence file and
+publishes only its absolute path, SHA-256 digest, and count in
+`application-metrics.yaml` under `namespace_scope`. The Kubernetes ticket must
+take `application-metrics` as a direct input and repeat that exact reference
+and digest. This permits multiple namespaces without allowing a cluster-wide
+fallback. Namespace values remain in the local scope evidence file, never in a
+ticket body or visible response.
+
 ## Checkpoint protocol
 
 Use Mike Farah `yq` v4 for YAML creation and mutation. If it is unavailable or

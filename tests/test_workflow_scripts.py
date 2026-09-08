@@ -172,6 +172,11 @@ class WorkflowScriptsTest(unittest.TestCase):
             selector_proposals={},
         )
         self.write("run-contract", run)
+        namespace_scope = self.root / "application-namespace-scope.yaml"
+        namespace_scope.write_text(
+            "schema_version: 1\nnamespaces:\n  - team-a\n  - team-b\n",
+            encoding="utf-8",
+        )
 
         metric = {
             "id": "M001",
@@ -199,8 +204,28 @@ class WorkflowScriptsTest(unittest.TestCase):
             catalog_ref="metrics.ndjson",
             metrics=[metric],
             omission_counts={},
+            namespace_scope={
+                "evidence_ref": str(namespace_scope),
+                "sha256": digest(namespace_scope),
+                "namespace_count": 2,
+            },
         )
         self.write("application-metrics", app)
+
+        kubernetes = self.envelope(
+            "kubernetes-metrics",
+            "DONE",
+            {
+                "run-contract": digest(self.paths["run-contract"]),
+                "application-metrics": digest(self.paths["application-metrics"]),
+            },
+            catalog_ref="metrics.ndjson",
+            metrics=[],
+            omission_counts={},
+            namespace_scope_ref=str(namespace_scope),
+            namespace_scope_sha256=digest(namespace_scope),
+        )
+        self.write("kubernetes-metrics", kubernetes)
 
         approved = {
             "id": "AM001",
@@ -527,6 +552,10 @@ class WorkflowScriptsTest(unittest.TestCase):
     def test_valid_artifacts_parity_chain_and_promotion(self) -> None:
         self.validate("run-contract", {})
         self.validate("application-metrics", {"run-contract": "run-contract"})
+        self.validate("kubernetes-metrics", {
+            "run-contract": "run-contract",
+            "application-metrics": "application-metrics",
+        })
         self.validate("metrics-contract", {
             "run-contract": "run-contract",
             "application-metrics": "application-metrics",

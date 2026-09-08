@@ -219,7 +219,11 @@ def main() -> int:
             require(app["status"] == "DONE", "application metrics is not DONE")
             shortlist_bindings["application-metrics"] = args.application_metrics
         if args.kubernetes_metrics is not None:
-            _, kube = checked(args.kubernetes_metrics, run_binding)
+            require(args.application_metrics is not None,
+                    "Kubernetes metrics requires the application metrics artifact")
+            _, kube = checked(args.kubernetes_metrics, run_binding | {
+                "application-metrics": args.application_metrics,
+            })
             require(kube["status"] == "DONE", "Kubernetes metrics is not DONE")
             shortlist_bindings["kubernetes-metrics"] = args.kubernetes_metrics
         require(bool(shortlist_bindings), "at least one metric shortlist is required")

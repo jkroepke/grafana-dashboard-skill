@@ -21,7 +21,27 @@ Read:
 - `knowledge/security/output-redaction.md`
 - `knowledge/kubernetes/metrics.md`
 
-Receive only the relevant manifests/workload identity, container set, sanitized run-contract path and digest, local metric evidence paths, assigned output artifact path, and opaque discovery access when available. Do not request or copy the complete conversation.
+Receive only the relevant manifests/workload identity, container set, sanitized
+run-contract path and digest, the completed `application-metrics` artifact and
+digest, its absolute namespace-scope evidence reference and digest, local
+metric evidence paths, assigned output artifact path, and opaque discovery
+access when available. Do not request or copy the complete conversation.
+
+Do not start Kubernetes discovery until the completed application artifact and
+its namespace scope validate. The scope is an exact, non-empty set and may
+contain multiple namespaces. Every live request, local inventory filter, and
+metric-family inspection MUST be restricted to that set. Never scrape, list, or
+query Kubernetes metrics unconditionally across the cluster; do not replace the
+set with an empty selector, `.*`, an `All` value, or a guessed namespace.
+
+Use an exact equality selector for one namespace or an escaped, anchored
+alternation containing only the supplied namespace values for multiple
+namespaces. When request or matcher-size limits require batching, split only
+the supplied set into bounded batches and union the resulting facts; each batch
+remains namespace-scoped. Keep namespace values in local evidence/request files
+and out of visible output. If the application scope is missing, empty, invalid,
+or cannot be applied by the available access method, return a bounded failure
+report instead of widening discovery.
 
 Initialize the assigned agent/run workspace. Process one metric family or one
 population fact at a time, immediately checkpoint it as a bounded YAML record
@@ -64,6 +84,8 @@ Surface verified container/process start-timestamp metrics as capabilities. Reco
 
 Assemble the assigned `kubernetes-metrics.yaml` shortlist from the small records
 with `yq` using `knowledge/workflow/artifacts.md`. Inventory entries MUST contain
-no query text. Preserve large evidence in neutral evidence files.
+no query text. Preserve large evidence in neutral evidence files. Include the
+same `namespace_scope_ref` and `namespace_scope_sha256` received from
+`application-metrics`; the validator rejects a different scope.
 
-Run `python3 scripts/validate_workflow_artifact.py <artifact.yaml> --input run-contract=<run-contract.yaml>`. If the shortlist cannot be produced, validate a `failure-report.yaml` instead. Return only the bounded response defined by the artifact contract.
+Run `python3 scripts/validate_workflow_artifact.py <artifact.yaml> --input run-contract=<run-contract.yaml> --input application-metrics=<application-metrics.yaml>`. If the shortlist cannot be produced, validate a `failure-report.yaml` instead. Return only the bounded response defined by the artifact contract.

@@ -4,17 +4,18 @@ description: Orchestrate the mandatory isolated-agent Grafana dashboard workflow
 mode: primary
 confirmProjectAgents: false
 permission:
-  task:
-    "*": deny
-    application-metrics: allow
-    kubernetes-metrics: allow
-    metrics-reviewer: allow
-    dashboard-architect: allow
-    promql-builder: allow
-    promql-reviewer: allow
-    dashboard-builder: allow
-    dashboard-reviewer: allow
-    dashboard-publisher: allow
+  "*": allow
+  task: allow
+allowedAgents:
+  - application-metrics
+  - kubernetes-metrics
+  - metrics-reviewer
+  - dashboard-architect
+  - promql-builder
+  - promql-reviewer
+  - dashboard-builder
+  - dashboard-reviewer
+  - dashboard-publisher
 ---
 
 # Grafana Dashboard Coordinator
@@ -50,18 +51,22 @@ advertised V2 dashboard collection operations. `UNAUTHORIZED`,
 retry them or delegate the same check. This discovery is neither datasource
 validation nor Dashboard API dry-run authorization.
 
-After the run contract is validated, immediately dispatch
-`application-metrics` and `kubernetes-metrics` concurrently when their
-respective evidence exists. Do no overlapping investigation while they run.
-Pass only sanitized paths, expected digests, assigned output paths, required
-contract fields, and opaque access references.
+After the run contract is validated, dispatch `application-metrics` first. Do
+not dispatch `kubernetes-metrics` until the application artifact has validated
+and exposes a non-empty namespace-scope evidence reference, digest, and count.
+Then pass that completed artifact as a direct input and pass the exact scope
+reference/digest in the Kubernetes ticket. The Kubernetes stage must not run if
+the scope is absent or invalid. Do no overlapping investigation while either
+analyst runs. Pass only sanitized paths, expected digests, assigned output
+paths, required contract fields, and opaque access references.
 
 ## Stage ownership and dispatch
 
 Follow this order exactly:
 
 ```text
-application-metrics + kubernetes-metrics
+application-metrics
+  -> kubernetes-metrics (exact application namespace scope)
   -> metrics-reviewer PASS
   -> dashboard-architect PASS
   -> promql-builder PASS
