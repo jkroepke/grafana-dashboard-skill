@@ -23,9 +23,12 @@ Read:
 - `knowledge/grafana/variables.md` for variable queries
 - `knowledge/grafana/annotations.md` for annotation queries
 
-Receive the sanitized run-contract, metrics-contract, dashboard-plan, and query-pack paths with expected SHA-256 digests; targeted evidence paths; opaque read-only datasource access when available; and the assigned review path. Do not receive builder conclusions or the complete conversation.
+First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+<job.yaml>`. Read assignments only from that validated ticket; do not request
+builder conclusions or the complete conversation. It supplies the approved
+bindings, targeted evidence, output path, limits, and opaque datasource access.
 
-Initialize the assigned agent/run workspace. Review one query record at a time,
+Use the initialized agent/run workspace. Review one query record at a time,
 checkpoint its result/finding as a bounded YAML file with `yq`, and update
 `state.yaml`. Resume from the queue; never retain every query or finding in
 context for a final write.

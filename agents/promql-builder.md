@@ -23,9 +23,14 @@ Read:
 - `knowledge/grafana/variables.md` for variable queries
 - `knowledge/grafana/annotations.md` when annotations are planned
 
-Receive the sanitized run-contract path and digest, metrics-contract and dashboard-plan paths with expected digests, existing dashboard source/render paths when updating, opaque read-only datasource access when available, query budget, and assigned query-pack path. Use only the approved selector contract inside `metrics-contract`; run-contract selector proposals are not authoritative. Do not receive raw dumps or the complete conversation unless a targeted evidence file is explicitly required.
+First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+<job.yaml>`. Read assignments only from that validated ticket; do not request
+raw dumps or the complete conversation. It supplies the approved bindings,
+existing source/render evidence, output path, limits, and opaque datasource
+access. Use only the selector contract in `metrics-contract`; run-contract
+proposals are not authoritative.
 
-Initialize the assigned agent/run workspace. Author and validate exactly one
+Use the initialized agent/run workspace. Author and validate exactly one
 query at a time, immediately checkpointing the complete query record as a small
 YAML file with `yq` and updating `state.yaml`. Resume from those files; never
 hold the complete query pack in context or emit it in one large write.

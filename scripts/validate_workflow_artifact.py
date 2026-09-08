@@ -443,7 +443,7 @@ def validate_metric_shortlist(
     if artifact_type == "application-metrics":
         scope = validate_namespace_scope(data["namespace_scope"], "namespace_scope")
         scope_path = evidence_path(scope["evidence_ref"], artifact_path)
-        require(scope["sha256"] == file_digest(scope_path, "application namespace scope"),
+        require(scope["sha256"] == file_digest(str(scope_path), "application namespace scope"),
                 "namespace_scope.sha256 does not match namespace_scope.evidence_ref")
         return
 

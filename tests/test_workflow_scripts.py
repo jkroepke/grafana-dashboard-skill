@@ -821,11 +821,28 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.assertIn("inside repository_root", result.stderr)
 
     def test_run_contract_requires_supported_openapi_for_v2_api_validation(self) -> None:
-        run = json.loads(self.paths["run-contract"].read_text(encoding="utf-8"))
+        run = load_artifact(self.paths["run-contract"])
         run["capabilities"]["dashboard_api_validation"] = True
         self.write("v2-openapi-gap", run)
         result = self.run_tool(VALIDATOR, self.paths["v2-openapi-gap"], expected=1)
         self.assertIn("requires supported Dashboard V2 OpenAPI", result.stderr)
+
+    def test_coordinator_stage_preserves_namespace_scope_input_chain(self) -> None:
+        command = (
+            "import pathlib,sys; "
+            f"sys.path.insert(0, {str(REPOSITORY / 'scripts')!r}); "
+            "import coordinator_stage as stage; "
+            "assert stage.direct_input_types('application-metrics') == {'run-contract'}; "
+            "assert stage.direct_input_types('kubernetes-metrics') == "
+            "{'run-contract', 'application-metrics'}; "
+            "assert stage.direct_input_types('metrics-reviewer') == "
+            "{'run-contract', 'application-metrics', 'kubernetes-metrics'}; "
+            f"scope=stage.ticket_namespace_scope('kubernetes-metrics', "
+            f"{{'application-metrics': pathlib.Path({str(self.paths['application-metrics'])!r})}}); "
+            f"assert scope == {{'evidence_ref': {str(self.root / 'application-namespace-scope.yaml')!r}, "
+            f"'sha256': {digest(self.root / 'application-namespace-scope.yaml')!r}}}"
+        )
+        self.run_tool("-c", command)
 
     def test_run_contract_requires_project_workspace_layout(self) -> None:
         run = load_artifact(self.paths["run-contract"])

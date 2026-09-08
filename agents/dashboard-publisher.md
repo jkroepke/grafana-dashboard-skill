@@ -22,9 +22,13 @@ Read:
 - `knowledge/grafana/publishing-v2.md`
 - for Dashboard V2, `knowledge/grafana/grafana-v2-dry-run.md`
 
-Receive only the run contract, dashboard build/review artifacts, promoted final-source path and digest, exact final rendered JSON and digest, opaque writable target access, and assigned publish-report path. Do not receive the complete conversation or upstream analyst prose.
+First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+<job.yaml>`. Read assignments only from that validated ticket; do not request
+upstream prose or the complete conversation. It supplies the approved bindings,
+promoted source and final-render evidence, output path, limits, and opaque
+writable access.
 
-Initialize the assigned agent/run workspace. Checkpoint the preflight, request,
+Use the initialized agent/run workspace. Checkpoint the preflight, request,
 and readback results as separate bounded YAML records with `yq`; keep raw bodies
 in `evidence/` and update `state.yaml` after each step. Never accumulate the
 publication transcript in context for one final write.

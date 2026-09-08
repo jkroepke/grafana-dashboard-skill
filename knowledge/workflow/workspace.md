@@ -39,12 +39,14 @@ validator also requires `state.status` to equal the artifact status and
 contain the terminal artifact path. A coordinator run contract alone is not a
 terminal artifact.
 
-The coordinator writes one immutable, at-most-8-KiB `inbox/job.yaml` before
-dispatch. It contains the run/stage/revision, approved input paths and digests,
-assigned output paths, budgets, and opaque capability references required by
-that role. It contains no artifact bodies or raw evidence. The dispatch prompt
-contains only the agent ID plus the job-ticket path and digest; it does not
-repeat the job contents in model context.
+The coordinator runs `python3 scripts/coordinator_stage.py dispatch` before
+each stage. It writes one immutable, at-most-8-KiB `inbox/job.yaml`, validates
+all bindings, and updates coordinator state. The ticket contains the
+run/stage/revision, approved input paths and digests, assigned output paths,
+budgets, and opaque capability references—never artifact bodies or raw
+evidence. The dispatch prompt contains only the agent ID, ticket path, and
+digest. The specialist runs `coordinator_stage.py validate-ticket` before work;
+the coordinator runs `coordinator_stage.py accept` on its bounded response.
 
 A job ticket uses this bounded shape; unused maps/lists stay empty rather than
 growing the dispatch prompt:
@@ -61,8 +63,10 @@ inputs:
 supports: {}
 evidence_refs:
   - evidence/source-index.yaml
+namespace_scope: null
 outputs:
   artifact: outbox/application-metrics.yaml
+  failure_report: outbox/failure-report.yaml
   candidate: null
   rendered: null
 limits: {}

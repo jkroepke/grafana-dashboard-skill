@@ -82,10 +82,11 @@ BLOCKED <stage> report=<neutral-path>.yaml sha256=sha256:<64-lowercase-hex>
 
 The referenced workflow file MUST have the exact `.yaml` suffix. Do not include
 metrics, queries, findings, source, rendered JSON, API responses, or rejected
-alternatives in the response. When the client can save the raw specialist
-response to a neutral file, the coordinator runs
-`python3 scripts/validate_stage_response.py <response-file>` before accepting
-it; any grammar violation fails the stage.
+alternatives in the response. Accept a saved response with
+`python3 scripts/coordinator_stage.py accept --ticket <job.yaml>
+--response-file <response-file>`; otherwise pass the exact one-line response
+with `--response`. The helper validates the grammar, artifact, bindings, and
+digest before recording acceptance.
 
 ## Run contract
 
@@ -101,7 +102,10 @@ python3 scripts/create_coordinator_artifact.py run-contract \
 
 The default render argv is `jsonnet -J vendor {source}`. Use repeated
 `--render-arg` options and `--render-program` only when the repository has a
-different shell-free render command. Capability flags are opt-in. The helper
+different shell-free render command. Pass the sanitized result of the one-time
+V2 discovery as `--dashboard-v2-openapi <status>`; it defaults to
+`NOT_CONFIGURED` for V2 and `NOT_APPLICABLE` for classic dashboards. Other
+capability flags are opt-in. The helper
 infers the source baseline and a unique locally locked and vendored Grafonnet
 revision, writes immutable YAML through `yq`, validates it, and updates the
 coordinator state. It refuses an unavailable render executable or a conflicting

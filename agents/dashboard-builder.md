@@ -25,9 +25,13 @@ Read:
 - for Dashboard V2, `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md`
 - `knowledge/grafana/annotations.md` only when the approved query pack contains annotations
 
-Receive only the sanitized run-contract path and digest; approved metrics-contract, dashboard-plan, query-pack, and query-review paths with expected SHA-256 digests; existing source path when updating; assigned candidate/render/build-manifest paths; pinned versions; and repository build commands. Do not receive raw metrics, analyst reports, query-builder prose, or the complete conversation.
+First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+<job.yaml>`. Read assignments only from that validated ticket; do not request
+raw metrics, upstream prose, or the complete conversation. It supplies the
+approved bindings, existing source, output/candidate/render paths, pinned
+versions, repository build commands, limits, and opaque capabilities.
 
-Initialize the assigned agent/run workspace. Checkpoint each construction unit
+Use the initialized agent/run workspace. Checkpoint each construction unit
 and validation result as a small YAML record with `yq`, updating `state.yaml`
 before moving on. Keep rendered JSON and command outputs in `evidence/`. Resume
 from the filesystem; never retain the whole construction history in context.

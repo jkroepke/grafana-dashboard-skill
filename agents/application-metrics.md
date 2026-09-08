@@ -20,9 +20,12 @@ Read:
 - `knowledge/workflow/artifacts.md`
 - `knowledge/security/output-redaction.md`
 
-Receive only the assigned metric dump/inventory paths, the sanitized run-contract path and digest, the output artifact path, and opaque discovery access when available. Do not request or copy the complete conversation.
+First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+<job.yaml>`. Read assignments only from that validated ticket; do not request
+or copy the complete conversation. It supplies the assigned metric evidence,
+run-contract binding, output path, limits, and opaque discovery access.
 
-Initialize the assigned agent/run workspace. Process one metric family at a
+Use the initialized agent/run workspace. Process one metric family at a
 time and immediately create one bounded `records/metrics/*.yaml` checkpoint with
 `yq`, then update `state.yaml`. Never hold the complete inventory in context or
 emit it through one large write-tool call. Resume from the snapshot queue.

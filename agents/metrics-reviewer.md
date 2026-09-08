@@ -21,9 +21,13 @@ Read:
 - `knowledge/security/output-redaction.md`
 - `knowledge/kubernetes/metrics.md` when Kubernetes capabilities are present
 
-Receive the sanitized run-contract path and digest, metric-shortlist paths with expected SHA-256 digests, relevant raw evidence paths, existing dashboard source/render paths when updating, opaque read-only discovery access when available, the approval budget, and the assigned output path. Do not receive analyst prose or the complete conversation.
+First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+<job.yaml>`. Read assignments only from that validated ticket; do not request
+analyst prose or the complete conversation. It supplies the run-contract and
+shortlist bindings, raw evidence, existing dashboard source/render evidence,
+output path, limits, and opaque discovery access.
 
-Initialize the assigned agent/run workspace. Review one shortlist record at a
+Use the initialized agent/run workspace. Review one shortlist record at a
 time and immediately checkpoint its approved, rejected, not-considered, or
 unresolved disposition in a small YAML file with `yq`. Update `state.yaml` after
 each decision and resume from it; never accumulate all review decisions in

@@ -223,17 +223,18 @@ Read `knowledge/grafana/variables.md` when implementing or reviewing variables.
 For every dashboard source creation or update, the following isolated-agent pipeline is mandatory. If the runtime cannot provide fresh subagent contexts or a required agent is unavailable, stop with the completed artifact statuses; the coordinator MUST NOT absorb the missing stage. A reviewer-only read-only inspection is allowed only when that reviewer's complete prerequisite artifact chain already exists; otherwise it is an informal inspection and cannot issue a gate status. No source change may bypass staged construction and review.
 
 Read `knowledge/workflow/workspace.md` and `knowledge/workflow/artifacts.md`
-before dispatch. Initialize every role below
-`dashboards/<project-name>/workspace/<agent>/<run-id>/`. Use small YAML
-checkpoints as the work queue and bounded digest-bound YAML stage artifacts as
-the gates. Before each dispatch, the coordinator creates the role's immutable
-`inbox/job.yaml` with `yq`. The agent prompt contains only the agent ID, ticket
-path, and ticket digest; artifact bodies and task notes are not copied into the
-prompt. Do not create recursive subagent trees. The ticket contains only neutral
-paths, expected digests, sanitized fields required by the stage, opaque access
-references, and transitive artifact paths needed by recursive validation.
-Support artifacts are validator-only unless they are also direct role inputs.
-Use a fresh agent instance for every author/reviewer boundary.
+before dispatch. Use `scripts/coordinator_stage.py dispatch` to initialize the
+role workspace, validate every accepted prerequisite, create its immutable
+`inbox/job.yaml`, and update coordinator state. Do not hand-build tickets or
+digests. Give the fresh specialist only its agent ID, ticket path, and ticket
+digest. The specialist runs `coordinator_stage.py validate-ticket` before
+reading assignments. Use `coordinator_stage.py accept` to verify its bounded
+response, artifact, and digest. Use a fresh specialist instance at every
+author/reviewer boundary. Do not create recursive subagent trees.
+
+The ticket contains only neutral paths, expected digests, sanitized fields,
+opaque access references, and transitive validation paths. Support artifacts
+are validator-only unless they are direct role inputs.
 
 The mandatory state machine is:
 
@@ -360,7 +361,9 @@ After writing, the publisher GETs the resource again through the same API versio
 - Do not give subagents the complete conversation.
 - Do not give subagents the complete `SKILL.md`; their registered agent definition is their role contract.
 - Queue each subagent's approved upstream paths/digests and assignments in its
-  small immutable `inbox/job.yaml`; give the model only that ticket path/digest.
+  small immutable `inbox/job.yaml`; create and validate it with
+  `scripts/coordinator_stage.py`, then give the model only its agent ID and that
+  ticket path/digest.
 - Sanitize target-specific context before handoff; use opaque access references.
 - Every agent treats context as disposable and its assigned workspace as durable
   memory. It writes one bounded YAML record as soon as each logical item is

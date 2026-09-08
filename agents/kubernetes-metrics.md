@@ -21,11 +21,12 @@ Read:
 - `knowledge/security/output-redaction.md`
 - `knowledge/kubernetes/metrics.md`
 
-Receive only the relevant manifests/workload identity, container set, sanitized
-run-contract path and digest, the completed `application-metrics` artifact and
-digest, its absolute namespace-scope evidence reference and digest, local
-metric evidence paths, assigned output artifact path, and opaque discovery
-access when available. Do not request or copy the complete conversation.
+First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+<job.yaml>`. Read assignments only from that validated ticket; do not request
+or copy the complete conversation. It supplies the relevant evidence, exact
+workload/container identity, run-contract and `application-metrics` bindings,
+namespace-scope reference and digest, output path, limits, and opaque discovery
+access.
 
 Do not start Kubernetes discovery until the completed application artifact and
 its namespace scope validate. The scope is an exact, non-empty set and may
@@ -43,7 +44,7 @@ and out of visible output. If the application scope is missing, empty, invalid,
 or cannot be applied by the available access method, return a bounded failure
 report instead of widening discovery.
 
-Initialize the assigned agent/run workspace. Process one metric family or one
+Use the initialized agent/run workspace. Process one metric family or one
 population fact at a time, immediately checkpoint it as a bounded YAML record
 with `yq`, and update `state.yaml`. Never retain the complete inventory in
 context for a final write; resume from the snapshot queue.

@@ -242,6 +242,9 @@ def create_run_contract(args: argparse.Namespace) -> str:
     render_argv = [program, *render_args]
     require(render_argv.count("{source}") == 1, "render arguments require one standalone {source}")
     grafonnet_revision = infer_grafonnet_revision(root, args.grafonnet_revision)
+    dashboard_v2_openapi = args.dashboard_v2_openapi
+    if dashboard_v2_openapi is None:
+        dashboard_v2_openapi = "NOT_CONFIGURED" if args.schema == "V2" else "NOT_APPLICABLE"
     for name, label in {
         "application namespace label": args.application_namespace_label,
         "application pod label": args.application_pod_label,
@@ -280,6 +283,7 @@ def create_run_contract(args: argparse.Namespace) -> str:
         "capabilities": {
             "datasource_access": args.datasource_access,
             "dashboard_api_validation": args.dashboard_api_validation,
+            "dashboard_v2_openapi": dashboard_v2_openapi,
             "publish_requested": args.publish_requested,
         },
         "selector_proposals": {
@@ -387,6 +391,10 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--timeout-seconds", type=int, default=120)
     run.add_argument("--datasource-access", action="store_true")
     run.add_argument("--dashboard-api-validation", action="store_true")
+    run.add_argument("--dashboard-v2-openapi", choices=[
+        "SUPPORTED", "NOT_CONFIGURED", "UNAUTHORIZED", "NOT_ADVERTISED",
+        "UNREACHABLE", "NOT_APPLICABLE",
+    ])
     run.add_argument("--publish-requested", action="store_true")
     run.add_argument("--application-namespace-label", default="kubernetes_namespace")
     run.add_argument("--application-pod-label", default="kubernetes_pod_name")

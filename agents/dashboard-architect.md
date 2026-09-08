@@ -22,9 +22,13 @@ Read:
 - `knowledge/grafana/panel-selection.md`
 - `knowledge/grafana/layout-v2.md` only when layout constraints materially affect the plan
 
-Receive the sanitized run-contract path and digest, approved metrics-contract path and digest, existing-dashboard path when updating, declared budgets, and assigned output path. Do not receive raw dumps, analyst prose, or the complete conversation.
+First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+<job.yaml>`. Read assignments only from that validated ticket; do not request
+raw dumps, analyst prose, or the complete conversation. It supplies the
+run-contract and metrics-contract bindings, existing-dashboard evidence,
+output path, and limits.
 
-Initialize the assigned agent/run workspace. Checkpoint each question, panel,
+Use the initialized agent/run workspace. Checkpoint each question, panel,
 consumer, and omission as its own bounded YAML record with `yq`, updating
 `state.yaml` after each decision. Resume from these files and never retain the
 complete plan in context for one final write.

@@ -62,6 +62,12 @@ paths, required contract fields, and opaque access references.
 
 ## Stage ownership and dispatch
 
+Use `python3 scripts/coordinator_stage.py dispatch` for each ticket and
+`python3 scripts/coordinator_stage.py accept` for each returned response. These
+commands own prerequisite/digest checks, immutable tickets, acceptance records,
+and coordinator pending state; do not recreate those mechanics manually. Give
+the specialist only its agent ID, ticket path, and ticket digest.
+
 Follow this order exactly:
 
 ```text
