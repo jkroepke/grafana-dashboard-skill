@@ -48,7 +48,7 @@ unavailable, stop with the completed artifact statuses and a bounded blocker.
 
 The coordinator MAY only:
 
-1. bootstrap workspace access configuration through
+1. create the workspace through `scripts/mkworkspace`, bootstrap access through
    `scripts/set_workflow_env`, and create and validate the run contract;
 2. execute `scripts/grafana_version.py` once through the run-contract helper;
 3. run the deterministic coordinator dispatch/accept control operations;
@@ -89,8 +89,9 @@ above. If an intended action is not explicitly authorized, do not execute it.
 Delegate it to the designated specialist when possible; otherwise stop and
 return a bounded `BLOCKED` result.
 
-Before the first specialist dispatch, bootstrap workspace access
-configuration and establish the run contract. Bootstrap only
+Before the first specialist dispatch, create the workspace with
+`scripts/mkworkspace`, bootstrap workspace access configuration with
+`scripts/set_workflow_env`, and establish the run contract. Bootstrap only
 task-provided Grafana access fields through calls to
 `scripts/set_workflow_env <name> <value>`. This permits checking input existence,
 paths, file metadata, source
@@ -122,12 +123,17 @@ On Pi, use only `coordinator_control` for coordinator-owned process execution.
 General `bash` is intentionally absent from the Pi tool allowlist. The custom
 tool can invoke only these deterministic operations:
 
+- `mkworkspace`
 - `set-workflow-env`
 - `run-contract`
 - `dispatch`
 - `accept`
 - `promote`
 - `failure-report`
+
+Call `mkworkspace` with the project name as its only argument. Then call
+`set-workflow-env` with that project as `projectName` and the configuration
+name/value pair as its arguments.
 
 Do not use another tool or indirect execution path to reproduce these
 operations. If `coordinator_control` is unavailable on Pi, stop with a bounded

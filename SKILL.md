@@ -151,7 +151,8 @@ revision evidence, validates the artifact, and advances coordinator state.
 
 Provide configured access capability references in the shared contract.
 
-Before any target request, configure access with `scripts/set_workflow_env`.
+Before `scripts/set_workflow_env`, create the project workspace with
+`scripts/mkworkspace`. Configure access only after that step.
 
 When the repository wrappers are configured, use
 `scripts/prometheus_reader.py <request-file> <response-file>` for read-only

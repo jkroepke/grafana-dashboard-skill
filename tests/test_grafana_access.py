@@ -100,12 +100,19 @@ class GrafanaAccessTest(unittest.TestCase):
             root = Path(temporary)
             scripts = root / "scripts"
             scripts.mkdir()
-            for name in {"set_workflow_env", "grafana_access.py"}:
+            for name in {"mkworkspace", "set_workflow_env", "grafana_access.py"}:
                 shutil.copy2(repository / "scripts" / name, scripts / name)
             command = scripts / "set_workflow_env"
             command.chmod(0o755)
+            created = subprocess.run(
+                [sys.executable, str(scripts / "mkworkspace"), "demo"],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=root,
+            )
+            self.assertEqual(0, created.returncode, created.stdout + created.stderr)
             workspace = root / "dashboards" / "demo" / "workspace"
-            workspace.mkdir(parents=True)
             result = subprocess.run(
                 [sys.executable, str(command), "GRAFANA_TARGET", "https://grafana.example.test"],
                 capture_output=True,
