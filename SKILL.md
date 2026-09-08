@@ -110,18 +110,23 @@ semantics; run datasource probes; or construct any dashboard artifact other
 than the run contract.
 
 For a Dashboard V2 run, one exception is permitted solely to establish the
-Dashboard API capability: execute the supplied opaque local OpenAPI command
-once. That command, not the coordinator, reaches
-`<GRAFANA_URL>/openapi/v3/apis/dashboard.grafana.app/v2`. It receives no URL,
-credential, or target identifier as an argument. Its exit status `0` must mean
-it received HTTP 200 and wrote the OpenAPI document to stdout. This is not a
-dashboard read, datasource probe, or dry-run. Capture stdout and stderr in
-neutral scratch files; record only the sanitized capability result in the run
-contract. A `SUPPORTED` result requires that successful command result, an
-OpenAPI document, and the advertised Dashboard V2 collection operations. Do not invoke
-the same command again during the run. Record `UNAUTHORIZED`,
-`NOT_ADVERTISED`, or `UNREACHABLE` as a terminal result unless the configured
-access or target changes.
+Dashboard API capability: make the one supplied OpenAPI discovery request.
+The task may provide either a shell-free opaque OpenAPI command that already
+knows the target, or an authenticated local HTTP transport plus an already
+configured non-echoed target environment reference. In the latter case, the
+coordinator may construct the Dashboard V2 OpenAPI URL from that existing
+reference and invoke the supplied transport; it must never put a literal
+endpoint, credential, or target identifier in a visible command, create the
+target configuration itself, or scan for connection configuration. The request
+reaches `<GRAFANA_URL>/openapi/v3/apis/dashboard.grafana.app/v2`. Its exit
+status `0` must mean it received HTTP 200 and wrote the OpenAPI document to
+stdout. This is not a dashboard read, datasource probe, or dry-run. Capture
+stdout and stderr in neutral scratch files; record only the sanitized
+capability result in the run contract. A `SUPPORTED` result requires that
+successful command result, an OpenAPI document, and the advertised Dashboard
+V2 collection operations. Do not invoke the same discovery request again
+during the run. Record `UNAUTHORIZED`, `NOT_ADVERTISED`, or `UNREACHABLE` as a
+terminal result unless the configured access or target changes.
 
 Once the run contract passes validation, dispatch `application-metrics` first.
 It must produce a validated, non-empty application namespace-scope evidence
@@ -151,7 +156,7 @@ Before delegation, locate or record proposed facts and evidence paths without pe
 - proposed fixed-selector references
 - configured datasource access method
 - opaque Grafana Dashboard resource API validation access/wrapper when available
-- for Dashboard V2, the shell-free opaque local command that emits the V2 OpenAPI document and its one-time cached discovery status
+- for Dashboard V2, either the shell-free opaque local command that emits the V2 OpenAPI document or the supplied authenticated transport with its preconfigured non-echoed target reference, plus its one-time cached discovery status
 - existing dashboard resource identity when applicable
 - whether publication is requested
 - when publication is requested: writable authentication method and folder placement when applicable
