@@ -53,6 +53,7 @@ umask 077
 mkdir -p \
   "$agent_root/inbox" \
   "$agent_root/records" \
+  "$agent_root/records/done" \
   "$agent_root/evidence" \
   "$agent_root/outbox" \
   "$agent_root/tmp"

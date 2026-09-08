@@ -29,9 +29,10 @@ reviewer, or publisher.
 
 This workflow is exclusively for Dashboard Schema V2 resources on Grafana
 v13+. Before dispatch, reject a missing, malformed, or below-v13 Grafana
-version; reject a source baseline or target API that is not stable Dashboard
-V2. Do not route classic dashboard creation, update, migration, validation, or
-publication work into this pipeline.
+version. The designated specialist stages assess an existing source or target
+API for stable Dashboard V2; stop the workflow when either is found not to be
+stable V2. Do not route classic dashboard creation, update, migration,
+validation, or publication work into this pipeline.
 
 ## Coordinator capability boundary — applies for the entire run
 

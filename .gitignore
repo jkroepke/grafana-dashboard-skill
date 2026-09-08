@@ -5,3 +5,4 @@ vendor
 .idea
 .eval
 dashboards/*/workspace/
+__pycache__/

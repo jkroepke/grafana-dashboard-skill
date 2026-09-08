@@ -14,7 +14,7 @@ This skill is V2-only and requires Grafana v13+.
 - Require a verified Grafana version in `v<major>[.<minor>[.<patch>]]` form, with major version 13 or higher, before dispatching any specialist.
 - Require a successful opaque `GET /version` check whose `gitTreeState` reports Grafana v13 or later. Ignore its Kubernetes API-style `major`, `minor`, and `gitVersion` fields.
 - Create, update, validate, and publish only Dashboard Schema V2 resources (`apiVersion: dashboard.grafana.app/v2`, `kind: Dashboard`).
-- Do not create, update, convert, validate, or publish classic dashboard JSON. If an existing source renders to a non-V2 dashboard, stop; classic-to-V2 migration is outside this workflow.
+- Do not create, update, convert, validate, or publish classic dashboard JSON. An existing source is assessed by the designated specialist stages; if it renders to a non-V2 dashboard, stop. Classic-to-V2 migration is outside this workflow.
 
 ## Environment
 
@@ -109,8 +109,9 @@ Do not publish before rendering, validation, and independent review are complete
 
 ## Coordinator entry gate
 
-The coordinator has exactly one permitted pre-delegation activity: create and
-validate the sanitized run contract. It may check input paths, file metadata,
+The coordinator's only task-specific pre-delegation activity is to create and
+validate the sanitized run contract. It may read the required confidentiality
+and coordinator-control documentation, and may check input paths, file metadata,
 source baseline state/digest, pinned-version metadata, and opaque access
 capabilities. It MUST NOT read or interpret raw metric/manifests/dashboard/API
 contents; search them for metric names, labels, query text, panel content, or
@@ -172,7 +173,13 @@ Do not place literal connection details or target identifiers into the shared co
 When the repository wrappers are configured, use
 `scripts/prometheus_reader.py <request-file> <response-file>` for read-only
 Prometheus access and `scripts/grafana_dry_run.py <resource-file>
-<response-file>` for Dashboard V2 validation. Their target, datasource selection,
+<response-file>` for a new-dashboard Dashboard V2 create dry-run. The supplied
+dry-run script does not validate an existing resource update. Treat Dashboard
+API validation as configured for an existing dashboard only when a separately
+supplied opaque wrapper supports the required resource GET and update dry-run,
+including writing the response body to a neutral local file on HTTP failure.
+Otherwise record `dashboard_api_validation: false` in the run contract and do
+not substitute a collection POST or direct request. Their target, datasource selection,
 proxy paths, and credentials are trusted runtime configuration; do not invoke
 the datasource resolver, supply an endpoint or UID, or source configuration.
 Prometheus requests may use only `query`, `query_range`, `series`, `labels`,
@@ -292,7 +299,11 @@ For large Prometheus/OpenMetrics exposition, the analyst streams the configured
 opaque reader or local evidence through `scripts/snapshot_metrics.py` on stdin.
 The helper has no network, credential, or input-file interface and writes small
 per-family YAML snapshots without exposing raw sample or label values to agent
-context. The analyst inspects those snapshots selectively.
+context. The analyst inspects those snapshots selectively. Both metric analysts
+use `records/pending/` and `records/done/` as a durable queue: after a metric
+record and its `state.yaml` checkpoint are durable, move its processed work item
+to `done/`; on restart, reconcile completed checkpoint entries before processing
+the remaining pending items.
 
 ### 2. Independent metrics review
 
@@ -336,7 +347,7 @@ Dispatch a fresh `dashboard-reviewer` with the candidate source, rendered JSON, 
 
 The reviewer checks Grafonnet/source composition, rendered schema, variables, visualization plugins, panels, layout, annotations, and exact integration of every approved query. It does not repeat semantic PromQL ownership and never writes a replacement query or source patch.
 
-It MUST perform the stable V2 Dashboard resource API dry-run when validation-capable access is configured. A target failure follows `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md`, including the six-probe limit. Dry-run validation is not publication.
+It MUST perform the stable V2 Dashboard resource API dry-run when validation-capable access is configured for the exact create or update operation. A target failure follows `knowledge/grafana/v2-validation-errors.md`; use `knowledge/grafana/diagnostic-execution.md` only when the opaque wrapper preserves the failure response and supports the required probe operations. Otherwise retain the sanitized wrapper failure as the validation result and route it back without attempting direct target requests. Dry-run validation is not publication.
 
 Route dashboard-source findings to `dashboard-builder`. A finding requiring query changes invalidates query review and returns to `promql-builder`. A worker never approves its own output.
 
@@ -469,9 +480,9 @@ dashboard-linter lint --strict --config <lint-config> <dashboard-builder-run-dir
 
 Use the repository's actual paths and commands when they differ. `jq empty` checks JSON syntax only, not Grafana schema correctness.
 
-With configured target Grafana Dashboard API validation access, server-side
-dry-run validation is mandatory before review can pass. Use the pinned/local
-stable V2 contract, namespace `default`, and
+With configured target Grafana Dashboard API validation access for the exact
+create or update operation, server-side dry-run validation is mandatory before
+review can pass. Use the pinned/local stable V2 contract, namespace `default`, and
 `knowledge/grafana/grafana-v2-dry-run.md`. A successful HTTP status alone is
 insufficient: inspect warnings and the returned resource structure. Do not
 fetch target OpenAPI/Swagger; `/version` is the only target-version request.
@@ -483,7 +494,7 @@ helper.
 
 Every target-access command MUST follow `knowledge/security/output-redaction.md`. Use an opaque configured target reference and never expose the resolved endpoint or target identifiers in the visible transcript.
 
-If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md` before changing source. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Follow the matching branch, capture the full error locally, and use bounded target-side isolation when necessary. Do not disable strict validation or invent union-wrapper fields as a workaround.
+If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` before changing source. Read `knowledge/grafana/diagnostic-execution.md` and use bounded target-side isolation only when the opaque wrapper preserves the failed response and supports those probe operations. Otherwise retain the sanitized wrapper failure locally and return it as a validation failure; do not bypass the wrapper with a direct request. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Do not disable strict validation or invent union-wrapper fields as a workaround.
 
 When datasource access is available, `promql-reviewer` tests every approved application, Kubernetes, variable, and annotation query with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics. Sanitize all surfaced evidence.
 

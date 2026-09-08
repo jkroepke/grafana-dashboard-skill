@@ -21,9 +21,11 @@ When target Grafana dashboard API access is configured:
 - on any dry-run failure, the reviewer MUST read `knowledge/grafana/v2-validation-errors.md` before changing or recommending a source change
 - credentials and authorization headers MUST NOT be printed in review output
 
-If the configured API wrapper cannot perform the stable V2 dry-run, return
-`FAIL` with the validation gap unless the task explicitly permits server-side
-validation to remain unverified.
+If the configured API wrapper cannot perform the stable V2 dry-run for the
+exact create or update operation, record Dashboard API validation as absent in
+the run contract. Do not use a create dry-run as a substitute for an update
+dry-run, and do not bypass the opaque wrapper. If the task requires server-side
+validation, stop with a bounded validation-gap failure.
 
 ## Source of truth
 
@@ -88,7 +90,11 @@ curl -fsS \
 
 Use the repository's configured authenticated wrapper/mechanism instead of inventing authentication.
 
-When diagnosing a failure, use equivalent options that preserve the complete response body and headers even on an HTTP error. See `knowledge/grafana/v2-validation-errors.md`.
+When diagnosing a failure, use an opaque wrapper that preserves the complete
+response body and headers even on an HTTP error. See
+`knowledge/grafana/v2-validation-errors.md`. If the configured wrapper does
+not offer that capability, retain its sanitized failure locally and stop rather
+than constructing a direct request.
 
 ## Existing dashboard
 

@@ -50,16 +50,24 @@ namespace-scoped request and response to neutral local files, then invoke it as
 datasource UID, or inline selector. A reader that cannot apply the supplied
 scope is unavailable for this stage.
 
-Use the initialized agent/run workspace. Process one metric family or one
-population fact at a time, immediately checkpoint it as a bounded YAML record
-with `yq`, and update `state.yaml`. Never retain the complete inventory in
-context for a final write; resume from the snapshot queue.
+Use the initialized agent/run workspace. Treat `records/pending/` as the
+metric-family work queue and `records/done/` as its completed queue. Process
+one metric family or population fact at a time: create its bounded
+`records/metrics/*.yaml` checkpoint with `yq`, update `state.yaml`, then
+atomically move its work item into `records/done/`. Never retain the complete
+inventory in context for a final write. On restart, first reconcile any item
+whose checkpoint and completed state entry exist but which remains in
+`records/pending/`, moving it to `records/done/` without reprocessing it.
 
 For a large Prometheus/OpenMetrics exposition, pipe the configured opaque reader
 or redirect local evidence into `scripts/snapshot_metrics.py`, assigning
-`records/exposition` as its output directory and a neutral source reference.
-The helper accepts metrics only through stdin. Inspect its family snapshots
-selectively and do not load the raw exposition into context.
+`records/pending` as its output directory and a neutral source reference. The
+helper accepts metrics only through stdin. Inspect its family snapshots
+selectively; after each durable checkpoint, move that family file into
+`records/done/`. Leave `manifest.yaml` in place as queue metadata. For
+discovery work without an exposition snapshot, create one bounded pending
+work-item YAML before inspection and move it to `done/` by the same protocol.
+Do not load the raw exposition into context.
 
 Use only locally documented or observed sources such as kube-state-metrics, kubelet/cAdvisor, scrape metadata, verified scheduler metrics, and verified recording rules. Availability remains `UNVERIFIED` until supported by local or live evidence.
 

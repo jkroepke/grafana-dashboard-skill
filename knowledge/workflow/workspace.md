@@ -12,6 +12,7 @@ The coordinator selects a filesystem-safe `<project-name>` and a neutral
 dashboards/<project-name>/workspace/<agent>/<run-id>/
 ├── inbox/       immutable job tickets from the coordinator
 ├── records/     small structured findings, one logical item per YAML file
+│   └── done/    completed metric-family work items; never reprocess these
 ├── evidence/    raw or sanitized evidence kept out of YAML records
 ├── outbox/      completed stage artifact or failure report
 ├── tmp/         incomplete files; never hand these to another stage
@@ -122,6 +123,15 @@ This is an agent-write rule, not a restriction on implementation language:
 - Write to `tmp/`, validate with `yq`, then rename into `records/` or `outbox/`.
   A promoted record is immutable. Corrections create a new revision; they do
   not edit a file already consumed downstream.
+- Metric analysts use `records/pending/` as the queue of unprocessed
+  metric-family work items and `records/done/` for processed items. After the
+  metric record is durable and `state.yaml` records completion, move the exact
+  pending item to `done/` with `mv`. On resume, reconcile completed state
+  entries first: move their still-pending item without reprocessing it. A
+  pending item without a completed state entry remains eligible for processing.
+  For discovery that has no exposition snapshot, create a bounded pending YAML
+  work item before inspection. Leave a snapshot `manifest.yaml` in `pending/`;
+  it is queue metadata, not a work item.
 - Update only the agent-owned `state.yaml`. It records pending/completed IDs,
   record paths, digests, and the next action—not prose history or raw evidence.
 - Before returning a completed artifact, set `state.status` to its `DONE`,
@@ -222,7 +232,7 @@ or OpenMetrics text through the repository helper:
 agent_run_dir="${DASHBOARD_AGENT_RUN_DIR:?set agent run directory}"
 metrics_input="${METRICS_INPUT:?set private metrics input path}"
 python3 scripts/snapshot_metrics.py \
-  --output-dir "$agent_run_dir/records/exposition" \
+  --output-dir "$agent_run_dir/records/pending" \
   --source-ref metrics-evidence < "$metrics_input"
 ```
 

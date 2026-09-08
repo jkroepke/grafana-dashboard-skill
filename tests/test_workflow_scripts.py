@@ -1131,7 +1131,7 @@ class WorkflowScriptsTest(unittest.TestCase):
             self.root / "dashboards" / "demo-project" / "workspace"
             / "application-metrics" / "run-1"
         )
-        for directory in {"inbox", "records", "evidence", "outbox", "tmp"}:
+        for directory in {"inbox", "records", "records/done", "evidence", "outbox", "tmp"}:
             self.assertTrue((agent_root / directory).is_dir())
         state_path = agent_root / "state.yaml"
         state_raw = state_path.read_bytes()

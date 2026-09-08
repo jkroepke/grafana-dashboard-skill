@@ -87,12 +87,15 @@ For the documented Grafonnet v13 query-variable and annotation nested-query defe
 
 ## Mandatory target-Grafana dry-run
 
-Perform server-side V2 validation when Dashboard resource API access is configured.
+Perform server-side V2 validation when Dashboard resource API access is
+configured for the exact create or update operation.
 
 When the configured capability is `scripts/grafana_dry_run.py`, invoke it only
 as `grafana_dry_run.py <resource-file> <response-file>`. It owns the target,
 authentication, namespace, and dry-run request path; keep the returned resource
-in the local response file and do not construct target requests.
+in the local response file and do not construct target requests. This wrapper
+supports only a new-dashboard create dry-run; it is not validation access for
+an existing resource update.
 
 1. Use the pinned/local stable V2 request model; do not fetch or inspect target OpenAPI/Swagger.
 2. Always use Dashboard resource namespace `default`.
@@ -102,9 +105,20 @@ in the local response file and do not construct target requests.
 6. Inspect returned structure and warnings, not only HTTP status.
 7. Repeat layout-reference and query-integration checks on the returned resource.
 
-A dry-run is validation, never publication. If configured target access cannot perform a required dry-run, record the server-side validation gap instead of treating static checks as equivalent.
+A dry-run is validation, never publication. If configured target access cannot
+perform the exact required dry-run, record the server-side validation gap rather
+than treating static checks as equivalent. This is a bounded validation-gap
+failure: the coordinator must have recorded the capability as absent before
+dispatch. Do not fall back to a collection POST.
 
-On failure, preserve the full target error in a scratch file and follow the required diagnostic references. Use one changed candidate per probe, a compact sanitized ledger, and no more than six isolation probes for one failure. Do not infer an unsupported layout or server bug from CUE alternative-branch conflicts, add union-arm wrappers, disable strict validation, or patch rendered JSON.
+On failure, preserve the full target error in a scratch file when the configured
+wrapper supplies it. Use the diagnostic references, one changed candidate per
+probe, a compact sanitized ledger, and no more than six isolation probes only
+when the wrapper supports error capture and the needed probe operations.
+Otherwise record the sanitized wrapper failure and route it back without direct
+target access. Do not infer an unsupported layout or server bug from CUE
+alternative-branch conflicts, add union-arm wrappers, disable strict validation,
+or patch rendered JSON.
 
 ## Artifact and response
 

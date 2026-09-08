@@ -1,16 +1,14 @@
 services:
   grafana:
-    image: grafana/grafana:13.0-distroless
+    image: grafana/grafana:latest-distroless
     volumes:
       - grafana:/var/lib/grafana/
     ports:
-      - "3000:3000"
+      - "3001:3000"
   prometheus:
     image: prom/prometheus:v3
     volumes:
       - prometheus:/prometheus
-    ports:
-      - "9090:9090"
 
 volumes:
   prometheus: {}

@@ -25,17 +25,24 @@ First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 or copy the complete conversation. It supplies the assigned metric evidence,
 run-contract binding, output path, limits, and opaque discovery access.
 
-Use the initialized agent/run workspace. Process one metric family at a
-time and immediately create one bounded `records/metrics/*.yaml` checkpoint with
-`yq`, then update `state.yaml`. Never hold the complete inventory in context or
-emit it through one large write-tool call. Resume from the snapshot queue.
+Use the initialized agent/run workspace. Treat `records/pending/` as the
+metric-family work queue and `records/done/` as its completed queue. Process
+one metric family at a time: create its bounded `records/metrics/*.yaml`
+checkpoint with `yq`, update `state.yaml`, then atomically move its work item
+into `records/done/`. Never hold the complete inventory in context or emit it
+through one large write-tool call. On restart, first reconcile any item whose
+checkpoint and completed state entry exist but which remains in
+`records/pending/`, moving it to `records/done/` without reprocessing it.
 
 For a large Prometheus/OpenMetrics exposition, pipe the configured opaque reader
 or redirect local evidence into `scripts/snapshot_metrics.py`, assigning
-`records/exposition` as its output directory and a neutral source reference.
-The helper accepts metrics only through stdin. Enumerate its family files and
-inspect them one at a time; never print or read the complete exposition into
-context.
+`records/pending` as its output directory and a neutral source reference. The
+helper accepts metrics only through stdin. Enumerate its family files and
+inspect them one at a time; after each durable checkpoint, move that family
+file into `records/done/`. Leave `manifest.yaml` in place as queue metadata.
+For discovery work without an exposition snapshot, create one bounded pending
+work-item YAML before inspection and move it to `done/` by the same protocol.
+Never print or read the complete exposition into context.
 
 Parse each metric family once. Preserve raw dumps on disk and never paste them into output. Record:
 
