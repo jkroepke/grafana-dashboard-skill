@@ -51,6 +51,11 @@ Validate all input digests. Independently check:
 
 HTTP success or PromQL syntax alone is not a pass. Keep raw responses in scratch files and surface only sanitized evidence in the review artifact.
 
+For a configured `scripts/prometheus_reader.py` capability, write the approved
+query request and response paths in the assigned workspace and invoke only
+`prometheus_reader.py <request-file> <response-file>`. Do not supply a target
+endpoint, datasource UID, or inline PromQL to a command.
+
 ## Artifact and response
 
 Assemble `query-review.yaml` from the per-query review records with `yq` using

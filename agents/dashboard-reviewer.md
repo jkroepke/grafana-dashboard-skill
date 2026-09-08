@@ -89,6 +89,11 @@ For the documented Grafonnet v13 query-variable and annotation nested-query defe
 
 Perform server-side V2 validation when Dashboard resource API access is configured.
 
+When the configured capability is `scripts/grafana_dry_run.py`, invoke it only
+as `grafana_dry_run.py <resource-file> <response-file>`. It owns the target,
+authentication, namespace, and dry-run request path; keep the returned resource
+in the local response file and do not construct target requests.
+
 1. Use the pinned/local stable V2 request model; do not fetch or inspect target OpenAPI/Swagger.
 2. Always use Dashboard resource namespace `default`.
 3. Use `dryRun=All`, not `dryRun=true`, and `fieldValidation=Strict`.

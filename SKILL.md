@@ -169,6 +169,16 @@ revision evidence, validates the artifact, and advances coordinator state.
 
 Do not place literal connection details or target identifiers into the shared contract passed to subagents. Provide an opaque access capability/reference instead.
 
+When the repository wrappers are configured, use
+`scripts/prometheus_reader.py <request-file> <response-file>` for read-only
+Prometheus access and `scripts/grafana_dry_run.py <resource-file>
+<response-file>` for Dashboard V2 validation. Their target, datasource selection,
+proxy paths, and credentials are trusted runtime configuration; do not invoke
+the datasource resolver, supply an endpoint or UID, or source configuration.
+Prometheus requests may use only `query`, `query_range`, `series`, `labels`,
+`label_values`, or `metadata`, with all target-identifying input kept in the
+request file.
+
 Do not require publication intent before using an already configured Dashboard API credential/wrapper for a non-persisting dry-run validation request.
 
 The parsed `gitTreeState` establishes only Grafana v13+ eligibility. It does

@@ -70,6 +70,12 @@ artifact. The scope evidence is immutable after this stage. If no namespace can
 be verified, return a bounded failure report; do not permit an unscoped
 Kubernetes inventory.
 
+When the configured capability is `scripts/prometheus_reader.py`, write a
+neutral request file and a separate neutral response path in the assigned
+workspace. Invoke it only as `prometheus_reader.py <request-file>
+<response-file>`; never provide a URL, datasource UID, or inline query. Keep
+stored-series selectors and returned values in those local files.
+
 Keep exposition labels separate from verified stored scrape labels. Stored labels supplied in the run contract may be valid even when absent from a raw exposition dump.
 
 Classify domain/application metric families as `BUSINESS` and runtime/process/GC/runtime-library families as `PROCESS` from observed semantics only. Do not rank panels, formulate operational questions, or invent HTTP or database semantics.

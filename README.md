@@ -41,6 +41,27 @@ privately. The coordinator extracts the
 Grafana version only from `gitTreeState`, which must be `grafana v<version>`;
 it ignores the Kubernetes API-style `major` and `minor` fields and `gitVersion`.
 
+## Opaque Grafana capabilities
+
+Configure `GRAFANA_TARGET` and, when needed, `GRAFANA_HTTP_CLIENT` plus its
+JSON-array `GRAFANA_HTTP_CLIENT_ARGS_JSON` in the trusted launch environment.
+Do not write or source a repository `.env` file. The provided wrappers keep the
+target, credentials, proxy path, and datasource UID out of agent arguments:
+
+```text
+scripts/grafana_version.py
+scripts/grafana_prometheus_datasource.py
+scripts/prometheus_reader.py <request.json> <response.json>
+scripts/grafana_dry_run.py <resource.json> <response.json>
+```
+
+`prometheus_reader.py` resolves the configured Prometheus datasource internally
+(default first, otherwise the first returned) and accepts only the read-only
+`query`, `query_range`, `series`, `labels`, `label_values`, and `metadata`
+operations. Request and response files remain in the assigned workspace.
+`grafana_prometheus_datasource.py` is a trusted bootstrap helper; do not hand
+it to agents as an access capability.
+
 The Grafana Dashboard resource namespace is always `default`. Do not provide or derive another API namespace.
 
 The mandatory pipeline is:

@@ -44,6 +44,12 @@ and out of visible output. If the application scope is missing, empty, invalid,
 or cannot be applied by the available access method, return a bounded failure
 report instead of widening discovery.
 
+When the configured capability is `scripts/prometheus_reader.py`, write each
+namespace-scoped request and response to neutral local files, then invoke it as
+`prometheus_reader.py <request-file> <response-file>`. Never pass a URL,
+datasource UID, or inline selector. A reader that cannot apply the supplied
+scope is unavailable for this stage.
+
 Use the initialized agent/run workspace. Process one metric family or one
 population fact at a time, immediately checkpoint it as a bounded YAML record
 with `yq`, and update `state.yaml`. Never retain the complete inventory in
