@@ -2,11 +2,11 @@
 
 ## Schema
 
-Default new dashboards to Dashboard Schema V2. Preserve classic schema for existing classic dashboards unless migration is requested.
+This workflow handles only Dashboard Schema V2 resources on Grafana v13+. Every new candidate and any existing baseline must be V2; reject classic dashboard JSON instead of preserving or migrating it.
 
 Use the pinned generated `grafana/grafonnet` API. Inspect unfamiliar local generated methods instead of guessing signatures or patch shapes.
 
-For Dashboard Schema V2, **MUST read both `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md` before writing or reviewing the Grafonnet source**. The model's built-in knowledge of Grafonnet may be stale; the local vendored generated API is authoritative.
+**MUST read both `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md` before writing or reviewing the Grafonnet source.** The model's built-in knowledge of Grafonnet may be stale; the local vendored generated API is authoritative.
 
 Do not reject the `grafonnet-latest` import path by name alone. Resolve what the vendored alias and jsonnet-bundler lock actually point to. Preserve the repository import convention and dependency pin.
 

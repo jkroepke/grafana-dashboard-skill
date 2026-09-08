@@ -12,36 +12,31 @@ This is validation only. A dry-run request MUST NOT be treated as publication.
 
 When target Grafana dashboard API access is configured:
 
-- the reviewer MUST submit the rendered Dashboard resource to the real target Grafana using the target-advertised dry-run mechanism
+- the reviewer MUST submit the rendered Dashboard resource using the pinned/local stable V2 dry-run mechanism
 - the reviewer MUST use the Dashboard resource namespace `default`
-- the reviewer MUST use the exact structured API version advertised by the target Swagger
-- the reviewer MUST enable strict field validation when the target advertises it
+- the reviewer MUST use `dashboard.grafana.app/v2`
+- the reviewer MUST enable strict field validation
 - the reviewer MUST NOT return `PASS` if the dry-run request fails
 - the reviewer MUST inspect the dry-run response body, not only the HTTP status
 - on any dry-run failure, the reviewer MUST read `knowledge/grafana/v2-validation-errors.md` before changing or recommending a source change
 - credentials and authorization headers MUST NOT be printed in review output
 
-If the target Swagger exposes no dry-run mechanism, return `FAIL` with the validation gap unless the task explicitly permits server-side validation to remain unverified.
+If the configured API wrapper cannot perform the stable V2 dry-run, return
+`FAIL` with the validation gap unless the task explicitly permits server-side
+validation to remain unverified.
 
 ## Source of truth
 
-The coordinator's run contract must first contain the cached V2 OpenAPI
-capability result. The coordinator obtains it by executing the configured local
-access command, which reaches this discovery document without receiving the
-target URL as an argument:
+The coordinator's run contract records the Grafana version parsed from the one
+opaque `GET /version` response. It extracts only `gitTreeState` in the form
+`grafana v<version>` and rejects versions below v13; the Kubernetes API-style
+`major`, `minor`, and `gitVersion` fields are not Grafana version evidence.
 
-```text
-<GRAFANA_URL>/openapi/v3/apis/dashboard.grafana.app/v2
-```
+Use the repository's pinned/local stable V2 request shapes. Do not fetch,
+inspect, or cache target OpenAPI/Swagger in this stage or any other workflow
+stage. Do not bypass the configured API wrapper with direct network access.
 
-Use the target-advertised operations and schemas from that document. It is a
-one-time coordinator discovery check, not a replacement for this reviewer's
-dry-run. Do not rediscover it in this stage or bypass the configured local
-command with direct network access. If a target supplies only an opaque Swagger
-wrapper, use that target-advertised contract after the run contract records the
-resulting capability gap; never guess a route or API version.
-
-If the target uses another structured version such as `v2beta1`, use that target version instead.
+This workflow requires stable `dashboard.grafana.app/v2` on Grafana v13+. If the target exposes only another structured version such as `v2beta1`, stop rather than substituting it.
 
 Do not assume the latest public Grafana behavior for an air-gapped/pinned target.
 
@@ -61,9 +56,9 @@ Do NOT use:
 dryRun=true
 ```
 
-unless the target Swagger explicitly says that is valid. Current stable V2 documents `All` as the valid dry-run directive.
+`dryRun=true` is not valid for this workflow.
 
-Also use strict field validation when advertised:
+Always use strict field validation:
 
 ```text
 fieldValidation=Strict

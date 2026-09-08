@@ -1,6 +1,14 @@
 # Grafana Dashboard Skill
 
-Local agent skill for creating, updating, validating, and optionally publishing Grafonnet dashboards for Kubernetes applications from Prometheus/OpenMetrics metrics.
+Local agent skill for creating, updating, validating, and optionally publishing Dashboard Schema V2 Grafonnet dashboards for Kubernetes applications from Prometheus/OpenMetrics metrics. It requires Grafana v13 or later.
+
+## Hard compatibility boundary
+
+This skill and its workflow support only Dashboard Schema V2 resources on Grafana v13+.
+
+- Provide a verified Grafana version in `v<major>[.<minor>[.<patch>]]` form; versions below v13 are rejected.
+- The target must advertise the stable Dashboard V2 resource API.
+- Existing sources must render as Dashboard Schema V2 resources. Classic dashboard JSON, classic-to-V2 migrations, and the legacy dashboard API are out of scope.
 
 The workflow is designed for air-gapped DeepSeek V3.7 agents with a 256k context window running through OpenCode or Pi. It uses fresh specialist contexts and bounded file-backed artifacts. Give it file paths and local datasource/API access instead of pasting large metric dumps or query responses.
 
@@ -15,6 +23,7 @@ Create or update the Grafana dashboard for <application>.
 Metrics dump: <path>
 Kubernetes manifests: <path or none>
 Existing dashboard: <path or none>
+Grafana /version access: <opaque shell-free command argv>
 Grafana/Prometheus access: <opaque local access instructions or none>
 Publish: <yes|no>
 Folder placement: <opaque configured reference or none>
@@ -24,11 +33,13 @@ For `Publish: yes`, provide writable Grafana dashboard API access. Prometheus da
 
 Do not paste target endpoints, host/domain details, credentials, or unrelated resource identifiers into the task prompt. Use an opaque local wrapper/environment reference. Visible command/output redaction is defined in `knowledge/security/output-redaction.md`.
 
-For a Dashboard V2 target that is reachable only through a local command,
-provide the shell-free opaque command that emits
-`/openapi/v3/apis/dashboard.grafana.app/v2` to stdout. It must already know the
-target and authentication; the coordinator runs it once, stores its output
-privately, and never replaces it with a direct URL request.
+Provide a shell-free opaque command argv that performs `GET /version` and emits
+its JSON response to stdout. The supplied program and arguments are executed
+as provided, so a local access wrapper such as `kcurl` or `curl` is permitted.
+It must already know the target and authentication; the coordinator runs it
+exactly once and stores the response privately. The coordinator extracts the
+Grafana version only from `gitTreeState`, which must be `grafana v<version>`;
+it ignores the Kubernetes API-style `major` and `minor` fields and `gitVersion`.
 
 The Grafana Dashboard resource namespace is always `default`. Do not provide or derive another API namespace.
 
@@ -82,11 +93,11 @@ coordinator must stop rather than gather or implement the missing stage.
 
 ## Dashboard V2 publishing
 
-For Dashboard Schema V2, the agent must use the Dashboard resource API instead of the legacy dashboard endpoint.
+The agent must use the Dashboard resource API instead of the legacy dashboard endpoint.
 
-Use the target Grafana Swagger/OpenAPI schema through the configured opaque target access as the API contract source of truth. Do not print or copy the resolved Swagger endpoint into visible output.
-
-The target Grafana Swagger wins if it exposes a different supported API version. The Dashboard resource namespace remains `default`.
+Do not fetch or inspect a target OpenAPI specification. The V2 workflow uses
+the pinned/local V2 contract and the configured API wrapper. The Dashboard
+resource namespace remains `default`.
 
 Detailed publish rules are in `knowledge/grafana/publishing-v2.md`.
 
@@ -109,4 +120,4 @@ Every generated dashboard uses:
 
 The dashboard variable named `namespace` is unrelated to the Grafana Dashboard resource API namespace, which is always `default`.
 
-New dashboards default to Dashboard Schema V2 when supported by the pinned local Grafana/Grafonnet dependencies.
+Every dashboard handled by this workflow is Dashboard Schema V2; classic dashboards are rejected rather than preserved or migrated.

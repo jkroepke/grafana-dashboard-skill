@@ -22,7 +22,7 @@ Read:
 - `knowledge/grafana/panel-selection.md`
 - `knowledge/grafana/variables.md`
 - `knowledge/grafana/layout-v2.md`
-- for Dashboard V2, `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md`
+- `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md`
 - `knowledge/grafana/annotations.md` only when the approved query pack contains annotations
 
 First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
@@ -37,6 +37,7 @@ before moving on. Keep rendered JSON and command outputs in `evidence/`. Resume
 from the filesystem; never retain the whole construction history in context.
 
 Refuse to build unless the metrics contract, plan, and query review are `PASS` and all digests match.
+Refuse to build unless the run contract records Grafana v13+ and Dashboard Schema V2, and any existing baseline renders as V2. Classic dashboards and migrations are out of scope.
 
 ## Construction rules
 
@@ -47,9 +48,9 @@ Refuse to build unless the metrics contract, plan, and query review are `PASS` a
 - Implement required variables in dependency order and use `$datasource` according to the pinned V2 datasource-reference model.
 - Choose only the planned conceptual visualizations; verify actual plugin IDs from local/target evidence rather than inventing them.
 - Keep layout within the plan and panel budget.
-- Default new dashboards to Dashboard Schema V2; preserve an existing schema unless migration was requested.
+- Build only a Dashboard Schema V2 resource. Do not retain, emit, or convert a classic dashboard shape.
 
-For Dashboard V2, use pinned generated Grafonnet builders whenever they exist. Inspect generated bodies to distinguish path mixins from standalone values. Use raw schema-shaped objects only for exact-pin gaps documented by the repository. Never patch rendered JSON as the source fix.
+Use pinned generated Grafonnet builders whenever they exist. Inspect generated bodies to distinguish path mixins from standalone values. Use raw schema-shaped objects only for exact-pin gaps documented by the repository. Never patch rendered JSON as the source fix.
 
 Do not edit shared helpers in this workflow version. If a helper change is required, write a `BLOCKED` failure report so the candidate-set contract can be redesigned explicitly.
 

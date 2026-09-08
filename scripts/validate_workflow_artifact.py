@@ -83,6 +83,7 @@ STATUSES = {
 }
 ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,63}$")
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+GRAFANA_VERSION_RE = re.compile(r"^v?(?P<major>[0-9]+)(?:\.[0-9]+){0,2}$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 COUNTER_FUNCTION_RE = re.compile(r"\b(?:rate|irate|increase|resets)\s*\(")
 
@@ -339,8 +340,13 @@ def validate_run_contract(data: dict[str, Any]) -> None:
     require_render_executable(argv[0], render_cwd)
 
     schema = strict_object(data["schema"], {"dashboard", "grafana_version", "grafonnet_revision"}, "schema")
-    enum(schema["dashboard"], {"V2", "CLASSIC"}, "schema.dashboard")
-    text(schema["grafana_version"], "schema.grafana_version", 128, nullable=True)
+    require(schema["dashboard"] == "V2", "workflow supports Dashboard Schema V2 only")
+    grafana_version = text(schema["grafana_version"], "schema.grafana_version", 128)
+    version_match = GRAFANA_VERSION_RE.fullmatch(grafana_version)
+    require(version_match is not None,
+            "schema.grafana_version must use v<major>[.<minor>[.<patch>]] form")
+    require(int(version_match.group("major")) >= 13,
+            "workflow requires Grafana v13 or later")
     revision = text(schema["grafonnet_revision"], "schema.grafonnet_revision", 256, nullable=True)
     dependencies = grafonnet_dependencies(resolved_root)
     if dependencies:
@@ -358,25 +364,11 @@ def validate_run_contract(data: dict[str, Any]) -> None:
     require(limits["changed_queries"] <= limits["total_queries"], "changed_queries exceeds total_queries")
 
     capabilities = strict_object(data["capabilities"], {
-        "datasource_access", "dashboard_api_validation", "dashboard_v2_openapi",
-        "publish_requested"
+        "datasource_access", "dashboard_api_validation", "publish_requested"
     }, "capabilities")
     for name in {"datasource_access", "dashboard_api_validation", "publish_requested"}:
         value = capabilities[name]
         require(isinstance(value, bool), f"capabilities.{name} must be boolean")
-    openapi_status = enum(capabilities["dashboard_v2_openapi"], {
-        "SUPPORTED", "NOT_CONFIGURED", "UNAUTHORIZED", "NOT_ADVERTISED",
-        "UNREACHABLE", "NOT_APPLICABLE",
-    }, "capabilities.dashboard_v2_openapi")
-    if schema["dashboard"] == "V2":
-        require(openapi_status != "NOT_APPLICABLE",
-                "V2 dashboard requires a Dashboard V2 OpenAPI capability result")
-        if capabilities["dashboard_api_validation"]:
-            require(openapi_status == "SUPPORTED",
-                    "configured dashboard API validation requires supported Dashboard V2 OpenAPI")
-    else:
-        require(openapi_status == "NOT_APPLICABLE",
-                "non-V2 dashboard requires dashboard_v2_openapi NOT_APPLICABLE")
     require(isinstance(data["selector_proposals"], dict), "selector_proposals must be an object")
 
 
@@ -775,12 +767,7 @@ def validate_query_pack(data: dict[str, Any], inputs: dict[str, dict[str, Any]],
                     f"{where}.plugin_query_model",
                 )
                 qry_type = plugin_model["qry_type"]
-                if run["schema"]["dashboard"] == "V2":
-                    integer(qry_type, f"{where}.plugin_query_model.qry_type", 0, 64)
-                else:
-                    require(qry_type is None or (
-                        isinstance(qry_type, int) and not isinstance(qry_type, bool) and 0 <= qry_type <= 64
-                    ), f"{where}.plugin_query_model.qry_type must be null or an integer")
+                integer(qry_type, f"{where}.plugin_query_model.qry_type", 0, 64)
                 editor_ref = text(
                     plugin_model["editor_ref_id"],
                     f"{where}.plugin_query_model.editor_ref_id", 128,

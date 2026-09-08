@@ -2,7 +2,7 @@
 
 Read this file only when the user asks to publish/write the dashboard or when an existing Dashboard V2 resource must be inspected through the Grafana API.
 
-Only the fresh `dashboard-publisher` performs a real write. The coordinator routes the approved artifacts and checks the resulting publish report; it does not interpret Swagger or construct API payloads.
+Only the fresh `dashboard-publisher` performs a real write. The coordinator routes the approved artifacts and checks the resulting publish report; it does not construct API payloads.
 
 **MUST read `knowledge/security/output-redaction.md` before target access.**
 
@@ -10,9 +10,9 @@ Only the fresh `dashboard-publisher` performs a real write. The coordinator rout
 
 Do not guess Dashboard V2 API fields or routes.
 
-Use the target Grafana Swagger/OpenAPI schema through the configured opaque target access. Do not print or copy the resolved endpoint into visible commands or output.
-
-The target Grafana contract wins over local/general knowledge. If the target exposes another structured dashboard API version such as `v2beta1`, use the version advertised by that target and its Swagger/OpenAPI schema.
+Use the pinned/local stable Dashboard V2 request contract through the configured
+opaque target access. Do not fetch target Swagger/OpenAPI or print/copy a
+resolved endpoint into visible commands or output.
 
 Do not convert a Schema V2 dashboard to classic dashboard JSON just to publish it. Do not use the legacy dashboard endpoint for a Schema V2 resource.
 
@@ -30,9 +30,9 @@ The Dashboard resource API namespace is not the Kubernetes namespace and is not 
 
 ## Resource API
 
-For stable V2, use the target-advertised collection create, resource GET, and resource PUT operations under the Dashboard resource API.
-
-Confirm methods and request schemas in the target Swagger before writing. Keep `namespaces/default` even when the target exposes another structured Dashboard API version.
+For stable V2, use collection create, resource GET, and resource PUT operations
+under the Dashboard resource API. Use the pinned/local request shapes; do not
+retrieve target Swagger before writing. Keep `namespaces/default`.
 
 `metadata.name` is the dashboard resource identity used by the item operation. Keep the literal identity inside the local request/artifact only; do not echo it in visible commands or completion output.
 
@@ -52,7 +52,10 @@ A create request is built from the rendered V2 dashboard spec plus resource meta
 
 Populate `spec` with the rendered Dashboard Schema V2 spec. Omit the folder annotation when no folder is required.
 
-If the rendered Jsonnet produces a full resource containing `apiVersion`, `kind`, `metadata`, and `spec`, use its `spec` as the dashboard spec and construct the API request according to the target Swagger. Do not blindly POST a DTO or classic dashboard envelope.
+If the rendered Jsonnet produces a full resource containing `apiVersion`,
+`kind`, `metadata`, and `spec`, use its `spec` as the dashboard spec and
+construct the API request from the pinned/local V2 contract. Do not blindly
+POST a DTO or classic dashboard envelope.
 
 ## Visible command discipline
 
@@ -106,9 +109,9 @@ For an existing dashboard:
 1. GET the current resource through the opaque configured access.
 2. Preserve its resource identity and folder placement unless the user requested a change.
 3. Preserve or send server metadata such as `resourceVersion` only when required by the target API contract.
-4. Replace it with the method/body defined by the target Swagger, normally the item update operation.
+4. Replace it with the pinned/local V2 item-update method and body.
 
-For a new dashboard, use the target-advertised collection create operation under `namespaces/default`.
+For a new dashboard, use the stable V2 collection create operation under `namespaces/default`.
 
 Never create a second dashboard merely because an update failed. Report conflicts, authorization failures, schema-validation errors, missing element references, and missing panel plugins instead, with sensitive target literals removed.
 

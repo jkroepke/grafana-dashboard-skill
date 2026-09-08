@@ -19,6 +19,7 @@ protocol throughout every stage.
 - Run `scripts/verify_query_parity.py` after rendering.
 - Run `scripts/verify_non_prometheus_preservation.py` to reject any non-Prometheus consumer change.
 - Run `scripts/verify_workflow_chain.py` before promotion.
+- The run contract must record Dashboard Schema V2 and a Grafana version of v13 or later. This workflow rejects classic dashboard sources and does not perform migrations.
 
 This workflow version stages exactly one dashboard source file. If a task requires a shared-helper edit, return `BLOCKED` rather than editing or promoting multiple files without an atomic candidate-set contract.
 
@@ -97,14 +98,20 @@ python3 scripts/create_coordinator_artifact.py run-contract \
   --repository-root "$PWD" \
   --project-name <project-name> \
   --run-id <run-id> \
+  --grafana-version-program <opaque-version-wrapper> \
   --final-source dashboards/<project-name>/dashboard.jsonnet
 ```
 
 The default render argv is `jsonnet -J vendor {source}`. Use repeated
 `--render-arg` options and `--render-program` only when the repository has a
-different shell-free render command. Pass the sanitized result of the one-time
-V2 discovery as `--dashboard-v2-openapi <status>`; it defaults to
-`NOT_CONFIGURED` for V2 and `NOT_APPLICABLE` for classic dashboards. Other
+different shell-free render command. `--grafana-version-program` is a required
+opaque executable. Pass any supplied shell-free wrapper arguments with repeated
+`--grafana-version-arg`; tools such as `curl` or `kcurl` are permitted. The
+complete supplied argv must perform `GET /version` and return HTTP-200 JSON
+only on stdout. The helper executes it once, stores the raw response privately,
+and extracts Grafana's version only from
+`gitTreeState: "grafana v<version>"`. It ignores `major`, `minor`, and
+`gitVersion`, which may identify the backing Kubernetes API server. Other
 capability flags are opt-in. The helper
 infers the source baseline and a unique locally locked and vendored Grafonnet
 revision, writes immutable YAML through `yq`, validates it, and updates the
@@ -130,8 +137,8 @@ The resulting artifact is at most 16 KiB, with `status: PASS`, `inputs: {}`, and
     "timeout_seconds": 120
   },
   "schema": {
-    "dashboard": "V2|CLASSIC",
-    "grafana_version": "<version>|null",
+    "dashboard": "V2",
+    "grafana_version": "v13.0.0 or later, extracted from /version.gitTreeState",
     "grafonnet_revision": "<revision>|null"
   },
   "limits": {
@@ -146,7 +153,6 @@ The resulting artifact is at most 16 KiB, with `status: PASS`, `inputs: {}`, and
   "capabilities": {
     "datasource_access": true,
     "dashboard_api_validation": true,
-    "dashboard_v2_openapi": "SUPPORTED",
     "publish_requested": false
   },
   "selector_proposals": {}
@@ -169,42 +175,28 @@ Validate:
 python3 scripts/validate_workflow_artifact.py <run-contract.yaml>
 ```
 
-### Dashboard V2 OpenAPI capability
+### Grafana `/version` gate
 
-For `schema.dashboard: "V2"`, the task must supply an opaque, shell-free local
-command that performs this request through its own configured target access:
+The task must supply an opaque, shell-free local executable that performs this
+request through its own configured target access:
 
 ```text
-<GRAFANA_URL>/openapi/v3/apis/dashboard.grafana.app/v2
+GET <GRAFANA_URL>/version
 ```
 
-The command accepts no URL, credential, or target identifier arguments. Exit
-status `0` must mean the command received HTTP 200 and emits the OpenAPI
-document only to stdout. The coordinator executes that supplied command exactly
-once before delegation, storing stdout and stderr in neutral scratch files; it
-must not use direct `curl` or discover connection configuration. It checks only
-that the captured JSON is an OpenAPI v3 document and advertises the Dashboard
-V2 collection operations. The contract records only
-`capabilities.dashboard_v2_openapi`:
+The supplied shell-free argv is executed exactly as provided; it may invoke an
+access wrapper such as `curl` or `kcurl`. Exit status `0` must mean it received
+HTTP 200 and emits only the JSON response to stdout. The coordinator executes
+it once before delegation and stores stdout and stderr in neutral scratch files.
+It parses only `gitTreeState`, which must exactly be
+`grafana v<major>[.<minor>[.<patch>]]`; this value supplies
+`schema.grafana_version` and must be v13 or later. Ignore `major`, `minor`,
+and `gitVersion`: a Kubernetes API server may populate them with its own
+version. Do not fetch, inspect, or cache target OpenAPI/Swagger.
 
-| Status | Meaning |
-| --- | --- |
-| `SUPPORTED` | HTTP 200 OpenAPI document advertises Dashboard V2 collection operations. |
-| `NOT_CONFIGURED` | No opaque Dashboard API access/wrapper was supplied. |
-| `UNAUTHORIZED` | Access reached the target but cannot read the OpenAPI document. |
-| `NOT_ADVERTISED` | The target did not advertise this V2 document. |
-| `UNREACHABLE` | Target access failed before discovery completed. |
-| `NOT_APPLICABLE` | The dashboard schema is not V2. |
-
-If the wrapper exposes a sanitized HTTP classification, use `UNAUTHORIZED` or
-`NOT_ADVERTISED` as appropriate. Otherwise a non-zero command exit is
-`UNREACHABLE`; preserve the raw failure privately and do not infer a URL,
-credential, or retry strategy from it.
-
-The coordinator does not retry an unchanged result. `SUPPORTED` is discovery
-only: it neither proves a Prometheus datasource is usable nor proves that the
-credential can create/update with `dryRun=All`. A V2 run with
-`dashboard_api_validation: true` must have `dashboard_v2_openapi: "SUPPORTED"`.
+The coordinator does not retry an unchanged `/version` result. A successful
+version gate neither proves a Prometheus datasource is usable nor proves the
+credential can create/update with `dryRun=All`.
 
 ## Metric shortlists
 
@@ -390,9 +382,9 @@ For a Prometheus variable query, `plugin_query_model` is instead exactly:
 }
 ```
 
-`qry_type` is required for V2 and may be null for classic dashboards when the classic model has no equivalent. `editor_ref_id` must equal the consumer locator `ref_id`. Panel and annotation records use null. Explicitly non-Prometheus consumers are outside this pack and must remain exactly unchanged; adding, changing, or removing one is out of scope and returns `BLOCKED`.
+`qry_type` is required. `editor_ref_id` must equal the consumer locator `ref_id`. Panel and annotation records use null. Explicitly non-Prometheus consumers are outside this pack and must remain exactly unchanged; adding, changing, or removing one is out of scope and returns `BLOCKED`.
 
-Expressions are non-empty and at most 4096 characters. Panel locators use the planned panel ID as their V2 element key. Variable and annotation locators use the corresponding `rendered_name` from `required_consumers`. For preserved classic panels use `panel-<numeric-id>` as the locator name. Panel queries map to planned panels/questions. Variable and annotation queries map to `required_consumers`. `PRESERVED` queries may use only `PRESERVE_ONLY` or `PLAN` metrics; new/modified queries require `PLAN` metrics.
+Expressions are non-empty and at most 4096 characters. Panel locators use the planned panel ID as their V2 element key. Variable and annotation locators use the corresponding `rendered_name` from `required_consumers`. Panel queries map to planned panels/questions. Variable and annotation queries map to `required_consumers`. `PRESERVED` queries may use only `PRESERVE_ONLY` or `PLAN` metrics; new/modified queries require `PLAN` metrics.
 
 Every planned panel, operational question, and required Prometheus variable/annotation consumer must be covered by the query pack. With an absent baseline every query must be `NEW`. For updates, the full-chain gate compares exact locator/text/mode/datasource/query-model tuples with the independently rendered baseline and rejects false change labels or removed Prometheus consumers. `datasource_ref` must be exactly `${datasource}` for every record; literal datasource UIDs are invalid.
 

@@ -30,7 +30,7 @@ Read:
 - `knowledge/security/output-redaction.md`
 - `knowledge/grafana/variables.md`
 - `knowledge/grafana/layout-v2.md`
-- for Dashboard V2, `knowledge/grafana/grafonnet-v2.md`, `knowledge/grafana/grafonnet-builder-composition.md`, and `knowledge/grafana/grafana-v2-dry-run.md`
+- `knowledge/grafana/grafonnet-v2.md`, `knowledge/grafana/grafonnet-builder-composition.md`, and `knowledge/grafana/grafana-v2-dry-run.md`
 - `knowledge/grafana/layout-reference-debugging.md` when layout references fail
 - `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md` when target dry-run validation fails
 - `knowledge/grafana/annotations.md` when annotations are present
@@ -47,6 +47,7 @@ then update `state.yaml`. Keep complete responses in `evidence/` and resume from
 the queue instead of accumulating the review in context.
 
 Refuse review unless upstream artifacts are `PASS`, all digests match, and the candidate has not changed since the build manifest was written.
+Refuse review unless the run contract records Grafana v13+ and Dashboard Schema V2, and the candidate (plus any baseline) is a V2 resource. Classic dashboards and migrations are out of scope.
 
 ## Query integration gate
 
@@ -86,11 +87,11 @@ For the documented Grafonnet v13 query-variable and annotation nested-query defe
 
 ## Mandatory target-Grafana dry-run
 
-For Dashboard Schema V2, perform server-side validation when Dashboard resource API access is configured.
+Perform server-side V2 validation when Dashboard resource API access is configured.
 
-1. Inspect target Swagger through opaque access; do not guess API version, route, or body.
+1. Use the pinned/local stable V2 request model; do not fetch or inspect target OpenAPI/Swagger.
 2. Always use Dashboard resource namespace `default`.
-3. For current stable V2, use `dryRun=All`, not `dryRun=true`, and `fieldValidation=Strict` when advertised.
+3. Use `dryRun=All`, not `dryRun=true`, and `fieldValidation=Strict`.
 4. Dry-run create for a new dashboard; for an existing dashboard, GET live metadata and dry-run the corresponding update/replace operation.
 5. Submit the exact rendered candidate resource/spec.
 6. Inspect returned structure and warnings, not only HTTP status.

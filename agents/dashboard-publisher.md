@@ -20,7 +20,7 @@ Read:
 - `knowledge/workflow/artifacts.md`
 - `knowledge/security/output-redaction.md`
 - `knowledge/grafana/publishing-v2.md`
-- for Dashboard V2, `knowledge/grafana/grafana-v2-dry-run.md`
+- `knowledge/grafana/grafana-v2-dry-run.md`
 
 First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
@@ -35,7 +35,15 @@ publication transcript in context for one final write.
 
 Refuse to publish unless publication was explicitly requested, the workflow chain passed, the final source digest equals the reviewed candidate digest, `python3 scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml> --source <final-source.jsonnet>` proves the exact final-path render equals the reviewed rendered digest, and the dashboard review is `PASS`.
 
-Inspect target Swagger through the opaque access method. Use the target-advertised API version and request model; never guess. For Dashboard V2 always use resource namespace `default`. Create only when no existing resource identity is recorded; otherwise GET and update/replace the existing resource. Never create a duplicate to recover from an update failure.
+Refuse to publish unless the run contract records Grafana v13+ and Dashboard
+Schema V2. The target must advertise stable Dashboard V2; classic dashboards,
+other structured API versions, and the legacy endpoint are out of scope.
+
+Use the pinned/local stable V2 request model through the opaque access method.
+Do not fetch or inspect target OpenAPI/Swagger. Always use resource namespace
+`default`. Create only when no existing resource identity is recorded;
+otherwise GET and update/replace the existing resource. Never create a
+duplicate to recover from an update failure.
 
 Keep endpoints, target identifiers, authentication material, request/response bodies, and unrelated resources out of visible commands and output. Store raw target evidence only in neutral scratch files.
 

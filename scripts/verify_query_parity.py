@@ -9,7 +9,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any, Optional
 
 import validate_workflow_artifact as artifact
 
@@ -167,107 +167,6 @@ def v2_consumers(root: dict[str, Any]) -> dict[Locator, Consumer]:
     return consumers
 
 
-def walk_classic_panels(panels: Any) -> Iterator[dict[str, Any]]:
-    if not isinstance(panels, list):
-        return
-    for panel in panels:
-        if not isinstance(panel, dict):
-            continue
-        yield panel
-        yield from walk_classic_panels(panel.get("panels"))
-
-
-def explicitly_non_prometheus(*values: Any) -> bool:
-    """Return true only when the nearest supplied datasource declares another type."""
-    for value in values:
-        if value is None:
-            continue
-        if isinstance(value, dict):
-            datasource_type = value.get("type")
-            if isinstance(datasource_type, str) and datasource_type:
-                return datasource_type.lower() != "prometheus"
-            reference = datasource_ref(value)
-        else:
-            reference = datasource_ref(value)
-        if reference in {"$datasource", "${datasource}"}:
-            return False
-    return False
-
-
-def classic_consumers(root: dict[str, Any]) -> dict[Locator, Consumer]:
-    if isinstance(root.get("dashboard"), dict):
-        root = root["dashboard"]
-    consumers: dict[Locator, Consumer] = {}
-    for panel in walk_classic_panels(root.get("panels")):
-        panel_id = panel.get("id")
-        require(isinstance(panel_id, int), "classic Prometheus panel requires numeric id")
-        panel_name = f"panel-{panel_id}"
-        for target in panel.get("targets", []):
-            if not isinstance(target, dict):
-                continue
-            if explicitly_non_prometheus(target.get("datasource"), panel.get("datasource")):
-                continue
-            expression = target.get("expr")
-            if not isinstance(expression, str) or not expression:
-                continue
-            ref_id = target.get("refId")
-            require(isinstance(ref_id, str) and ref_id, "classic Prometheus target has no refId")
-            ds_ref = datasource_ref(target.get("datasource")) or datasource_ref(panel.get("datasource"))
-            require(ds_ref is not None, "classic Prometheus target has no datasource reference")
-            mode = "INSTANT" if target.get("instant") is True else "RANGE"
-            add_consumer(consumers, ("PANEL", panel_name, ref_id), Consumer(expression, mode, ds_ref))
-
-    templating = root.get("templating", {})
-    variables = templating.get("list", []) if isinstance(templating, dict) else []
-    for variable in variables:
-        if not isinstance(variable, dict) or variable.get("type") != "query":
-            continue
-        if explicitly_non_prometheus(variable.get("datasource")):
-            continue
-        raw_query = variable.get("query")
-        if isinstance(raw_query, dict):
-            expression = raw_query.get("query")
-            ref_id = raw_query.get("refId")
-            qry_type = raw_query.get("qryType")
-        else:
-            expression = raw_query
-            ref_id = variable.get("refId")
-            qry_type = None
-        if not isinstance(expression, str) or not expression:
-            continue
-        require(ref_id is None or isinstance(ref_id, str), "classic variable refId is invalid")
-        name = variable.get("name")
-        require(isinstance(name, str) and name, "classic query variable has no name")
-        ds_ref = datasource_ref(variable.get("datasource"))
-        require(ds_ref is not None, "classic query variable has no datasource reference")
-        require(qry_type is None or (isinstance(qry_type, int) and not isinstance(qry_type, bool)),
-                "classic variable qryType is invalid")
-        add_consumer(
-            consumers,
-            ("VARIABLE", name, ref_id),
-            Consumer(expression, "VARIABLE", ds_ref, qry_type),
-        )
-
-    annotations = root.get("annotations", {})
-    annotation_list = annotations.get("list", []) if isinstance(annotations, dict) else []
-    for annotation in annotation_list:
-        if not isinstance(annotation, dict):
-            continue
-        if explicitly_non_prometheus(annotation.get("datasource")):
-            continue
-        expression = annotation.get("expr")
-        if not isinstance(expression, str) or not expression:
-            continue
-        name = annotation.get("name")
-        require(isinstance(name, str) and name, "classic Prometheus annotation has no name")
-        ref_id = annotation.get("refId")
-        require(ref_id is None or isinstance(ref_id, str), "classic annotation refId is invalid")
-        ds_ref = datasource_ref(annotation.get("datasource"))
-        require(ds_ref is not None, "classic annotation has no datasource reference")
-        add_consumer(consumers, ("ANNOTATION", name, ref_id), Consumer(expression, "RANGE", ds_ref))
-    return consumers
-
-
 def approved_consumers(pack: dict[str, Any]) -> tuple[dict[Locator, Consumer], dict[Locator, str]]:
     require(pack.get("artifact_type") == "query-pack" and pack.get("status") == "PASS",
             "query pack must be a PASS query-pack artifact")
@@ -324,10 +223,11 @@ def main() -> int:
         require(review.get("findings") == [], "PASS query review must have zero findings")
 
         expected, query_ids = approved_consumers(pack)
-        if isinstance(rendered.get("spec"), dict) and isinstance(rendered["spec"].get("elements"), dict):
-            actual = v2_consumers(rendered)
-        else:
-            actual = classic_consumers(rendered)
+        require(rendered.get("apiVersion") == "dashboard.grafana.app/v2",
+                "workflow supports Dashboard Schema V2 resources only")
+        require(rendered.get("kind") == "Dashboard",
+                "workflow supports Dashboard resources only")
+        actual = v2_consumers(rendered)
 
         missing = set(expected) - set(actual)
         extra = set(actual) - set(expected)

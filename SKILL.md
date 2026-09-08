@@ -1,11 +1,20 @@
 ---
 name: grafana-dashboard
-description: Create, update, validate, and optionally publish Grafonnet dashboards for Kubernetes applications and APIs from Prometheus or OpenMetrics metrics. Use application metrics first, add Kubernetes context where useful, and default new dashboards to Dashboard Schema V2.
+description: Create, update, validate, and optionally publish Dashboard Schema V2 Grafonnet dashboards for Kubernetes applications and APIs on Grafana v13+. This skill does not support classic dashboards or Grafana versions below 13.
 ---
 
-# Grafana dashboards for Kubernetes applications
+# Grafana Dashboard V2 for Kubernetes applications
 
-Create or update Grafonnet dashboards. Keep application behavior prominent. Add Kubernetes signals only when they explain workload health, capacity, or resource use.
+Create or update only Dashboard Schema V2 Grafonnet dashboard resources for Grafana v13 or later. Keep application behavior prominent. Add Kubernetes signals only when they explain workload health, capacity, or resource use.
+
+## Compatibility gate
+
+This skill is V2-only and requires Grafana v13+.
+
+- Require a verified Grafana version in `v<major>[.<minor>[.<patch>]]` form, with major version 13 or higher, before dispatching any specialist.
+- Require a successful opaque `GET /version` check whose `gitTreeState` reports Grafana v13 or later. Ignore its Kubernetes API-style `major`, `minor`, and `gitVersion` fields.
+- Create, update, validate, and publish only Dashboard Schema V2 resources (`apiVersion: dashboard.grafana.app/v2`, `kind: Dashboard`).
+- Do not create, update, convert, validate, or publish classic dashboard JSON. If an existing source renders to a non-V2 dashboard, stop; classic-to-V2 migration is outside this workflow.
 
 ## Environment
 
@@ -49,7 +58,7 @@ Act on a decided diagnostic step instead of narrating it repeatedly.
 - One diagnostic step is: hypothesis -> one changed candidate -> one action -> one result -> one recorded fact.
 - Do not rerun an identical request against an identical target operation unless deterministic reproduction is explicitly needed.
 - Preserve proven PASS/FAIL facts; do not reopen an unchanged hypothesis without new interaction evidence.
-- For Dashboard V2 target-validation failures requiring more than one probe, MUST read `knowledge/grafana/diagnostic-execution.md`. Use its diagnostic ledger and six-probe isolation budget.
+- For target-validation failures requiring more than one probe, MUST read `knowledge/grafana/diagnostic-execution.md`. Use its diagnostic ledger and six-probe isolation budget.
 - Prefer direct repository commands and `jq` structural slicing over repeatedly generating throwaway helper scripts.
 
 ## Runtime compatibility
@@ -89,8 +98,7 @@ Do not duplicate agent definitions for individual runtimes.
 - Publish/write a dashboard only when the user explicitly requests it and writable Grafana dashboard API access is available.
 - Dashboard Schema V2 server-side dry-run validation is not publication and SHOULD use configured validation-capable Grafana Dashboard resource API access even when publication is not requested.
 - Read-only datasource access may be used for discovery and query validation.
-- Default new dashboards to Dashboard Schema V2.
-- Preserve the schema of an existing dashboard unless migration is requested.
+- Every candidate and existing-source baseline must render as a Dashboard Schema V2 resource.
 - Preserve existing dashboard identity, unrelated panels, repository helpers, and dependency pins.
 - Use the repository dashboard location, or
   `dashboards/<project-name>/dashboard.jsonnet` when none exists.
@@ -109,24 +117,16 @@ contents; search them for metric names, labels, query text, panel content, or
 semantics; run datasource probes; or construct any dashboard artifact other
 than the run contract.
 
-For a Dashboard V2 run, one exception is permitted solely to establish the
-Dashboard API capability: make the one supplied OpenAPI discovery request.
-The task may provide either a shell-free opaque OpenAPI command that already
-knows the target, or an authenticated local HTTP transport plus an already
-configured non-echoed target environment reference. In the latter case, the
-coordinator may construct the Dashboard V2 OpenAPI URL from that existing
-reference and invoke the supplied transport; it must never put a literal
-endpoint, credential, or target identifier in a visible command, create the
-target configuration itself, or scan for connection configuration. The request
-reaches `<GRAFANA_URL>/openapi/v3/apis/dashboard.grafana.app/v2`. Its exit
-status `0` must mean it received HTTP 200 and wrote the OpenAPI document to
-stdout. This is not a dashboard read, datasource probe, or dry-run. Capture
-stdout and stderr in neutral scratch files; record only the sanitized
-capability result in the run contract. A `SUPPORTED` result requires that
-successful command result, an OpenAPI document, and the advertised Dashboard
-V2 collection operations. Do not invoke the same discovery request again
-during the run. Record `UNAUTHORIZED`, `NOT_ADVERTISED`, or `UNREACHABLE` as a
-terminal result unless the configured access or target changes.
+The coordinator's sole target-version request is one supplied shell-free,
+opaque command argv that performs `GET /version`. Execute its program and
+arguments exactly as supplied; local access wrappers such as `kcurl` or `curl`
+are permitted. It must already know the target and authentication, exit zero
+only for HTTP 200, and write the JSON response only to stdout. Capture stdout
+and stderr in neutral scratch files. Parse only `gitTreeState`, which must be
+exactly `grafana v<major>[.<minor>[.<patch>]]`; the Kubernetes API-server
+`major`, `minor`, and `gitVersion` fields are not Grafana version evidence.
+Do not fetch, inspect, or cache a target OpenAPI document. Do not invoke the
+same `/version` request again during the run.
 
 Once the run contract passes validation, dispatch `application-metrics` first.
 It must produce a validated, non-empty application namespace-scope evidence
@@ -146,7 +146,7 @@ Before delegation, locate or record proposed facts and evidence paths without pe
 - filesystem-safe project name, neutral run ID, and the absolute
   `dashboards/<project-name>/workspace` path
 - candidate container and sidecar evidence
-- Grafana version and dashboard schema
+- verified Grafana version (`v13+`) and Dashboard Schema V2 compatibility
 - Grafonnet revision
 - absolute repository root, final `.jsonnet` path, adjacent candidate path, and source baseline digest
 - shell-free render argv/cwd that emits JSON on stdout and uses one standalone `{source}` argument
@@ -156,7 +156,7 @@ Before delegation, locate or record proposed facts and evidence paths without pe
 - proposed fixed-selector references
 - configured datasource access method
 - opaque Grafana Dashboard resource API validation access/wrapper when available
-- for Dashboard V2, either the shell-free opaque local command that emits the V2 OpenAPI document or the supplied authenticated transport with its preconfigured non-echoed target reference, plus its one-time cached discovery status
+- the shell-free opaque local `/version` command that emits the version JSON
 - existing dashboard resource identity when applicable
 - whether publication is requested
 - when publication is requested: writable authentication method and folder placement when applicable
@@ -171,12 +171,11 @@ Do not place literal connection details or target identifiers into the shared co
 
 Do not require publication intent before using an already configured Dashboard API credential/wrapper for a non-persisting dry-run validation request.
 
-`dashboard_v2_openapi: SUPPORTED` establishes that the target advertises the
-Dashboard V2 API and supplies the target contract. It does **not** establish
-that the credential may create or update a dashboard, even with `dryRun=All`;
-the later reviewer dry-run is the permission/admission check. A Prometheus
-datasource is a separate capability from Dashboard V2 and must not be inferred
-from this OpenAPI result.
+The parsed `gitTreeState` establishes only Grafana v13+ eligibility. It does
+not establish that the credential may create or update a dashboard, even with
+`dryRun=All`; the later reviewer dry-run is the permission/admission check. A
+Prometheus datasource is a separate capability and must not be inferred from
+the `/version` result.
 
 The Grafana Dashboard resource API namespace is always `default`. Do not ask for, infer, discover, or configure another Dashboard API namespace. This API namespace is unrelated to the dashboard variable named `namespace`.
 
@@ -319,7 +318,7 @@ Dispatch a fresh `dashboard-builder` with the approved metrics contract, dashboa
 
 The builder writes and renders only the staged candidate. It MUST NOT edit the final dashboard path or publish. It copies approved query text byte-for-byte and may not create a new datasource query. If exact integration is impossible, it returns a failure artifact for the owning earlier stage.
 
-For Dashboard Schema V2, the builder MUST read `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md`, use pinned generated builders whenever they exist, and use only documented exact-pin workarounds. It runs format, exact candidate-render binding, JSON, lint/schema, layout-reference, variable-contract, and query-parity checks before returning `PASS`.
+The builder MUST read `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md`, use pinned generated builders whenever they exist, and use only documented exact-pin workarounds. It runs format, exact candidate-render binding, JSON, lint/schema, layout-reference, variable-contract, and query-parity checks before returning `PASS`.
 
 ### 7. Independent dashboard review
 
@@ -327,7 +326,7 @@ Dispatch a fresh `dashboard-reviewer` with the candidate source, rendered JSON, 
 
 The reviewer checks Grafonnet/source composition, rendered schema, variables, visualization plugins, panels, layout, annotations, and exact integration of every approved query. It does not repeat semantic PromQL ownership and never writes a replacement query or source patch.
 
-For Dashboard Schema V2, it MUST perform the target-advertised Dashboard resource API dry-run when validation-capable access is configured. A target failure follows `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md`, including the six-probe limit. Dry-run validation is not publication.
+It MUST perform the stable V2 Dashboard resource API dry-run when validation-capable access is configured. A target failure follows `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md`, including the six-probe limit. Dry-run validation is not publication.
 
 Route dashboard-source findings to `dashboard-builder`. A finding requiring query changes invalidates query review and returns to `promql-builder`. A worker never approves its own output.
 
@@ -345,13 +344,15 @@ Read:
 
 - `knowledge/grafana/publishing-v2.md`
 
-For Dashboard Schema V2, use the Grafana Dashboard resource API. Do not use the legacy dashboard endpoint and do not convert the dashboard to classic JSON merely to publish it.
+Use the Grafana Dashboard resource API. Do not use the legacy dashboard endpoint and do not convert the dashboard to classic JSON merely to publish it.
 
-The API contract source of truth is the target Grafana Swagger obtained through the configured opaque target access. The target Grafana Swagger wins. If the target advertises another supported structured dashboard version instead of stable V2, use that target-advertised API and schema. Never guess an API version.
+Use the repository's pinned/local stable Dashboard V2 contract with the
+configured API wrapper. Do not fetch or inspect target OpenAPI/Swagger during
+this workflow, and never substitute another structured API version.
 
 Always use the Dashboard resource namespace `default`.
 
-For stable V2 the resource operations are normally collection create, resource GET, and resource PUT under the Dashboard resource API. Confirm methods and request bodies from target Swagger before writing.
+For stable V2 the resource operations are collection create, resource GET, and resource PUT under the Dashboard resource API. Use the pinned/local request shapes; do not retrieve target Swagger before writing.
 
 - New dashboard: use the collection create operation.
 - Existing dashboard: GET it first, preserve identity/folder placement unless intentionally changed, then use the documented replace/update operation.
@@ -438,7 +439,7 @@ The Kubernetes analyst, metrics reviewer, PromQL builder, and PromQL reviewer re
 - For V2, use layout kinds supported by the pinned schema, such as `AutoGridLayout`, `GridLayout`, `RowsLayout`, and `TabsLayout`.
 - Prefer `AutoGridLayout` for similarly sized panels and `GridLayout` only for deliberate size/position differences.
 - Use tabs or rows only when each section contains enough useful content.
-- **For Dashboard V2, MUST use generated Grafonnet builders whenever the pinned library provides them; manual equivalents are not acceptable source.**
+- **MUST use generated Grafonnet builders whenever the pinned library provides them; manual equivalents are not acceptable source.**
 - Inspect pinned generated Grafonnet methods when uncertain; do not guess method or schema shapes.
 - Preserve dependency pins.
 - Keep code-managed dashboards non-editable unless repository policy explicitly requires UI editing.
@@ -458,14 +459,12 @@ dashboard-linter lint --strict --config <lint-config> <dashboard-builder-run-dir
 
 Use the repository's actual paths and commands when they differ. `jq empty` checks JSON syntax only, not Grafana schema correctness.
 
-For Dashboard Schema V2 with configured target Grafana Dashboard API validation access, server-side dry-run validation is mandatory before review can pass. Use the target-advertised OpenAPI contract, namespace `default`, and `knowledge/grafana/grafana-v2-dry-run.md`. A successful HTTP status alone is insufficient: inspect warnings and the returned resource structure.
-
-For V2, use the coordinator's cached
-`/openapi/v3/apis/dashboard.grafana.app/v2` result as the first target-contract
-check. A missing, unauthorized, or unreachable OpenAPI result is not retried
-by other stages; it is an explicit validation gap. The reviewer uses the
-advertised operation to perform the one required dry-run when validation access
-is available.
+With configured target Grafana Dashboard API validation access, server-side
+dry-run validation is mandatory before review can pass. Use the pinned/local
+stable V2 contract, namespace `default`, and
+`knowledge/grafana/grafana-v2-dry-run.md`. A successful HTTP status alone is
+insufficient: inspect warnings and the returned resource structure. Do not
+fetch target OpenAPI/Swagger; `/version` is the only target-version request.
 
 Do not replace the configured local command with direct `curl`, a guessed
 `GRAFANA_URL`, or an environment scan. The command is the access boundary for

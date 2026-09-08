@@ -166,7 +166,6 @@ class WorkflowScriptsTest(unittest.TestCase):
             capabilities={
                 "datasource_access": False,
                 "dashboard_api_validation": False,
-                "dashboard_v2_openapi": "NOT_CONFIGURED",
                 "publish_requested": False,
             },
             selector_proposals={},
@@ -416,6 +415,8 @@ class WorkflowScriptsTest(unittest.TestCase):
         self.write("query-review", query_review)
 
         rendered_value = {
+            "apiVersion": "dashboard.grafana.app/v2",
+            "kind": "Dashboard",
             "spec": {
                 "elements": {
                     "P001": {
@@ -820,12 +821,19 @@ class WorkflowScriptsTest(unittest.TestCase):
         result = self.run_tool(VALIDATOR, self.paths["outside-run"], expected=1)
         self.assertIn("inside repository_root", result.stderr)
 
-    def test_run_contract_requires_supported_openapi_for_v2_api_validation(self) -> None:
+    def test_run_contract_rejects_classic_dashboard_schema(self) -> None:
         run = load_artifact(self.paths["run-contract"])
-        run["capabilities"]["dashboard_api_validation"] = True
-        self.write("v2-openapi-gap", run)
-        result = self.run_tool(VALIDATOR, self.paths["v2-openapi-gap"], expected=1)
-        self.assertIn("requires supported Dashboard V2 OpenAPI", result.stderr)
+        run["schema"]["dashboard"] = "CLASSIC"
+        self.write("classic-run", run)
+        result = self.run_tool(VALIDATOR, self.paths["classic-run"], expected=1)
+        self.assertIn("Dashboard Schema V2 only", result.stderr)
+
+    def test_run_contract_rejects_grafana_before_v13(self) -> None:
+        run = load_artifact(self.paths["run-contract"])
+        run["schema"]["grafana_version"] = "12.4.0"
+        self.write("grafana-v12-run", run)
+        result = self.run_tool(VALIDATOR, self.paths["grafana-v12-run"], expected=1)
+        self.assertIn("requires Grafana v13 or later", result.stderr)
 
     def test_coordinator_stage_preserves_namespace_scope_input_chain(self) -> None:
         command = (
@@ -929,61 +937,19 @@ class WorkflowScriptsTest(unittest.TestCase):
         )
         self.assertIn("query consumer mismatch", result.stderr)
 
-    def test_classic_parity_ignores_explicit_loki_consumer(self) -> None:
-        pack = load_artifact(self.paths["query-pack"])
-        pack["queries"][0]["consumer_locator"]["name"] = "panel-1"
-        classic_pack = self.write("classic-pack", pack)
-        review = load_artifact(self.paths["query-review"])
-        review["query_pack_sha256"] = digest(classic_pack)
-        review["inputs"]["query-pack"] = digest(classic_pack)
-        classic_review = self.write("classic-review", review)
-        expressions = [record["expression"] for record in pack["queries"]]
-        editor_ref = "PrometheusVariableQueryEditor-VariableQuery"
-        classic = {
-            "panels": [
-                {
-                    "id": 1,
-                    "datasource": {"type": "prometheus", "uid": "${datasource}"},
-                    "targets": [{"refId": "A", "expr": expressions[0]}],
-                },
-                {
-                    "id": 2,
-                    "datasource": {"type": "loki", "uid": "logs"},
-                    "targets": [{"refId": "A", "expr": "{service=\"example\"}"}],
-                },
-            ],
-            "templating": {
-                "list": [
-                    {"name": "datasource", "type": "datasource", "query": "prometheus"},
-                    {
-                        "name": "namespace",
-                        "type": "query",
-                        "datasource": {"type": "prometheus", "uid": "${datasource}"},
-                        "query": {"query": expressions[1], "refId": editor_ref, "qryType": 1},
-                    },
-                    {
-                        "name": "pod",
-                        "type": "query",
-                        "datasource": {"type": "prometheus", "uid": "${datasource}"},
-                        "query": {"query": expressions[2], "refId": editor_ref, "qryType": 1},
-                    },
-                ]
-            },
-            "annotations": {"list": []},
-        }
+    def test_verifiers_reject_classic_dashboard_json(self) -> None:
+        classic = {"panels": [], "templating": {"list": []}, "annotations": {"list": []}}
         classic_rendered = self.write("classic-rendered", classic)
-        self.run_tool(PARITY, classic_pack, classic_review, classic_rendered)
-        changed = copy.deepcopy(classic)
-        changed["panels"][1]["targets"][0]["expr"] = "{service=\"changed\"}"
-        changed_rendered = self.write("changed-classic-rendered", changed)
         result = self.run_tool(
-            NON_PROMETHEUS,
-            changed_rendered,
-            "--baseline",
+            PARITY,
+            self.paths["query-pack"],
+            self.paths["query-review"],
             classic_rendered,
             expected=1,
         )
-        self.assertIn("non-Prometheus consumers changed", result.stderr)
+        self.assertIn("Dashboard Schema V2 resources only", result.stderr)
+        result = self.run_tool(NON_PROMETHEUS, classic_rendered, expected=1)
+        self.assertIn("Dashboard Schema V2 resources only", result.stderr)
 
     def test_chain_rejects_destination_created_after_absent_baseline(self) -> None:
         (self.root / "dashboard.jsonnet").write_text("{ concurrent: true }\n", encoding="utf-8")
@@ -1229,6 +1195,12 @@ class WorkflowScriptsTest(unittest.TestCase):
         render_tool = helper_root / "render-tool"
         render_tool.write_text("#!/bin/sh\ncat \"$1\"\n", encoding="utf-8")
         render_tool.chmod(0o755)
+        version_tool = helper_root / "grafana-version-tool"
+        version_tool.write_text(
+            "#!/bin/sh\ntest \"$1\" = /version || exit 1\nprintf '%s\\n' '{\"gitTreeState\":\"grafana v13.2.1\"}'\n",
+            encoding="utf-8",
+        )
+        version_tool.chmod(0o755)
         lock = {
             "version": 1,
             "dependencies": [{
@@ -1257,6 +1229,10 @@ class WorkflowScriptsTest(unittest.TestCase):
                 "demo-project",
                 "--run-id",
                 "run-1",
+                "--grafana-version-program",
+                str(version_tool),
+                "--grafana-version-arg",
+                "/version",
                 "--final-source",
                 "dashboards/demo-project/dashboard.jsonnet",
                 "--render-program",
@@ -1283,6 +1259,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         )
         run_contract = coordinator / "outbox/run-contract.yaml"
         run = load_artifact(run_contract)
+        self.assertEqual("v13.2.1", run["schema"]["grafana_version"])
         self.assertEqual("helper-revision", run["schema"]["grafonnet_revision"])
         state = load_artifact(coordinator / "state.yaml")
         self.assertEqual("IN_PROGRESS", state["status"])

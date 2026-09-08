@@ -48,29 +48,24 @@ def regular_digest(path: Path, label: str) -> str:
 
 
 def rendered_consumers(root: dict[str, Any]) -> dict[query_parity.Locator, query_parity.Consumer]:
-    if isinstance(root.get("spec"), dict) and isinstance(root["spec"].get("elements"), dict):
-        return query_parity.v2_consumers(root)
-    return query_parity.classic_consumers(root)
+    require(root.get("apiVersion") == "dashboard.grafana.app/v2",
+            "workflow supports Dashboard Schema V2 resources only")
+    require(root.get("kind") == "Dashboard", "workflow supports Dashboard resources only")
+    return query_parity.v2_consumers(root)
 
 
 def rendered_panels(root: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    if isinstance(root.get("spec"), dict) and isinstance(root["spec"].get("elements"), dict):
-        return {
-            str(name): panel
-            for name, panel in root["spec"]["elements"].items()
-            if isinstance(panel, dict) and panel.get("kind") == "Panel"
-        }
-    if isinstance(root.get("dashboard"), dict):
-        root = root["dashboard"]
-    result: dict[str, dict[str, Any]] = {}
-    for panel in query_parity.walk_classic_panels(root.get("panels")):
-        panel_id = panel.get("id")
-        require(isinstance(panel_id, int) and not isinstance(panel_id, bool),
-                "every classic panel must have a numeric id")
-        key = f"panel-{panel_id}"
-        require(key not in result, f"duplicate classic panel id {panel_id}")
-        result[key] = panel
-    return result
+    require(root.get("apiVersion") == "dashboard.grafana.app/v2",
+            "workflow supports Dashboard Schema V2 resources only")
+    require(root.get("kind") == "Dashboard", "workflow supports Dashboard resources only")
+    spec = root.get("spec")
+    require(isinstance(spec, dict) and isinstance(spec.get("elements"), dict),
+            "Dashboard V2 resource has no elements object")
+    return {
+        str(name): panel
+        for name, panel in spec["elements"].items()
+        if isinstance(panel, dict) and panel.get("kind") == "Panel"
+    }
 
 
 def verify_change_classification(

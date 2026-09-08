@@ -8,7 +8,7 @@ The purpose is to diagnose the exact failing schema branch without inventing exp
 
 - MUST preserve the complete dry-run response body before reasoning about the failure.
 - MUST identify the exact request body that produced the error.
-- MUST inspect the target-advertised Dashboard API version and schema.
+- MUST use the pinned/local `dashboard.grafana.app/v2` contract; do not fetch target OpenAPI/Swagger.
 - MUST distinguish CUE disjunction branch errors from the actual selected-branch error.
 - MUST NOT infer that Grafana saw multiple layouts merely because an error lists several layout kinds.
 - MUST NOT infer that a layout kind is unsupported merely because the other disjunction branches report `conflicting values`.
@@ -228,12 +228,14 @@ Prefer binary isolation for a large `spec`: remove half of optional properties o
 
 ## Compare with target-produced evidence
 
-When local knowledge and target behavior disagree, use target-local evidence in this order:
+When local knowledge and target behavior disagree, use evidence in this order:
 
-1. target Swagger for the exact structured Dashboard API version
-2. a Dashboard V2 resource returned by that target Grafana
-3. locally pinned Grafana/Grafonnet generated schema/code for the target version
-4. repository knowledge
+1. a Dashboard V2 resource returned by that target Grafana
+2. locally pinned Grafana/Grafonnet generated schema/code for the target version
+3. repository knowledge
+
+Do not fetch target OpenAPI/Swagger; the only target-version request is the
+coordinator's one opaque `/version` command.
 
 Do not use a newer public schema to override a pinned target.
 

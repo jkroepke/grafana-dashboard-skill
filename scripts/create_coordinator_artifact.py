@@ -31,6 +31,8 @@ HARD_LIMITS = {
 }
 SAFE_COMPONENT_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 PROMETHEUS_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+GRAFANA_VERSION_RE = re.compile(r"^v?(?P<major>[0-9]+)(?:\.[0-9]+){0,2}$")
+GRAFANA_TREE_STATE_RE = re.compile(r"^grafana v(?P<version>[0-9]+(?:\.[0-9]+){0,2})$")
 
 
 class CreationError(ValueError):
@@ -123,6 +125,54 @@ def render_executable(root: Path, program: str) -> str:
         return str(candidate.resolve()) if Path(program).is_absolute() else program
     require(shutil.which(program) is not None, f"render program is unavailable: {program}")
     return program
+
+
+def validate_grafana_version(value: str) -> str:
+    """Require a supported Grafana v13+ version string."""
+    match = GRAFANA_VERSION_RE.fullmatch(value)
+    require(match is not None, "Grafana version must use v<major>[.<minor>[.<patch>]] form")
+    require(int(match.group("major")) >= 13, "workflow requires Grafana v13 or later")
+    return value
+
+
+def grafana_version_from_response(response: bytes) -> str:
+    """Extract the Grafana version from a Kubernetes-backed /version response."""
+    try:
+        payload = json.loads(response)
+    except json.JSONDecodeError as error:
+        raise CreationError("Grafana /version response is not valid JSON") from error
+    require(isinstance(payload, dict), "Grafana /version response must be an object")
+    tree_state = payload.get("gitTreeState")
+    require(isinstance(tree_state, str), "Grafana /version response has no gitTreeState")
+    match = GRAFANA_TREE_STATE_RE.fullmatch(tree_state)
+    require(match is not None,
+            "Grafana /version gitTreeState must use grafana v<major>[.<minor>[.<patch>]] form")
+    return validate_grafana_version("v" + match.group("version"))
+
+
+def read_grafana_version(
+    root: Path, program: str, command_args: list[str], evidence_directory: Path
+) -> str:
+    """Run the opaque /version wrapper once and retain its raw response privately."""
+    executable = render_executable(root, program)
+    stdout_path = evidence_directory / "grafana-version.json"
+    stderr_path = evidence_directory / "grafana-version.stderr"
+    try:
+        with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
+            result = subprocess.run(
+                [executable, *command_args],
+                cwd=root,
+                stdout=stdout,
+                stderr=stderr,
+                check=False,
+            )
+    except OSError as error:
+        raise CreationError("Grafana /version command could not run") from error
+    require(result.returncode == 0, "Grafana /version command failed")
+    try:
+        return grafana_version_from_response(stdout_path.read_bytes())
+    except OSError as error:
+        raise CreationError("Grafana /version response could not be read") from error
 
 
 def yaml_bytes(value: dict[str, Any]) -> bytes:
@@ -224,8 +274,17 @@ def create_run_contract(args: argparse.Namespace) -> str:
     require(root.is_dir() and not root.is_symlink(), "repository root must be a regular directory")
     require(SAFE_COMPONENT_RE.fullmatch(args.project_name) is not None, "project name is not filesystem-safe")
     require(SAFE_COMPONENT_RE.fullmatch(args.run_id) is not None, "run ID is not filesystem-safe")
+    require(len(args.grafana_version_arg) <= 31, "Grafana /version command has too many arguments")
+    require(all(len(argument) <= 1024 for argument in args.grafana_version_arg),
+            "Grafana /version command argument is too long")
 
     coordinator = initialize_coordinator(root, args.project_name, args.run_id)
+    grafana_version = read_grafana_version(
+        root,
+        args.grafana_version_program,
+        args.grafana_version_arg,
+        coordinator / "evidence",
+    )
     workspace = root / "dashboards" / args.project_name / "workspace"
     final_source = repository_path(root, args.final_source, "final source")
     candidate = final_source.with_name(f"{final_source.stem}.candidate.jsonnet")
@@ -242,9 +301,6 @@ def create_run_contract(args: argparse.Namespace) -> str:
     render_argv = [program, *render_args]
     require(render_argv.count("{source}") == 1, "render arguments require one standalone {source}")
     grafonnet_revision = infer_grafonnet_revision(root, args.grafonnet_revision)
-    dashboard_v2_openapi = args.dashboard_v2_openapi
-    if dashboard_v2_openapi is None:
-        dashboard_v2_openapi = "NOT_CONFIGURED" if args.schema == "V2" else "NOT_APPLICABLE"
     for name, label in {
         "application namespace label": args.application_namespace_label,
         "application pod label": args.application_pod_label,
@@ -275,15 +331,14 @@ def create_run_contract(args: argparse.Namespace) -> str:
         ),
         "render": {"cwd": str(root), "argv": render_argv, "timeout_seconds": args.timeout_seconds},
         "schema": {
-            "dashboard": args.schema,
-            "grafana_version": args.grafana_version,
+            "dashboard": "V2",
+            "grafana_version": grafana_version,
             "grafonnet_revision": grafonnet_revision,
         },
         "limits": HARD_LIMITS,
         "capabilities": {
             "datasource_access": args.datasource_access,
             "dashboard_api_validation": args.dashboard_api_validation,
-            "dashboard_v2_openapi": dashboard_v2_openapi,
             "publish_requested": args.publish_requested,
         },
         "selector_proposals": {
@@ -383,18 +438,14 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--project-name", required=True)
     run.add_argument("--run-id", required=True)
     run.add_argument("--final-source", required=True)
-    run.add_argument("--schema", choices=["V2", "CLASSIC"], default="V2")
-    run.add_argument("--grafana-version")
+    run.add_argument("--grafana-version-program", required=True)
+    run.add_argument("--grafana-version-arg", action="append", default=[])
     run.add_argument("--grafonnet-revision")
     run.add_argument("--render-program", default="jsonnet")
     run.add_argument("--render-arg", action="append")
     run.add_argument("--timeout-seconds", type=int, default=120)
     run.add_argument("--datasource-access", action="store_true")
     run.add_argument("--dashboard-api-validation", action="store_true")
-    run.add_argument("--dashboard-v2-openapi", choices=[
-        "SUPPORTED", "NOT_CONFIGURED", "UNAUTHORIZED", "NOT_ADVERTISED",
-        "UNREACHABLE", "NOT_APPLICABLE",
-    ])
     run.add_argument("--publish-requested", action="store_true")
     run.add_argument("--application-namespace-label", default="kubernetes_namespace")
     run.add_argument("--application-pod-label", default="kubernetes_pod_name")

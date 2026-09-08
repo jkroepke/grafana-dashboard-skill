@@ -28,14 +28,14 @@ def read_dashboard(path: Path) -> dict[str, Any]:
     return value
 
 
-def named_variables(variables: Any, v2: bool) -> tuple[list[str], dict[str, dict[str, Any]]]:
+def named_variables(variables: Any) -> tuple[list[str], dict[str, dict[str, Any]]]:
     require(isinstance(variables, list), "dashboard variables must be an array")
     names: list[str] = []
     records: dict[str, dict[str, Any]] = {}
     for variable in variables:
         if not isinstance(variable, dict):
             continue
-        spec = variable.get("spec") if v2 else variable
+        spec = variable.get("spec")
         if not isinstance(spec, dict):
             continue
         name = spec.get("name")
@@ -56,9 +56,12 @@ def bool_field(spec: dict[str, Any], name: str, expected: bool, label: str) -> N
 
 
 def verify_v2(root: dict[str, Any]) -> None:
+    require(root.get("apiVersion") == "dashboard.grafana.app/v2",
+            "dashboard apiVersion must be dashboard.grafana.app/v2")
+    require(root.get("kind") == "Dashboard", "dashboard kind must be Dashboard")
     spec = root.get("spec")
     require(isinstance(spec, dict), "Dashboard V2 resource has no spec")
-    _, records = named_variables(spec.get("variables"), True)
+    _, records = named_variables(spec.get("variables"))
 
     datasource = records["datasource"]
     datasource_spec = datasource.get("spec")
@@ -94,35 +97,8 @@ def verify_v2(root: dict[str, Any]) -> None:
             "pod query must depend on namespace")
 
 
-def verify_classic(root: dict[str, Any]) -> None:
-    if isinstance(root.get("dashboard"), dict):
-        root = root["dashboard"]
-    templating = root.get("templating")
-    require(isinstance(templating, dict), "classic dashboard has no templating object")
-    _, records = named_variables(templating.get("list"), False)
-
-    datasource = records["datasource"]
-    require(datasource.get("type") == "datasource", "datasource must be a datasource variable")
-    require(datasource.get("query") == "prometheus", "datasource variable must select Prometheus")
-    bool_field(datasource, "multi", False, "datasource")
-    bool_field(datasource, "includeAll", False, "datasource")
-    for name, multi, include_all in (("namespace", False, False), ("pod", True, True)):
-        variable = records[name]
-        require(variable.get("type") == "query", f"{name} must be a query variable")
-        bool_field(variable, "multi", multi, name)
-        bool_field(variable, "includeAll", include_all, name)
-    require(records["pod"].get("allValue") == "", "pod.allValue must be empty")
-    raw_query = records["pod"].get("query")
-    pod_query = raw_query.get("query") if isinstance(raw_query, dict) else raw_query
-    require(isinstance(pod_query, str) and ("$namespace" in pod_query or "${namespace" in pod_query),
-            "pod query must depend on namespace")
-
-
 def verify(root: dict[str, Any]) -> None:
-    if isinstance(root.get("spec"), dict) and isinstance(root["spec"].get("elements"), dict):
-        verify_v2(root)
-    else:
-        verify_classic(root)
+    verify_v2(root)
 
 
 def main() -> int:
