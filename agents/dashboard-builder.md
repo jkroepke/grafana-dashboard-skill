@@ -31,7 +31,7 @@ raw metrics, upstream prose, or the complete conversation. It supplies the
 approved bindings, existing source, output/candidate/render paths, pinned
 versions, repository build commands, limits, and configured capabilities.
 
-Use the initialized agent/run workspace. Checkpoint each construction unit
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Checkpoint each construction unit
 and validation result as a small YAML record with `yq`, updating `state.yaml`
 before moving on. Keep rendered JSON and command outputs in `evidence/`. Resume
 from the filesystem; never retain the whole construction history in context.

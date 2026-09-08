@@ -30,7 +30,7 @@ existing source/render evidence, output path, limits, and configured datasource
 access. Use only the selector contract in `metrics-contract`; run-contract
 proposals are not authoritative.
 
-Use the initialized agent/run workspace. Author and validate exactly one
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Author and validate exactly one
 query at a time, immediately checkpointing the complete query record as a small
 YAML file with `yq` and updating `state.yaml`. Resume from those files; never
 hold the complete query pack in context or emit it in one large write.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -852,6 +853,35 @@ class WorkflowScriptsTest(unittest.TestCase):
         )
         self.run_tool("-c", command)
 
+    def test_coordinator_stage_requires_workspace_cwd(self) -> None:
+        workspace = self.root / "dashboards" / "test-project" / "workspace"
+        run_contract = workspace / "coordinator" / "test-run" / "outbox" / "run-contract.yaml"
+        run_contract.parent.mkdir(parents=True)
+        run_contract.write_bytes(self.paths["run-contract"].read_bytes())
+        command = (
+            "import pathlib,sys; "
+            f"sys.path.insert(0, {str(REPOSITORY / 'scripts')!r}); "
+            "import coordinator_stage as stage; "
+            f"stage.load_run(pathlib.Path({str(run_contract)!r}))"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", command],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        result = subprocess.run(
+            [sys.executable, "-c", command],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("run coordinator commands from workspace", result.stderr)
+
     def test_run_contract_requires_project_workspace_layout(self) -> None:
         run = load_artifact(self.paths["run-contract"])
         run["workspace"] = str(self.root / "work")
@@ -1192,15 +1222,37 @@ class WorkflowScriptsTest(unittest.TestCase):
     def test_coordinator_helpers_create_valid_terminal_artifacts_and_state(self) -> None:
         helper_root = self.root / "helper-repository"
         helper_root.mkdir()
-        render_tool = helper_root / "render-tool"
-        render_tool.write_text("#!/bin/sh\ncat \"$1\"\n", encoding="utf-8")
-        render_tool.chmod(0o755)
+        workspace = helper_root / "dashboards/demo-project/workspace"
+        workspace.mkdir(parents=True)
+        jsonnet_dir = helper_root / "bin"
+        jsonnet_dir.mkdir()
+        jsonnet_tool = jsonnet_dir / "jsonnet"
+        jsonnet_tool.write_text(
+            "#!/bin/sh\ntest \"$1\" = -J && test \"$2\" = vendor || exit 1\ncat \"$3\"\n",
+            encoding="utf-8",
+        )
+        jsonnet_tool.chmod(0o755)
         version_tool = helper_root / "grafana-version-tool"
         version_tool.write_text(
-            "#!/bin/sh\ntest \"$#\" = 0 || exit 1\nprintf x >> \"$0.invocations\"\nprintf '%s\\n' '{\"gitTreeState\":\"grafana v13.2.1\"}'\n",
+            "#!/bin/sh\n"
+            "while [ \"$#\" -gt 0 ]; do\n"
+            "  case \"$1\" in --output) output=$2; shift 2;; *) url=$1; shift;; esac\n"
+            "done\n"
+            "test \"$url\" = https://grafana.example.test/version || exit 1\n"
+            "printf x >> \"$0.invocations\"\n"
+            "printf '%s\\n' '{\"gitTreeState\":\"grafana v13.2.1\"}' > \"$output\"\n"
+            "printf 200\n",
             encoding="utf-8",
         )
         version_tool.chmod(0o755)
+        environment_file = workspace / ".env"
+        environment_file.write_text(
+            "GRAFANA_TARGET=https://grafana.example.test\n"
+            f"GRAFANA_HTTP_CLIENT={version_tool}\n"
+            "GRAFANA_HTTP_CLIENT_ARGS_JSON=[\"--netrc\"]\n",
+            encoding="utf-8",
+        )
+        environment_file.chmod(0o600)
         lock = {
             "version": 1,
             "dependencies": [{
@@ -1218,31 +1270,25 @@ class WorkflowScriptsTest(unittest.TestCase):
             parents=True
         )
 
+        environment = os.environ | {"PATH": f"{jsonnet_dir}:{os.environ['PATH']}"}
         create_run = subprocess.run(
             [
                 sys.executable,
                 str(CREATE_COORDINATOR_ARTIFACT),
                 "run-contract",
-                "--repository-root",
-                str(helper_root),
-                "--project-name",
-                "demo-project",
                 "--run-id",
                 "run-1",
-                "--grafana-version-command",
-                str(version_tool),
-                "--final-source",
-                "dashboards/demo-project/dashboard.jsonnet",
-                "--render-program",
-                str(render_tool),
-                "--render-arg={source}",
             ],
             capture_output=True,
             text=True,
             check=False,
+            cwd=workspace,
+            env=environment,
         )
         self.assertEqual(0, create_run.returncode, create_run.stdout + create_run.stderr)
-        repeated_run = subprocess.run(create_run.args, capture_output=True, text=True, check=False)
+        repeated_run = subprocess.run(
+            create_run.args, capture_output=True, text=True, check=False, cwd=workspace, env=environment,
+        )
         self.assertEqual(1, repeated_run.returncode, repeated_run.stdout + repeated_run.stderr)
         self.assertIn("already invoked", repeated_run.stderr)
         conflicting_run = subprocess.run(
@@ -1250,6 +1296,8 @@ class WorkflowScriptsTest(unittest.TestCase):
             capture_output=True,
             text=True,
             check=False,
+            cwd=workspace,
+            env=environment,
         )
         self.assertEqual(1, conflicting_run.returncode, conflicting_run.stdout + conflicting_run.stderr)
         self.assertIn("already invoked", conflicting_run.stderr)

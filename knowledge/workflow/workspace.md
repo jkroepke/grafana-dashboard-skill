@@ -51,8 +51,8 @@ each stage. It writes one immutable, at-most-8-KiB `inbox/job.yaml`, validates
 all bindings, and updates coordinator state. The ticket contains the
 run/stage/revision, approved input paths and digests, assigned output paths,
 budgets, and opaque capability references—never artifact bodies or raw
-evidence. The dispatch prompt contains only the agent ID, ticket path, and
-digest. The specialist runs `coordinator_stage.py validate-ticket` before work;
+evidence. The dispatch prompt contains only the agent ID, absolute project workspace path,
+ticket path, and digest. The specialist runs `coordinator_stage.py validate-ticket` before work;
 the coordinator runs `coordinator_stage.py accept` on its bounded response.
 
 A job ticket uses this bounded shape; unused maps/lists stay empty rather than
@@ -60,6 +60,7 @@ growing the dispatch prompt:
 
 ```yaml
 schema_version: 1
+workspace: /absolute/path/to/dashboards/project/workspace
 run_id: run-001
 agent: application-metrics
 revision: 1

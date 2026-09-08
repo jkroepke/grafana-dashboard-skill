@@ -28,7 +28,7 @@ upstream prose or the complete conversation. It supplies the approved bindings,
 promoted source and final-render evidence, output path, limits, and configured
 writable access.
 
-Use the initialized agent/run workspace. Checkpoint the preflight, request,
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Checkpoint the preflight, request,
 and readback results as separate bounded YAML records with `yq`; keep raw bodies
 in `evidence/` and update `state.yaml` after each step. Never accumulate the
 publication transcript in context for one final write.

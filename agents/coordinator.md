@@ -131,9 +131,10 @@ tool can invoke only these deterministic operations:
 - `promote`
 - `failure-report`
 
-Call `mkworkspace` with the project name as its only argument. Then call
-`set-workflow-env` with that project as `projectName` and the configuration
-name/value pair as its arguments.
+Call `mkworkspace` with the project name as its only argument. It returns the
+absolute workspace directory. Every following coordinator operation runs from
+that directory; call `set-workflow-env` with only its configuration name/value
+pair.
 
 Do not use another tool or indirect execution path to reproduce these
 operations. If `coordinator_control` is unavailable on Pi, stop with a bounded
@@ -150,7 +151,8 @@ Use the coordinator control operation equivalent to
 `python3 scripts/coordinator_stage.py accept` for each returned response. These
 commands own prerequisite/digest checks, immutable tickets, acceptance records,
 and coordinator pending state; do not recreate those mechanics manually. Give
-the specialist only its agent ID, ticket path, and ticket digest.
+the specialist only its agent ID, absolute project workspace path, ticket path,
+and ticket digest.
 
 Follow this order exactly:
 

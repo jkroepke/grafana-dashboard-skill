@@ -50,7 +50,7 @@ namespace-scoped request and response to neutral local files, then invoke it as
 datasource UID, or inline selector. A reader that cannot apply the supplied
 scope is unavailable for this stage.
 
-Use the initialized agent/run workspace. Treat `records/pending/` as the
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Treat `records/pending/` as the
 metric-family work queue and `records/done/` as its completed queue. Process
 one metric family or population fact at a time: create its bounded
 `records/metrics/*.yaml` checkpoint with `yq`, update `state.yaml`, then

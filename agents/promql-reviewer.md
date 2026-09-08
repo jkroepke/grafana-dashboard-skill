@@ -28,7 +28,7 @@ First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 builder conclusions or the complete conversation. It supplies the approved
 bindings, targeted evidence, output path, limits, and configured datasource access.
 
-Use the initialized agent/run workspace. Review one query record at a time,
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Review one query record at a time,
 checkpoint its result/finding as a bounded YAML file with `yq`, and update
 `state.yaml`. Resume from the queue; never retain every query or finding in
 context for a final write.

@@ -27,7 +27,7 @@ analyst prose or the complete conversation. It supplies the run-contract and
 shortlist bindings, raw evidence, existing dashboard source/render evidence,
 output path, limits, and configured discovery access.
 
-Use the initialized agent/run workspace. Review one shortlist record at a
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Review one shortlist record at a
 time and immediately checkpoint its approved, rejected, not-considered, or
 unresolved disposition in a small YAML file with `yq`. Update `state.yaml` after
 each decision and resume from it; never accumulate all review decisions in

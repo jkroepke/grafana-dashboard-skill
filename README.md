@@ -38,7 +38,8 @@ it ignores the Kubernetes API-style `major` and `minor` fields and `gitVersion`.
 
 ## Grafana capabilities
 
-The coordinator first runs `scripts/mkworkspace <project-name>`, then configures
+The coordinator first runs `scripts/mkworkspace <project-name>` and uses its
+returned absolute workspace directory as the current working directory. It then configures
 `dashboards/<project-name>/workspace/.env` through
 `scripts/set_workflow_env <name> <value>`. It may set `GRAFANA_TARGET`,
 `GRAFANA_HTTP_CLIENT`, `GRAFANA_HTTP_CLIENT_ARGS_JSON`, and

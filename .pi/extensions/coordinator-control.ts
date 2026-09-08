@@ -119,6 +119,8 @@ async function runOperation(
 }
 
 export default function coordinatorControlExtension(pi: ExtensionAPI): void {
+  let workspaceCwd: string | undefined;
+
   pi.registerTool({
     name: "coordinator_control",
     label: "Coordinator Control",
@@ -145,34 +147,37 @@ export default function coordinatorControlExtension(pi: ExtensionAPI): void {
             "Arguments for the selected fixed workflow operation. No shell parsing is performed.",
         },
       ),
-      projectName: Type.Optional(
-        Type.String({
-          pattern: "^[A-Za-z0-9._-]+$",
-          minLength: 1,
-          maxLength: 128,
-          description: "Required only for set-workflow-env; selects the project workspace.",
-        }),
-      ),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      let operationCwd = ctx.cwd;
-      if (params.action === "set-workflow-env") {
-        if (!params.projectName || !SAFE_COMPONENT.test(params.projectName)) {
-          return {
-            content: [{ type: "text", text: "FAIL set-workflow-env: projectName is required" }],
-            details: { action: params.action, exitCode: 2, overflow: false },
-            isError: true,
-          };
-        }
-        operationCwd = resolve(ctx.cwd, "dashboards", params.projectName, "workspace");
+      if (params.action !== "mkworkspace" && workspaceCwd === undefined) {
+        return {
+          content: [{ type: "text", text: `FAIL ${params.action}: run mkworkspace first` }],
+          details: { action: params.action, exitCode: 2, overflow: false },
+          isError: true,
+        };
       }
       const result = await runOperation(
         params.action,
         params.arguments,
         ctx.cwd,
-        operationCwd,
+        params.action === "mkworkspace" ? ctx.cwd : workspaceCwd!,
         signal,
       );
+
+      if (params.action === "mkworkspace" && result.code === 0 && !result.overflow) {
+        const projectName = params.arguments.length === 1 ? params.arguments[0] : undefined;
+        const expected = projectName && SAFE_COMPONENT.test(projectName)
+          ? resolve(ctx.cwd, "dashboards", projectName, "workspace")
+          : undefined;
+        if (expected === undefined || result.stdout !== expected) {
+          return {
+            content: [{ type: "text", text: "FAIL mkworkspace: invalid workspace path" }],
+            details: { action: params.action, exitCode: 1, overflow: false },
+            isError: true,
+          };
+        }
+        workspaceCwd = expected;
+      }
 
       if (result.overflow) {
         return {

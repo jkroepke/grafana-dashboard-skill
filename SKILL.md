@@ -131,7 +131,7 @@ Before delegation, locate or record proposed facts and evidence paths without pe
 - verified Grafana version (`v13+`) and Dashboard Schema V2 compatibility
 - Grafonnet revision
 - absolute repository root, final `.jsonnet` path, adjacent candidate path, and source baseline digest
-- shell-free render argv/cwd that emits JSON on stdout and uses one standalone `{source}` argument
+- fixed `jsonnet -J vendor {source}` rendering from the repository root
 - proposed cluster scope
 - scrape intervals when available
 - available metric-source paths/access capabilities
@@ -146,13 +146,14 @@ Before delegation, locate or record proposed facts and evidence paths without pe
 Create the coordinator run contract with
 `scripts/create_coordinator_artifact.py run-contract`; do not reconstruct its
 YAML with an ad hoc `yq` expression. The helper records the source baseline,
-requires an executable render command, resolves locally locked Grafonnet
+requires the `jsonnet` executable, resolves locally locked Grafonnet
 revision evidence, validates the artifact, and advances coordinator state.
 
 Provide configured access capability references in the shared contract.
 
 Before `scripts/set_workflow_env`, create the project workspace with
-`scripts/mkworkspace`. Configure access only after that step.
+`scripts/mkworkspace`. It prints the absolute workspace directory; use that
+directory as the current working directory for every following workflow command.
 
 When the repository wrappers are configured, use
 `scripts/prometheus_reader.py <request-file> <response-file>` for read-only
@@ -231,8 +232,8 @@ Read `knowledge/workflow/workspace.md` and `knowledge/workflow/artifacts.md`
 before dispatch. Use `scripts/coordinator_stage.py dispatch` to initialize the
 role workspace, validate every accepted prerequisite, create its immutable
 `inbox/job.yaml`, and update coordinator state. Do not hand-build tickets or
-digests. Give the fresh specialist only its agent ID, ticket path, and ticket
-digest. The specialist runs `coordinator_stage.py validate-ticket` before
+digests. Give the fresh specialist only its agent ID, absolute project workspace
+path, ticket path, and ticket digest. The specialist runs `coordinator_stage.py validate-ticket` before
 reading assignments. Use `coordinator_stage.py accept` to verify its bounded
 response, artifact, and digest. Use a fresh specialist instance at every
 author/reviewer boundary. Do not create recursive subagent trees.
@@ -372,8 +373,8 @@ After writing, the publisher GETs the resource again through the same API versio
 - Do not give subagents the complete `SKILL.md`; their registered agent definition is their role contract.
 - Queue each subagent's approved upstream paths/digests and assignments in its
   small immutable `inbox/job.yaml`; create and validate it with
-  `scripts/coordinator_stage.py`, then give the model only its agent ID and that
-  ticket path/digest.
+  `scripts/coordinator_stage.py`, then give the model only its agent ID, project
+  workspace path, and that ticket path/digest.
 - Every agent treats context as disposable and its assigned workspace as durable
   memory. It writes one bounded YAML record as soon as each logical item is
   resolved, then updates `state.yaml`; it never accumulates a complete result in

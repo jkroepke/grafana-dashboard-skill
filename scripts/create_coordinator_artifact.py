@@ -274,20 +274,25 @@ def update_state(state_path: Path, *, status: str, completed: str, pending: list
 
 
 def create_run_contract(args: argparse.Namespace) -> str:
-    root = Path(args.repository_root).resolve()
+    workspace = Path.cwd().resolve()
+    require(
+        workspace.name == "workspace" and workspace.parent.parent.name == "dashboards",
+        "run-contract must run from dashboards/<project-name>/workspace",
+    )
+    root = workspace.parents[2]
+    project_name = workspace.parent.name
     require(root.is_dir() and not root.is_symlink(), "repository root must be a regular directory")
-    require(SAFE_COMPONENT_RE.fullmatch(args.project_name) is not None, "project name is not filesystem-safe")
+    require(SAFE_COMPONENT_RE.fullmatch(project_name) is not None, "project name is not filesystem-safe")
     require(SAFE_COMPONENT_RE.fullmatch(args.run_id) is not None, "run ID is not filesystem-safe")
 
-    coordinator = initialize_coordinator(root, args.project_name, args.run_id)
-    workspace = root / "dashboards" / args.project_name / "workspace"
+    coordinator = initialize_coordinator(root, project_name, args.run_id)
     grafana_version = read_grafana_version(
         root,
-        args.grafana_version_command,
+        str(SCRIPT_DIR / "grafana_version.py"),
         coordinator / "evidence",
         workspace,
     )
-    final_source = repository_path(root, args.final_source, "final source")
+    final_source = workspace.parent / "dashboard.jsonnet"
     candidate = final_source.with_name(f"{final_source.stem}.candidate.jsonnet")
     if final_source.exists():
         require(final_source.is_file() and not final_source.is_symlink(), "final source must be a regular file")
@@ -297,10 +302,7 @@ def create_run_contract(args: argparse.Namespace) -> str:
         baseline_state = "ABSENT"
         baseline_sha256 = None
 
-    program = render_executable(root, args.render_program)
-    render_args = args.render_arg or ["-J", "vendor", "{source}"]
-    render_argv = [program, *render_args]
-    require(render_argv.count("{source}") == 1, "render arguments require one standalone {source}")
+    render_argv = [render_executable(root, "jsonnet"), "-J", "vendor", "{source}"]
     grafonnet_revision = infer_grafonnet_revision(root, args.grafonnet_revision)
     for name, label in {
         "application namespace label": args.application_namespace_label,
@@ -435,14 +437,8 @@ def parser() -> argparse.ArgumentParser:
     subparsers = result.add_subparsers(dest="command", required=True)
 
     run = subparsers.add_parser("run-contract", help="create and validate a coordinator run contract")
-    run.add_argument("--repository-root", required=True)
-    run.add_argument("--project-name", required=True)
     run.add_argument("--run-id", required=True)
-    run.add_argument("--final-source", required=True)
-    run.add_argument("--grafana-version-command", required=True)
     run.add_argument("--grafonnet-revision")
-    run.add_argument("--render-program", default="jsonnet")
-    run.add_argument("--render-arg", action="append")
     run.add_argument("--timeout-seconds", type=int, default=120)
     run.add_argument("--datasource-access", action="store_true")
     run.add_argument("--dashboard-api-validation", action="store_true")

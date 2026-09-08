@@ -111,8 +111,9 @@ class GrafanaAccessTest(unittest.TestCase):
                 check=False,
                 cwd=root,
             )
-            self.assertEqual(0, created.returncode, created.stdout + created.stderr)
             workspace = root / "dashboards" / "demo" / "workspace"
+            self.assertEqual(0, created.returncode, created.stdout + created.stderr)
+            self.assertEqual(str(workspace), created.stdout.strip())
             result = subprocess.run(
                 [sys.executable, str(command), "GRAFANA_TARGET", "https://grafana.example.test"],
                 capture_output=True,

@@ -32,7 +32,7 @@ upstream conclusions, raw metric dumps, or the complete conversation. It
 supplies the approved bindings, candidate/rendered evidence, pinned versions,
 output path, limits, and configured target access.
 
-Use the initialized agent/run workspace. Checkpoint each independent check,
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Checkpoint each independent check,
 finding, and target-validation result in its own bounded YAML file with `yq`,
 then update `state.yaml`. Keep complete responses in `evidence/` and resume from
 the queue instead of accumulating the review in context.

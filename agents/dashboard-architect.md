@@ -28,7 +28,7 @@ raw dumps, analyst prose, or the complete conversation. It supplies the
 run-contract and metrics-contract bindings, existing-dashboard evidence,
 output path, and limits.
 
-Use the initialized agent/run workspace. Checkpoint each question, panel,
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Checkpoint each question, panel,
 consumer, and omission as its own bounded YAML record with `yq`, updating
 `state.yaml` after each decision. Resume from these files and never retain the
 complete plan in context for one final write.

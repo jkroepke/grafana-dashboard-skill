@@ -110,7 +110,7 @@ def load_run(run_contract: Path) -> tuple[dict[str, Any], Path, Path]:
     root = Path(run.get("repository_root", "")).resolve()
     workspace = Path(run.get("workspace", "")).resolve()
     require(root.is_dir() and workspace.is_dir(), "run-contract repository/workspace is unavailable")
-    require(Path.cwd().resolve() == root, "run coordinator commands from repository_root")
+    require(Path.cwd().resolve() == workspace, "run coordinator commands from workspace")
     validate_artifact_file(run_contract, {})
     expected = workspace / "coordinator" / run["run_id"] / "outbox" / "run-contract.yaml"
     require(run_contract == expected, "run-contract is outside its canonical coordinator workspace")
@@ -291,13 +291,14 @@ def validate_ticket(path: Path) -> tuple[dict[str, Any], dict[str, Any], Path, P
     run_id = agent_root.name
     ticket = read_yaml(path)
     expected_fields = {
-        "schema_version", "run_id", "agent", "revision", "inputs", "supports",
+        "schema_version", "workspace", "run_id", "agent", "revision", "inputs", "supports",
         "evidence_refs", "namespace_scope", "outputs", "limits", "capability_refs",
     }
     require(set(ticket) == expected_fields, "ticket fields are incomplete or unknown")
     require(ticket["schema_version"] == 1 and ticket["revision"] in {1, 2, 3}, "invalid ticket version")
     require(ticket["agent"] == agent and ticket["run_id"] == run_id, "ticket path identity mismatch")
     require(agent in STAGES, f"unknown ticket agent: {agent}")
+    require(ticket["workspace"] == str(workspace.resolve()), "ticket workspace mismatch")
 
     inputs = validate_binding_map(ticket["inputs"], "inputs", workspace, workspace.parents[2])
     require("run-contract" in inputs, "ticket inputs must include run-contract")
@@ -440,6 +441,7 @@ def dispatch(args: argparse.Namespace) -> str:
     }
     ticket = {
         "schema_version": 1,
+        "workspace": str(workspace),
         "run_id": run_id,
         "agent": agent,
         "revision": args.revision,
@@ -474,13 +476,16 @@ def dispatch(args: argparse.Namespace) -> str:
     )
     coordinator_artifact.validate_workspace(agent_root)
     coordinator_artifact.validate_workspace(coordinator_root)
-    return f"{agent} ticket={ticket_path.relative_to(root)} sha256={sha256(ticket_path)}"
+    return (
+        f"{agent} workspace={workspace} ticket={ticket_path.relative_to(root)} "
+        f"sha256={sha256(ticket_path)}"
+    )
 
 
 def accept(args: argparse.Namespace) -> str:
     ticket_path = Path(args.ticket).resolve()
     ticket, run, root, workspace, inputs, supports = validate_ticket(ticket_path)
-    require(Path.cwd().resolve() == root, "run coordinator commands from repository_root")
+    require(Path.cwd().resolve() == workspace, "run coordinator commands from workspace")
     agent = ticket["agent"]
     response = args.response
     if args.response_file is not None:
@@ -617,8 +622,8 @@ def main() -> int:
         if args.command == "dispatch":
             print(dispatch(args))
         elif args.command == "validate-ticket":
-            validate_ticket(Path(args.ticket))
-            print("PASS job-ticket")
+            _, _, _, workspace, _, _ = validate_ticket(Path(args.ticket))
+            print(f"PASS job-ticket workspace={workspace}")
         else:
             print(accept(args))
     except (StageError, workflow.ArtifactError, coordinator_artifact.CreationError, OSError, KeyError) as error:

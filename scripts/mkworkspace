@@ -19,7 +19,7 @@ def main() -> int:
     workspace = Path.cwd() / "dashboards" / sys.argv[1] / "workspace"
     workspace.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(workspace, 0o700)
-    print("PASS mkworkspace")
+    print(workspace.resolve())
     return 0
 
 

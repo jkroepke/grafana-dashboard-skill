@@ -25,7 +25,7 @@ First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
 or copy the complete conversation. It supplies the assigned metric evidence,
 run-contract binding, output path, limits, and configured discovery access.
 
-Use the initialized agent/run workspace. Treat `records/pending/` as the
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Treat `records/pending/` as the
 metric-family work queue and `records/done/` as its completed queue. Process
 one metric family at a time: create its bounded `records/metrics/*.yaml`
 checkpoint with `yq`, update `state.yaml`, then atomically move its work item

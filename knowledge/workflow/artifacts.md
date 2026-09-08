@@ -95,19 +95,15 @@ The coordinator creates a `run-contract` artifact with the deterministic helper:
 
 ```bash
 python3 scripts/create_coordinator_artifact.py run-contract \
-  --repository-root "$PWD" \
-  --project-name <project-name> \
-  --run-id <run-id> \
-  --grafana-version-command scripts/grafana_version.py \
-  --final-source dashboards/<project-name>/dashboard.jsonnet
+  --run-id <run-id>
 ```
 
-The default render argv is `jsonnet -J vendor {source}`. Use repeated
-`--render-arg` options and `--render-program` only when the repository has a
-different shell-free render command. Bootstrap the workspace-private `.env`
-through `scripts/set_workflow_env` before this command. The required
-zero-argument version executable is `scripts/grafana_version.py`; it reads that
-file, performs `GET /version`, and returns HTTP-200 JSON only on stdout. The helper
+Run this command from the project workspace. It derives the repository root and
+project name from that directory, uses the project working directory's
+`dashboard.jsonnet` as the final source, uses `scripts/grafana_version.py`, and
+renders with `jsonnet -J vendor {source}`. Bootstrap the workspace-private `.env`
+through `scripts/set_workflow_env` before this command. The version helper reads
+that file, performs `GET /version`, and returns HTTP-200 JSON only on stdout. The helper
 executes it once, stores the raw response privately, and extracts Grafana's version only from
 `gitTreeState: "grafana v<version>"`. It ignores `major`, `minor`, and
 `gitVersion`, which may identify the backing Kubernetes API server. Other
