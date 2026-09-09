@@ -95,21 +95,24 @@ inspect scripts or add configuration fields.
 
 1. Run `mkworkspace` with the project name. Use its returned absolute workspace
    path for every following control operation.
-2. Set these task-provided values with `set-workflow-env`:
+2. Set these required task-provided values with `set-workflow-env`:
 
    | Field | Required value |
    | --- | --- |
    | `GRAFANA_TARGET` | Grafana HTTP(S) base URL |
-   | `GRAFANA_HTTP_CLIENT` | optional HTTP client executable; defaults to `curl` |
-   | `GRAFANA_HTTP_CLIENT_ARGS_JSON` | JSON array of client arguments |
    | `METRICS_TARGET` | metrics HTTP(S) URL or regular local file |
-   | `METRICS_HTTP_CLIENT` | optional client for an HTTP(S) target; defaults to `curl`; empty for a local file |
-   | `METRICS_HTTP_CLIENT_ARGS_JSON` | JSON client-argument array; `[]` for a local file |
    | `WORKFLOW_DATASOURCE_ACCESS` | `true` or `false` |
    | `WORKFLOW_DASHBOARD_API_VALIDATION` | `true` or `false` |
    | `WORKFLOW_PUBLISH_REQUESTED` | `true` or `false` |
 
-If no `*_HTTP_CLIENT` is given for an HTTP(S) target, use `curl`.
+   Set these optional overrides only when supplied:
+
+   | Field | Default |
+   | --- | --- |
+   | `GRAFANA_HTTP_CLIENT` | `curl` |
+   | `GRAFANA_HTTP_CLIENT_ARGS_JSON` | `[]` |
+   | `METRICS_HTTP_CLIENT` | `curl` for an HTTP(S) target; empty for a local file |
+   | `METRICS_HTTP_CLIENT_ARGS_JSON` | `[]` |
 
 3. When `WORKFLOW_DATASOURCE_ACCESS=true`, run `set-datasource` with no
    arguments. If it fails, create a bounded failure report and stop.
@@ -117,17 +120,7 @@ If no `*_HTTP_CLIENT` is given for an HTTP(S) target, use `curl`.
    version gate and rejects an unsupported target. Do not call the version helper
    separately.
 
-`mkworkspace` generates `WORKFLOW_RUN_ID`; do not set or replace it. Analysts
-read metrics only with `scripts/metrics_reader.py`.
-
-After the run contract is validated, dispatch `application-metrics` first. Do
-not dispatch `kubernetes-metrics` until the application artifact has validated
-and exposes a non-empty namespace-scope evidence reference, digest, and count.
-Then pass that completed artifact as a direct input and pass the exact scope
-reference/digest in the Kubernetes ticket. The Kubernetes stage must not run if
-the scope is absent or invalid. Do no overlapping investigation while either
-analyst runs. Pass paths, expected digests, assigned output paths, required
-contract fields, and configured access references.
+`mkworkspace` generates `WORKFLOW_RUN_ID`; do not set or replace it.
 
 ## Coordinator tool boundary
 
@@ -161,6 +154,9 @@ operations own prerequisite/digest checks, immutable tickets, acceptance
 records, and coordinator pending state; do not recreate those mechanics
 manually. Give the specialist only its agent ID, absolute project workspace
 path, and ticket path.
+
+Dispatch is sequential and enforces every stage prerequisite, including the
+validated application namespace scope before `kubernetes-metrics`.
 
 Follow this order exactly:
 

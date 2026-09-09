@@ -89,45 +89,9 @@ Do not publish before rendering, validation, and independent review are complete
 
 ## Coordinator entry gate
 
-The coordinator's only task-specific pre-delegation activity is to configure
-access with `scripts/set_workflow_env` and create and validate the run
-contract. It may read the required coordinator-control documentation and check
-input paths, file metadata,
-source baseline state/digest, pinned-version metadata, and configured access
-capabilities. It MUST NOT read or interpret raw metric/manifests/dashboard/API
-contents; search them for metric names, labels, query text, panel content, or
-semantics; run datasource probes; or construct any dashboard artifact other
-than the run contract.
-
-After access configuration, the coordinator's sole target-version request is
-the repository's shell-free, zero-argument `scripts/grafana_version.py`. It
-exits zero only for HTTP 200 and writes JSON only to stdout. Do not append,
-construct, or pass target arguments. Capture stdout and stderr in neutral scratch
-files. Parse only `gitTreeState`, which must be
-exactly `grafana v<major>[.<minor>[.<patch>]]`; the Kubernetes API-server
-`major`, `minor`, and `gitVersion` fields are not Grafana version evidence.
-Do not fetch, inspect, or cache a target OpenAPI document. Do not invoke the
-same `/version` request again during the run.
-
-Once the run contract passes validation, dispatch `application-metrics` first.
-It must produce a validated, non-empty application namespace-scope evidence
-reference before `kubernetes-metrics` can start. Dispatch `kubernetes-metrics`
-only with the application artifact as a direct input and with that exact scope
-reference and digest in its ticket. The coordinator performs no overlapping
-evidence gathering while either analyst runs. If an analyst, fresh subagent
-context, or the runtime's subagent tool is unavailable, stop with the completed
-artifact statuses and a bounded blocker. Do not substitute coordinator work for
-the missing stage.
-
-## Establish the shared contract
-
-Create the workspace, use its returned path as the working directory, configure
-task access through `scripts/set_workflow_env`, run `scripts/set_datasource`
-when datasource access is enabled, then create the run contract. The fixed
-helper derives the run ID, source path, renderer, version gate, baseline, and
-locked Grafonnet revision; do not reconstruct its YAML or inspect helpers to
-supply those values. Capability wrappers receive their configuration only from
-the workspace and task tickets.
+Follow the ordered bootstrap workflow in `agents/coordinator.md`. The
+coordinator configures access and creates the run contract; it does not inspect
+raw task inputs, query a datasource, or construct specialist artifacts.
 
 Do not require publication intent before using an already configured Dashboard API credential/wrapper for a non-persisting dry-run validation request.
 
@@ -187,14 +151,14 @@ Read `knowledge/grafana/variables.md` when implementing or reviewing variables.
 For every dashboard source creation or update, the following isolated-agent pipeline is mandatory. If the runtime cannot provide fresh subagent contexts or a required agent is unavailable, stop with the completed artifact statuses; the coordinator MUST NOT absorb the missing stage. A reviewer-only read-only inspection is allowed only when that reviewer's complete prerequisite artifact chain already exists; otherwise it is an informal inspection and cannot issue a gate status. No source change may bypass staged construction and review.
 
 Read `knowledge/workflow/workspace.md` and `knowledge/workflow/artifacts.md`
-before dispatch. Use `scripts/coordinator_stage.py dispatch` to initialize the
-role workspace, validate every accepted prerequisite, create its immutable
-`inbox/job.yaml`, and update coordinator state. Do not hand-build tickets or
-digests. Give the fresh specialist only its agent ID, absolute project workspace
-path, and ticket path. The specialist runs `coordinator_stage.py validate-ticket` before
-reading assignments. Use `coordinator_stage.py accept` to verify its bounded
-response, artifact, and digest. Use a fresh specialist instance at every
-author/reviewer boundary. Do not create recursive subagent trees.
+before dispatch. Use `dispatch` to initialize the role workspace, validate
+prerequisites, create its immutable `inbox/job.yaml`, and update coordinator
+state. Do not hand-build tickets or digests. Give the fresh specialist only its
+agent ID, absolute project workspace path, and ticket path. The specialist runs
+`coordinator_stage.py validate-ticket` before reading assignments. Use `accept`
+to verify its bounded response, artifact, and digest. Use a fresh specialist
+instance at every author/reviewer boundary. Do not create recursive subagent
+trees.
 
 The ticket contains paths, expected digests, configured access references, and
 transitive validation paths. Support artifacts
