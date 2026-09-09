@@ -21,8 +21,7 @@ Read:
 - `knowledge/workflow/artifacts.md`
 - `knowledge/kubernetes/metrics.md` when Kubernetes capabilities are present
 
-First run `scripts/coordinator_stage.py validate-ticket --ticket
-<job.yaml>`. Read assignments only from that validated ticket; do not request
+First run `scripts/coordinator_stage.py validate-ticket`. Read assignments only from that validated ticket; do not request
 analyst prose or the complete conversation. It supplies the run-contract and
 shortlist bindings, raw evidence, existing dashboard source/render evidence,
 output path, limits, and configured discovery access.
@@ -83,9 +82,9 @@ explicit, and all blocking selector/population contradictions are resolved.
 Write `failure-report.yaml` otherwise. `PASS` does not approve any query.
 
 Before moving `tmp/metrics-contract.yaml` to `outbox/`, run
-`scripts/stage_check.py --ticket <job.yaml> --draft`. It performs every schema,
+`scripts/stage_check.py --draft`. It performs every schema,
 array-shape, size, length, digest, evidence-reference, and input-binding check.
 Do not compute a workspace path, resolve input paths, calculate evidence
 digests, or manually check static limits.
 
-Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.
+Run `scripts/stage_check.py` after writing the assigned artifact or failure report. Return its bounded response.

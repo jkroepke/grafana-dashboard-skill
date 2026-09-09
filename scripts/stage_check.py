@@ -44,7 +44,7 @@ def validate_draft(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ticket", required=True, type=Path)
+    parser.add_argument("--ticket", type=Path, default=Path("inbox/job.yaml"))
     parser.add_argument("--draft", action="store_true",
                         help="validate tmp/<assigned artifact name> before moving it to outbox")
     args = parser.parse_args()

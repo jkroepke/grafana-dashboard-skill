@@ -23,8 +23,7 @@ Read:
 - `knowledge/grafana/variables.md` for variable queries
 - `knowledge/grafana/annotations.md` for annotation queries
 
-First run `scripts/coordinator_stage.py validate-ticket --ticket
-<job.yaml>`. Read assignments only from that validated ticket; do not request
+First run `scripts/coordinator_stage.py validate-ticket`. Read assignments only from that validated ticket; do not request
 builder conclusions or the complete conversation. It supplies the approved
 bindings, targeted evidence, output path, limits, and configured datasource access.
 
@@ -49,12 +48,15 @@ Independently check:
 - annotation event sparsity and sample-time semantics
 - live behavior with one pod, multiple pods, and All where supported
 
-HTTP success or PromQL syntax alone is not a pass. Keep raw responses in scratch files and include the relevant evidence in the review artifact.
+HTTP success or PromQL syntax alone is not a pass. For routine queries, declare
+concrete values/cardinality/identity labels in `evidence/probe-matrix.json` and
+run `./prometheus-probe-matrix`. It stores raw responses and checks
+status, warnings, labels, duplicate identities, and bounds deterministically.
+Review only failed probes and `CUSTOM` queries for semantic fitness.
 
-For a configured `scripts/prometheus_reader.py` capability, write the approved
-query request and response paths in the assigned workspace and invoke only
-`prometheus_reader.py <request-file> <response-file>`. Do not supply a target
-endpoint, datasource UID, or inline PromQL to a command.
+Do not invoke `prometheus_reader.py` directly for routine validation. The probe
+matrix owns request execution and raw response storage; a failed/custom probe
+is the only reason to inspect its retained evidence.
 
 ## Artifact and response
 
@@ -65,4 +67,4 @@ contain a corrected query.
 
 Return `PASS` only when there are no findings and all mandatory validation available to the task has completed. When live access is unavailable, record the live-validation gap explicitly according to the task's policy.
 
-Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.
+Run `scripts/stage_check.py` after writing the assigned artifact or failure report. Return its bounded response.

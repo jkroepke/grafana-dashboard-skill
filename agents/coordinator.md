@@ -135,6 +135,11 @@ inspect scripts or add configuration fields.
    path for every following control operation.
 2. Set these required task-provided values with `set-workflow-env`:
 
+   Invoke it once for each value, as `set-workflow-env <name> <value>`.
+   It accepts exactly one name/value pair per call; do not pass a map, a list,
+   or multiple pairs. The repository executable is `scripts/set_workflow_env`;
+   `coordinator_control` exposes that operation as `set-workflow-env`.
+
    | Field | Required value |
    | --- | --- |
    | `GRAFANA_TARGET` | Grafana HTTP(S) base URL |
@@ -156,6 +161,13 @@ inspect scripts or add configuration fields.
    arguments. If it fails, create a bounded failure report and stop.
 4. Run `run-contract` with no arguments. It performs the fixed Grafana
    eligibility gate and rejects an unsupported target.
+
+   Record its canonical path as
+   `coordinator/<run-id>/outbox/run-contract.yaml`. Control operations run
+   from the project `workspace/` directory, so pass that workspace-relative
+   path (or its absolute path). Never pass a repository-relative path beginning
+   with `dashboards/.../workspace/`: it is resolved from `workspace/` and would
+   duplicate the prefix.
 
 ## Coordinator tool boundary
 
@@ -189,6 +201,12 @@ operations own prerequisite/digest checks, immutable tickets, acceptance
 records, and coordinator pending state; do not recreate those mechanics
 manually. Give the specialist only its agent ID, absolute project workspace
 path, and ticket path.
+
+Invoke dispatch as `dispatch --run-contract <run-contract-path> --agent <agent-id>`.
+It does not accept a workspace or ticket argument: it creates and returns the
+ticket path. Use the workspace-relative run-contract path recorded during
+bootstrap (for example, `coordinator/run-001/outbox/run-contract.yaml`) or an
+absolute path.
 
 Dispatch is sequential and enforces every stage prerequisite, including the
 validated application namespace scope before the deterministic

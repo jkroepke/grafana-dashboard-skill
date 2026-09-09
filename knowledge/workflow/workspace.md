@@ -46,6 +46,24 @@ evidence. The dispatch prompt contains only the agent ID, absolute project works
 and ticket path. The specialist runs `scripts/coordinator_stage.py validate-ticket` before work;
 the coordinator uses `accept` on its bounded response.
 
+## Coordinator control paths
+
+Coordinator control operations run from `dashboards/<project-name>/workspace/`.
+`set-workflow-env` accepts exactly one name/value pair per invocation:
+`set-workflow-env <name> <value>`. Do not pass multiple pairs in one call.
+
+After `run-contract`, invoke a specialist with:
+
+```text
+dispatch --run-contract coordinator/<run-id>/outbox/run-contract.yaml --agent <agent-id>
+```
+
+The run-contract path is relative to this `workspace/` directory (or absolute).
+Do not pass `dashboards/<project-name>/workspace/...` as a relative path: the
+controller resolves it from `workspace/`, which duplicates that prefix.
+`dispatch` creates the ticket and returns its path; workspace and ticket paths
+are inputs to the specialist handoff, not to `dispatch`.
+
 A job ticket uses this bounded shape; unused maps/lists stay empty rather than
 growing the dispatch prompt:
 
@@ -76,6 +94,28 @@ Relative paths are resolved from the project `workspace/` root; paths may be
 absolute when required by an artifact contract. Every digest is computed from
 the exact referenced bytes. The specialist validates the ticket and all
 declared digests before processing its first queue item.
+
+## Deterministic execution paths
+
+Use deterministic tools for routine mechanics; do not spend model context
+recreating their output.
+
+- `metrics-sync` fetches/snapshots application exposition and resumes its
+  queue. `scripts/metric_facts.py` copies bounded observed facts and marks every
+  family `NEEDS_AI`; it never guesses operational semantics.
+- `scripts/promql_templates.py <request.json> <result.json>` compiles only an
+  allowlisted typed template. Unknown templates and joins are `CUSTOM` work.
+- `scripts/prometheus_probe_matrix.py` defaults to `inbox/job.yaml`, runs a
+  declared matrix, stores raw responses in `evidence/`, and checks response
+  status, warnings, cardinality, labels, and duplicate identities.
+- `scripts/grafana_dry_run.py ... --operation UPDATE` performs the required
+  GET and metadata-preserving dry-run PUT. `scripts/grafana_publish.py`
+  defaults to `inbox/job.yaml` and performs the equivalent real transaction
+  only after ticket/integrity/review preflight passes.
+
+These scripts are closed-input exception boundaries. The model remains
+responsible for dashboard intent, ambiguous metric meaning, and `CUSTOM`
+PromQL—not a free-form PASS assertion.
 
 After dispatch, only the assigned specialist writes in `records/`, `evidence/`,
 `tmp/`, `outbox/`, and its `state.yaml`. No two agents write the same file.
@@ -213,13 +253,13 @@ unset ITEMS_FILE
 ```
 
 Add the remaining required envelope and artifact fields using `yq`, then run
-`scripts/stage_check.py --ticket <job.yaml> --draft`. It validates the assigned
+`scripts/stage_check.py --draft`. It validates the assigned
 `tmp/<artifact>.yaml` using the ticketed inputs, support artifacts, evidence
 base path, and repository working directory. Do not call
 `validate_agent_workspace.sh` or `validate_workflow_artifact.py` directly and
 do not reconstruct their arguments. After a `PASS` draft result, atomically
 rename it to `outbox/<artifact>.yaml`, finish `state.yaml`, and run
-`scripts/stage_check.py --ticket <job.yaml>` for the terminal response. The
+`scripts/stage_check.py` for the terminal response. The
 artifact remains the digest-bound stage gate; the record files are its
 human-reviewable construction log and recovery snapshots.
 
@@ -230,24 +270,31 @@ JSON and Grafonnet source remains Jsonnet.
 
 ## Large metrics exposition
 
-Never load a complete `/metrics` response into agent context. Stream Prometheus
-or OpenMetrics text through `scripts/metrics_reader.py` and
-`scripts/snapshot_metrics.py`:
+Never load a complete `/metrics` response into agent context. The initialized
+application-metrics workspace provides `./metrics-sync`, which validates the
+ticket and performs the fixed acquisition/snapshot operation:
 
 ```bash
-agent_run_dir="${DASHBOARD_AGENT_RUN_DIR:?set agent run directory}"
-set -o pipefail
-scripts/metrics_reader.py | scripts/snapshot_metrics.py \
-  --output-dir "$agent_run_dir/records/pending" \
-  --source-ref metrics-evidence
+cd <application-metrics-agent-run-directory>
+./metrics-sync
 ```
 
-`scripts/snapshot_metrics.py` intentionally has no URL, credential,
-or input-file option: exposition bytes enter only through stdin. It emits no raw
-sample or label values to stdout. It writes one small YAML snapshot per family
-plus `manifest.yaml`, preserving declared `HELP`, `TYPE`, and `UNIT`, member and
-label names, sample counts, line references, timestamp/exemplar presence, and
-bounded parse warnings.
+The sync command invokes the internal reader and snapshot parser. The parser
+has no URL, credential, or input-file option: exposition bytes enter only
+through stdin. It emits no raw sample or label values to stdout. It writes one
+small YAML snapshot per family plus `manifest.yaml`, preserving declared
+`HELP`, `TYPE`, and `UNIT`, member and label names, sample counts, line
+references, timestamp/exemplar presence, and bounded parse warnings.
+
+On a new application-metrics run, `records/pending/` must not exist before this
+command: the snapshot tool creates it atomically. Do not run
+`metric_queue.py reconcile` or create that directory first. On a resumed run,
+when `records/pending/manifest.yaml` already exists, do not fetch or snapshot
+again; run `scripts/metric_queue.py reconcile` before processing its remaining
+items. An empty `records/pending/` without a manifest is an interrupted initial
+setup: recover with `rmdir records/pending`, then take the snapshot. Any
+non-empty directory without a manifest is an unknown state and must fail rather
+than be deleted.
 
 These are discovery snapshots, not approved metric records. Analysts still
 verify semantics, lifecycle, stored labels, availability, category, and risks.

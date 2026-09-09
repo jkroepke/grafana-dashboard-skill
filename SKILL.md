@@ -167,6 +167,17 @@ to verify its bounded response, artifact, and digest. Use a fresh specialist
 instance at every author/reviewer boundary. Do not create recursive subagent
 trees.
 
+The staged deterministic migration and its acceptance criteria are recorded in
+`knowledge/workflow/deterministic-roadmap.md`.
+
+Coordinator control operations run from the project `workspace/` directory.
+Set access with exactly one `set-workflow-env <name> <value>` pair per call.
+After `run-contract`, invoke a stage as
+`dispatch --run-contract coordinator/<run-id>/outbox/run-contract.yaml --agent <agent-id>`;
+that path is workspace-relative (or may be absolute), never repository-relative.
+`dispatch` creates the ticket, so it receives neither a workspace nor ticket
+argument.
+
 `kubernetes-metrics` has no specialist handoff. Its `dispatch` operation
 generates and accepts the fixed preset artifact immediately.
 
@@ -209,16 +220,17 @@ artifacts.
 
 Analysts MUST NOT write final or candidate PromQL, variable queries, annotation queries, operational panel plans, or dashboard source. Large catalogs and raw evidence remain on disk; their visible response contains only stage status, artifact path, and digest.
 
-`application-metrics` always streams `scripts/metrics_reader.py` through
-`scripts/snapshot_metrics.py` on stdin.
-`scripts/snapshot_metrics.py` has no network, credential, or input-file interface and writes small
-per-family YAML snapshots without exposing raw sample or label values to agent
-context. The application analyst inspects those snapshots selectively. Both
-metric stages use `records/pending/` and `records/done/` as a durable queue:
+`application-metrics` runs its ticket-derived `metrics-sync` command; it owns
+the configured metric acquisition, streaming snapshot, and new-versus-resumed
+queue transition. The snapshot process has no network, credential, or
+input-file interface and writes small per-family YAML snapshots without
+exposing raw sample or label values to agent context. The application analyst
+inspects those snapshots selectively. Both metric stages use
+`records/pending/` and `records/done/` as a durable queue:
 the preset stage queues its deterministic catalogue records without an
 exposition snapshot. After a metric record is durable, complete its work item
-with `scripts/metric_queue.py`; on restart, reconcile the queue before
-processing remaining pending items.
+with `scripts/metric_queue.py`. `metrics-sync` owns the queue's new-run and
+resume behavior.
 
 ### 2. Independent metrics review
 
@@ -236,7 +248,10 @@ It writes operational question IDs, allowed metric IDs, desired result shapes, c
 
 Dispatch `promql-builder` with only the approved metrics contract and dashboard plan, existing dashboard source/render paths when updating, relevant targeted evidence, and configured read-only datasource access. It obtains selector, population, and scrape-timing facts only from the approved metrics contract and its evidence references, never from run-contract proposals.
 
-`promql-builder` is the only agent allowed to author or change any final Prometheus datasource query text. This includes all panel targets, Prometheus variable queries, and Prometheus annotation queries. Straightforward and difficult queries have the same owner. No analyst, architect, dashboard builder, reviewer, or coordinator may add, repair, normalize, or optimize them.
+`promql-builder` owns semantic query choices. It compiles routine typed queries
+with `scripts/promql_templates.py`; only `CUSTOM` expressions are authored by
+the model. No analyst, architect, dashboard builder, reviewer, or coordinator
+may add, repair, normalize, or optimize final query text.
 
 The builder writes a bounded `query-pack.yaml`. Discovery and validation probes by other roles are evidence only and MUST NOT be copied into dashboard artifacts.
 
@@ -274,7 +289,7 @@ If the final destination changed concurrently, stop rather than overwrite it. Th
 
 ### 9. Publish when requested
 
-Dispatch a fresh `dashboard-publisher`. Publish only after the dashboard has passed the applicable local validation, target-Grafana dry-run validation, independent review, exact final-path render verification, and mechanical promotion. The publisher may construct API requests and verify the readback, but it MUST NOT change source or query text.
+Dispatch a fresh `dashboard-publisher`. Publish only after the dashboard has passed the applicable local validation, target-Grafana dry-run validation, independent review, exact final-path render verification, and mechanical promotion. It runs `scripts/grafana_publish.py`, which constructs the fixed API transaction and verifies readback; the model MUST NOT construct mutable requests or change source/query text.
 
 Read:
 
@@ -406,7 +421,7 @@ authenticated wrapper.
 
 If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` before changing source. Read `knowledge/grafana/diagnostic-execution.md` and use bounded target-side isolation only when the configured wrapper preserves the failed response and supports those probe operations. Otherwise retain the wrapper failure locally and return it as a validation failure; do not bypass the wrapper with a direct request. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Do not disable strict validation or invent union-wrapper fields as a workaround.
 
-When datasource access is available, `promql-reviewer` tests every approved application, Kubernetes, variable, and annotation query with explicit values replacing dashboard variables and macros. HTTP success alone is not a pass: inspect datasource errors, warnings, series count, label keys, duplicate series, representative values, and empty-result semantics.
+When datasource access is available, `promql-reviewer` tests every approved application, Kubernetes, variable, and annotation query with explicit values replacing dashboard variables and macros. `scripts/prometheus_probe_matrix.py` mechanically records datasource errors, warnings, series count, label keys, and duplicate identities; the reviewer interprets only failed probes and semantic exceptions.
 
 For every Dashboard V2 Prometheus `QueryVariable`, inspect the rendered plugin-specific query payload. On the documented v13 pin, require non-empty `spec.query.spec.query`, the expected `qryType`, and the Prometheus variable-editor `refId`. Do not accept `spec.query.spec.expr` as a substitute. Target schema admission alone is insufficient because the generic DataQuery schema does not prove that the Prometheus variable editor can deserialize the plugin payload.
 

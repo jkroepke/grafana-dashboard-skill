@@ -20,22 +20,34 @@ Read:
 - `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
 
-First run `scripts/coordinator_stage.py validate-ticket --ticket
-<job.yaml>`. Read assignments only from that validated ticket; do not request
-or copy the complete conversation. It supplies the assigned metric evidence,
-run-contract binding, output path, limits, and configured discovery access.
+First, from the assigned agent/run workspace, run exactly:
 
-The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Run `scripts/metric_queue.py reconcile` before processing and use `scripts/metric_queue.py complete <pending-item> <record>` after each durable checkpoint. Treat `records/pending/` as the
-metric-family work queue and `records/done/` as its completed queue. Process
-one metric family at a time: create its bounded `records/metrics/*.yaml`
-checkpoint with `yq`, then complete its work item with `scripts/metric_queue.py complete`.
+```text
+./metrics-sync
+```
+
+This validates the immutable ticket and is the only acquisition/snapshot
+command. Read assignments only from that validated ticket; do not request or
+copy the complete conversation. It uses the configured metrics target, creates
+`records/pending/` atomically on a new run, or reconciles the existing queue on
+a resume. Do not locate or invoke `coordinator_stage.py`, `metrics_reader.py`,
+`snapshot_metrics.py`, or `metric_queue.py reconcile` yourself.
+
+Then run `./metric-facts`. It copies observed snapshot facts into a
+bounded inventory and marks every family `NEEDS_AI`; it never classifies
+operational meaning from a name. Use that inventory to focus judgment on
+supported semantics rather than re-transcribing parser output.
+
+Treat `records/pending/` as the metric-family work queue and `records/done/` as
+its completed queue. `metrics-sync` owns new-run setup, resume reconciliation,
+and safe recovery. Process one metric family at a time: create its bounded
+`records/metrics/*.yaml` checkpoint with `yq`, then complete its work item with
+`scripts/metric_queue.py complete`.
 Never hold the complete inventory in context or emit it through one large
 write-tool call.
 
-Always pipe `scripts/metrics_reader.py` into `scripts/snapshot_metrics.py`, assigning
-`records/pending` as its output directory and a neutral source reference. The
-`scripts/snapshot_metrics.py` accepts metrics only through stdin. Enumerate its family files and
-inspect them one at a time; complete each with `scripts/metric_queue.py complete`. Leave
+After `metrics-sync` passes, enumerate its family files and inspect them one at
+a time; complete each with `scripts/metric_queue.py complete`. Leave
 `manifest.yaml` in place as queue metadata.
 For discovery work without an exposition snapshot, create one bounded pending
 work-item YAML before inspection and complete it by the same protocol.
@@ -75,11 +87,9 @@ artifact. The scope evidence is immutable after this stage. If no namespace can
 be verified, return a bounded failure report; the fixed preset stage requires
 the scope binding.
 
-When the configured capability is `scripts/prometheus_reader.py`, write a
-neutral request file and a separate neutral response path in the assigned
-workspace. Invoke it only as `prometheus_reader.py <request-file>
-<response-file>`; never provide a URL, datasource UID, or inline query. Keep
-stored-series selectors and returned values in those local files.
+When stored-series evidence is needed for namespace discovery, use only the
+ticketed opaque capability and retain its local evidence. Do not invoke metric
+acquisition, snapshot, or queue scripts directly; `metrics-sync` owns them.
 
 Keep exposition labels separate from verified stored scrape labels. Stored labels supplied in the run contract may be valid even when absent from a raw exposition dump.
 
@@ -98,7 +108,7 @@ shortlist top level. Its payload fields are exactly `catalog_ref`, `metrics`,
 `omission_counts`, and `namespace_scope`.
 
 Before moving `tmp/application-metrics.yaml` to `outbox/`, run
-`scripts/stage_check.py --ticket <job.yaml> --draft`; do not manually invoke
+`scripts/stage_check.py --draft`; do not manually invoke
 the underlying workspace or artifact validators.
 
-Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.
+Run `scripts/stage_check.py` after writing the assigned artifact or failure report. Return its bounded response.

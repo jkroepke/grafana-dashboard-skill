@@ -154,6 +154,22 @@ def http_request(
     expected_status: int | tuple[int, ...] = 200,
 ) -> bytes:
     """Run the configured HTTP client and return only an expected-status body."""
+    _, response = http_response(
+        access, method, url, request_file=request_file, headers=headers, expected_status=expected_status,
+    )
+    return response
+
+
+def http_response(
+    access: GrafanaAccess,
+    method: str,
+    url: str,
+    *,
+    request_file: Path | None = None,
+    headers: tuple[str, ...] = (),
+    expected_status: int | tuple[int, ...] = 200,
+) -> tuple[int, bytes]:
+    """Run one fixed HTTP request and return its expected numeric status/body."""
     client = shutil.which(access.client) if "/" not in access.client else access.client
     require(client is not None, "configured Grafana HTTP client is unavailable")
     if request_file is not None:
@@ -188,12 +204,9 @@ def http_request(
         require(result.returncode == 0, "Grafana request failed")
         status = result.stdout.decode("ascii", errors="replace").strip()
         expected = (expected_status,) if isinstance(expected_status, int) else expected_status
-        require(
-            status in {str(value) for value in expected},
-            f"Grafana request returned HTTP {status or 'unknown'}",
-        )
+        require(status in {str(value) for value in expected}, f"Grafana request returned HTTP {status or 'unknown'}")
         try:
-            return response_file.read_bytes()
+            return int(status), response_file.read_bytes()
         except OSError as error:
             raise AccessError("Grafana response could not be read") from error
 

@@ -16,6 +16,7 @@ VALIDATOR = REPOSITORY / "scripts" / "validate_workflow_artifact.py"
 PARITY = REPOSITORY / "scripts" / "verify_query_parity.py"
 CHAIN = REPOSITORY / "scripts" / "verify_workflow_chain.py"
 DASHBOARD_CONTRACT = REPOSITORY / "scripts" / "verify_dashboard_contract.py"
+DASHBOARD_INTEGRITY = REPOSITORY / "scripts" / "dashboard_integrity.py"
 NON_PROMETHEUS = REPOSITORY / "scripts" / "verify_non_prometheus_preservation.py"
 RENDER_VERIFIER = REPOSITORY / "scripts" / "verify_candidate_render.py"
 INIT_WORKSPACE = REPOSITORY / "scripts" / "init_agent_workspace.sh"
@@ -953,6 +954,16 @@ class WorkflowScriptsTest(unittest.TestCase):
         )
         self.assertNotEqual(0, result.returncode)
         self.assertIn("run coordinator commands from workspace", result.stderr)
+
+    def test_specialist_ticket_tools_default_to_local_inbox(self) -> None:
+        commands = (
+            [COORDINATOR_STAGE, "validate-ticket", "--help"],
+            [STAGE_CHECK, "--help"],
+            [DASHBOARD_INTEGRITY, "--help"],
+        )
+        for command in commands:
+            result = self.run_tool(*command)
+            self.assertIn("[--ticket TICKET]", result.stdout)
 
     def test_reset_stage_reissues_ticket_without_changing_agent_workspace(self) -> None:
         workspace = self.root / "dashboards" / "test-project" / "workspace"

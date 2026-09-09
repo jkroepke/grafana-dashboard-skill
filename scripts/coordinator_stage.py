@@ -640,7 +640,7 @@ def parser() -> argparse.ArgumentParser:
     dispatch_parser.add_argument("--limit", action="append", default=[])
 
     validate_parser = subparsers.add_parser("validate-ticket", help="validate a ticket and every binding")
-    validate_parser.add_argument("--ticket", required=True)
+    validate_parser.add_argument("--ticket", type=Path, default=Path("inbox/job.yaml"))
 
     accept_parser = subparsers.add_parser("accept", help="validate and accept one specialist response")
     accept_parser.add_argument("--ticket", required=True)

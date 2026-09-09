@@ -23,8 +23,7 @@ Read:
 - `knowledge/grafana/layout-v2.md` only when layout constraints materially affect the plan
 - `knowledge/kubernetes/presets.md` when approved Kubernetes or Istio preset candidates are present
 
-First run `scripts/coordinator_stage.py validate-ticket --ticket
-<job.yaml>`. Read assignments only from that validated ticket; do not request
+First run `scripts/coordinator_stage.py validate-ticket`. Read assignments only from that validated ticket; do not request
 raw dumps, analyst prose, or the complete conversation. It supplies the
 run-contract and metrics-contract bindings, existing-dashboard evidence,
 output path, and limits.
@@ -59,4 +58,4 @@ Assemble a `PASS` `dashboard-plan.yaml` from the small records with `yq` using
 or the plan cannot fit the declared budgets without losing the user's objective,
 write `failure-report.yaml` instead.
 
-Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.
+Run `scripts/stage_check.py` after writing the assigned artifact or failure report. Return its bounded response.

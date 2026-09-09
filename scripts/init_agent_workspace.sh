@@ -67,6 +67,38 @@ case "$physical_agent_root/" in
     ;;
 esac
 
+tool_link() {
+  link_path=$1
+  target_path=$2
+  if [ -L "$link_path" ]; then
+    [ "$(readlink "$link_path")" = "$target_path" ] || {
+      echo "workflow tool link has an unexpected target" >&2
+      exit 2
+    }
+  elif [ -e "$link_path" ]; then
+    echo "workflow tool link already exists" >&2
+    exit 2
+  else
+    ln -s "$target_path" "$link_path"
+  fi
+}
+
+case "$agent_id" in
+  application-metrics)
+    tool_link "$agent_root/metrics-sync" "$repository_root/scripts/metrics_sync.py"
+    tool_link "$agent_root/metric-facts" "$repository_root/scripts/metric_facts.py"
+    ;;
+  promql-builder)
+    tool_link "$agent_root/promql-templates" "$repository_root/scripts/promql_templates.py"
+    ;;
+  promql-reviewer)
+    tool_link "$agent_root/prometheus-probe-matrix" "$repository_root/scripts/prometheus_probe_matrix.py"
+    ;;
+  dashboard-publisher)
+    tool_link "$agent_root/grafana-publish" "$repository_root/scripts/grafana_publish.py"
+    ;;
+esac
+
 state_path="$agent_root/state.yaml"
 export AGENT_ID="$agent_id" RUN_ID="$run_id"
 if [ -e "$state_path" ]; then

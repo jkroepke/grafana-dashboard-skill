@@ -100,7 +100,7 @@ def check(ticket_path: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ticket", required=True, type=Path)
+    parser.add_argument("--ticket", type=Path, default=Path("inbox/job.yaml"))
     args = parser.parse_args()
     try:
         check(args.ticket)

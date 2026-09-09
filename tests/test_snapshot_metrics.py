@@ -7,9 +7,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 REPOSITORY = Path(__file__).resolve().parents[1]
+SCRIPTS = REPOSITORY / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from metrics_sync import sync_workspace
+
+
 SNAPSHOT = REPOSITORY / "scripts" / "snapshot_metrics.py"
+INIT_WORKSPACE = REPOSITORY / "scripts" / "init_agent_workspace.sh"
 
 
 EXPOSITION = r'''# HELP http_requests_total Current request accumulator.
@@ -44,6 +50,69 @@ def load_yaml(path: Path) -> dict:
 
 
 class SnapshotMetricsTest(unittest.TestCase):
+    def test_metrics_sync_defaults_to_the_local_ticket(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPTS / "metrics_sync.py"), "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertIn("[--ticket TICKET]", result.stdout)
+
+    def test_metrics_sync_uses_configured_local_target_without_an_agent_pipeline(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / "dashboards" / "demo" / "workspace"
+            agent_root = workspace / "application-metrics" / "run-001"
+            (agent_root / "records" / "done").mkdir(parents=True)
+            (agent_root / "state.yaml").write_text(
+                "schema_version: 1\nagent: application-metrics\nrun_id: run-001\n"
+                "status: READY\ncompleted: []\npending: []\nnext_action: read-inbox\n",
+                encoding="utf-8",
+            )
+            source = root / "metrics.txt"
+            source.write_text("metric 1\n", encoding="utf-8")
+            config = workspace / ".env"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(f"METRICS_TARGET={source}\n", encoding="utf-8")
+            config.chmod(0o600)
+
+            self.assertEqual("SNAPSHOT", sync_workspace(agent_root))
+            self.assertTrue((agent_root / "records" / "pending" / "manifest.yaml").is_file())
+
+    def test_fresh_agent_workspace_allows_snapshot_to_create_pending_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialized = subprocess.run(
+                [str(INIT_WORKSPACE), str(root), "demo", "run-001", "application-metrics"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, initialized.returncode, initialized.stdout + initialized.stderr)
+            workspace = Path(initialized.stdout.strip())
+            pending = workspace / "records" / "pending"
+            self.assertFalse(pending.exists())
+            self.assertEqual(
+                str(root / "scripts" / "metrics_sync.py"),
+                (workspace / "metrics-sync").readlink().as_posix(),
+            )
+            self.assertEqual(
+                str(root / "scripts" / "metric_facts.py"),
+                (workspace / "metric-facts").readlink().as_posix(),
+            )
+
+            result = subprocess.run(
+                [sys.executable, str(SNAPSHOT), "--output-dir", str(pending)],
+                input="metric 1\n",
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertTrue((pending / "manifest.yaml").is_file())
+
     def test_streams_stdin_into_small_family_snapshots(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

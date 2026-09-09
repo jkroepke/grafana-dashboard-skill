@@ -25,8 +25,7 @@ Read:
 - `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md`
 - `knowledge/grafana/annotations.md` only when the approved query pack contains annotations
 
-First run `scripts/coordinator_stage.py validate-ticket --ticket
-<job.yaml>`. Read assignments only from that validated ticket; do not request
+First run `scripts/coordinator_stage.py validate-ticket`. Read assignments only from that validated ticket; do not request
 raw metrics, upstream prose, or the complete conversation. It supplies the
 approved bindings, existing source, output/candidate/render paths, pinned
 versions, repository build commands, limits, and configured capabilities.
@@ -55,7 +54,7 @@ Do not edit shared helpers in this workflow version. If a helper change is requi
 
 ## Validation and artifact
 
-Run `jsonnetfmt -i` on the candidate, render it with `jsonnet -J vendor`, and parse the rendered file with `jq empty`. Then run `scripts/dashboard_integrity.py --ticket <job.yaml>` for the fixed V2, query-parity, and preservation checks. Verify:
+Run `jsonnetfmt -i` on the candidate, render it with `jsonnet -J vendor`, and parse the rendered file with `jq empty`. Then run `scripts/dashboard_integrity.py` for the fixed V2, query-parity, and preservation checks. Verify:
 
 - required variables and datasource references
 - every planned/integrated query ID
@@ -69,4 +68,4 @@ Only after that integrity check passes may you write a `PASS` build artifact. A 
 
 Write a `PASS` `dashboard-build.yaml` using `knowledge/workflow/artifacts.md` only after those commands pass. Write `failure-report.yaml` for a failed or blocked build.
 
-Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.
+Run `scripts/stage_check.py` after writing the assigned artifact or failure report. Return its bounded response.

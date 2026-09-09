@@ -119,7 +119,7 @@ Tabs can have section-local behavior in the schema, but keep the required `datas
 
 For a candidate dashboard, `dashboard-builder` runs `jsonnetfmt -i`, renders
 with `jsonnet -J vendor`, and parses the result with `jq empty`;
-`scripts/dashboard_integrity.py --ticket <job.yaml>` performs the fixed integrity gate.
+`scripts/dashboard_integrity.py` performs the fixed integrity gate.
 Then check:
 
 - schema version

@@ -378,7 +378,7 @@ validation results are checkpointed separately before manifest assembly:
 }
 ```
 
-`PASS` requires every query-pack ID exactly once, no omissions, all mandatory checks `PASS`, and candidate/rendered/baseline values equal to the current ticketed files. Run `scripts/dashboard_integrity.py --ticket <job.yaml>` before writing it.
+`PASS` requires every query-pack ID exactly once, no omissions, all mandatory checks `PASS`, and candidate/rendered/baseline values equal to the current ticketed files. Run `scripts/dashboard_integrity.py` before writing it.
 
 Required inputs: `run-contract`, `metrics-contract`, `dashboard-plan`, `query-pack`, `query-review`.
 
@@ -473,4 +473,4 @@ from its checkpointed request/readback results:
 
 Required inputs: `run-contract`, `dashboard-build`, `dashboard-review`. `scripts/validate_workflow_artifact.py` requires explicit publication intent, the exact reviewed source at the final repository path, and successful target readback. Publication failures use `failure-report`; the coordinator never constructs or repairs API payloads.
 
-Before the target write, the publisher runs `scripts/dashboard_integrity.py --ticket <job.yaml>` to verify the promoted final source.
+Before the target write, the publisher runs `scripts/dashboard_integrity.py` to verify the promoted final source.
