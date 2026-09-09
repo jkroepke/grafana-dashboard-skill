@@ -73,16 +73,47 @@ a time. Do not author a record with an ad-hoc `yq` expression. Use the fixed
 initializer, then complete its work item:
 
 ```text
-./metric-record <pending-item.yaml> M001 [BUSINESS|PROCESS]
-./metric-queue complete <pending-item.yaml> records/metrics/M001.yaml
+./metric-record <pending-item.yaml> [BUSINESS|PROCESS]
+./metric-queue complete <pending-item.yaml> records/metrics/M00001.yaml
 ```
 
+For example, the pending item `records/pending/F00001.yaml` is passed as
+**only** `F00001.yaml`: `./metric-record F00001.yaml BUSINESS`. The helper
+derives `M00001` from that full snapshot ID; a PASS response names the one
+created record as `record=records/metrics/M00001.yaml`.
+Complete that exact item with
+`./metric-queue complete F00001.yaml records/metrics/M00001.yaml`. Do not pass
+`records/pending/F00001.yaml` as the first argument, search for the output
+after a PASS, or update `state.yaml` yourself: `metric-queue complete` moves
+the pending item to `records/done/` and records both paths atomically.
+Every snapshot filename equals its ID: `F00002.yaml` contains `id: F00002` and
+its record is `M00002.yaml`. Never derive IDs with a loop, padding expression,
+or a numeric filename such as `00002.yaml`.
+
 The category argument is required only for an unclassified family. Pinned
-families such as `fastapi_app_info` and `<prefix>_build_info` infer `PROCESS`.
+identity families such as `fastapi_app_info` and `<prefix>_build_info` infer
+`PROCESS`. The exact, evidence-verified default FastAPI HTTP server-workload
+families in `knowledge/metrics/classification.md` infer `BUSINESS`; framework
+provenance alone never makes observed request traffic `PROCESS`.
 The initializer copies the declared type, unit (including YAML `null`), help,
-members, labels, and bounded warnings. It does not use a `yq if` expression.
-Never hold the complete inventory in context or emit it through one large
-write-tool call.
+members, observed labels, and bounded warnings. It also derives stored labels
+and the exact discovery evidence reference from
+`evidence/metric-discovery/responses/F00001.json` using the snapshot's own ID;
+it never maps `F00001` to an abbreviated `F01` name. `availability: OBSERVED`
+means the raw exposition contained samples and is not changed by an empty
+stored-series result. Do not alter `type`, `unit`, `help`, `members`,
+`observed_labels`, `stored_labels`, `availability`, or `evidence_refs`; edit
+only evidence-backed semantic fields such as `population`, `lifecycle`,
+`cardinality_risk`, and `limitations` before completion. `metric-queue complete`
+independently rederives and rejects changed mechanical facts. It does not use a
+`yq if` expression. Never hold the complete inventory in context or emit it
+through one large write-tool call.
+
+A `PASS metric-queue complete` has already verified the record's ID mapping,
+snapshot facts, discovery labels, availability, and evidence references. It is
+complete; do not reopen it, update it in a batch, inspect helper source, or
+move queue files manually. If completion fails, preserve its evidence and
+return the assigned failure report.
 
 After the two commands pass, enumerate its family files and inspect them one at
 a time; complete each with `./metric-queue complete`. Leave
@@ -144,9 +175,10 @@ inspect `.env` or invoke metric acquisition, snapshot, or queue scripts;
 Keep exposition labels separate from verified stored scrape labels. Stored labels supplied in the run contract may be valid even when absent from a raw exposition dump.
 
 Apply the exact pinned classifications in `knowledge/metrics/classification.md`
-without reconsidering them: `fastapi_app_info` and every
-`<prefix>_build_info` family are `PROCESS`, not `BUSINESS`. For all other
-families, classify domain/application metrics as `BUSINESS` and
+without reconsidering them. In particular, `fastapi_app_info` and every
+`<prefix>_build_info` family are `PROCESS`, while the documented, evidence
+verified FastAPI **server** request/latency/size families are `BUSINESS`.
+For all other families, classify domain/application metrics as `BUSINESS` and
 runtime/process/GC/runtime-library metrics as `PROCESS` from observed semantics
 only. Do not rank panels, formulate operational questions, or invent HTTP or
 database semantics.

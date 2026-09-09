@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -14,6 +15,9 @@ from pathlib import Path
 
 class QueueError(ValueError):
     pass
+
+
+SNAPSHOT_ID = re.compile(r"^F[0-9]{5}$")
 
 
 def require(condition: bool, message: str) -> None:
@@ -32,16 +36,58 @@ def workspace() -> tuple[Path, Path, Path, Path]:
 
 
 def read_state(path: Path) -> dict[str, object]:
-    result = subprocess.run(["yq", "eval", "-o=json", ".", str(path)], capture_output=True, text=True, check=False)
-    require(result.returncode == 0, "cannot read state.yaml")
-    try:
-        value = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
-        raise QueueError("cannot decode state.yaml") from error
+    value = read_yaml(path, "state.yaml")
     require(isinstance(value, dict), "state.yaml must contain an object")
     require(isinstance(value.get("pending"), list) and isinstance(value.get("completed"), list),
             "state.yaml queue fields are invalid")
     return value
+
+
+def read_yaml(path: Path, description: str) -> object:
+    result = subprocess.run(["yq", "eval", "-o=json", ".", str(path)], capture_output=True, text=True, check=False)
+    require(result.returncode == 0, f"cannot read {description}")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise QueueError(f"cannot decode {description}") from error
+
+
+def validate_metric_checkpoint(root: Path, item: Path, record_path: Path) -> None:
+    """Keep facts derived from a snapshot outside model authority."""
+    snapshot = read_yaml(item, "queue item")
+    if not isinstance(snapshot, dict) or snapshot.get("kind") != "metric-family-snapshot":
+        return
+    record = read_yaml(record_path, "checkpoint record")
+    require(isinstance(record, dict), "checkpoint record must contain an object")
+    for source_key, record_key in {
+        "family": "family", "members": "members", "declared_type": "type", "unit": "unit",
+        "help": "help", "observed_labels": "observed_labels",
+    }.items():
+        require(record.get(record_key) == snapshot.get(source_key),
+                f"checkpoint {record_key} does not match the observed snapshot")
+
+    snapshot_id = snapshot.get("id")
+    require(isinstance(snapshot_id, str) and SNAPSHOT_ID.fullmatch(snapshot_id) is not None,
+            "snapshot ID must look like F00001")
+    require(record.get("id") == f"M{int(snapshot_id[1:]):05d}",
+            "checkpoint ID does not match the snapshot ID")
+    response_ref = f"evidence/metric-discovery/responses/{snapshot_id}.json"
+    response_path = root / response_ref
+    require(response_path.is_file() and not response_path.is_symlink(),
+            "stored-series discovery response is unavailable")
+    try:
+        response = json.loads(response_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise QueueError("stored-series discovery response is invalid") from error
+    series = response.get("data") if isinstance(response, dict) and response.get("status") == "success" else None
+    require(isinstance(series, list), "stored-series discovery response is invalid")
+    stored_labels = sorted({key for value in series if isinstance(value, dict) for key in value if isinstance(key, str)})
+    require(record.get("stored_labels") == stored_labels,
+            "checkpoint stored_labels do not match the discovery response")
+    require(record.get("availability") == "OBSERVED",
+            "checkpoint availability must remain OBSERVED")
+    require(record.get("evidence_refs") == ["evidence/metric-facts.json", response_ref],
+            "checkpoint evidence_refs do not match the snapshot ID")
 
 
 def write_state(path: Path, state: dict[str, object]) -> None:
@@ -66,6 +112,7 @@ def complete(item_name: str, record: Path) -> None:
     record_path = (root / record).resolve() if not record.is_absolute() else record.resolve()
     require(record_path.is_file() and not record_path.is_symlink(), "checkpoint record is unavailable")
     require(record_path.is_relative_to(root / "records"), "checkpoint record must be under records")
+    validate_metric_checkpoint(root, item, record_path)
     state = read_state(state_path)
     pending_ref = f"records/pending/{item_name}"
     done_ref = f"records/done/{item_name}"
@@ -74,7 +121,10 @@ def complete(item_name: str, record: Path) -> None:
     state["completed"] = list(dict.fromkeys([*state["completed"], record_ref, done_ref]))
     write_state(state_path, state)
     os.replace(item, target)
-    print(f"PASS metric-queue complete={item_name}")
+    print(
+        f"PASS metric-queue pending={item_name} record={record_ref} "
+        f"done={done_ref}"
+    )
 
 
 def reconcile() -> None:

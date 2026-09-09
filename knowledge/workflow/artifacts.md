@@ -139,7 +139,7 @@ Each metric record has these required fields (plus optional `documented_labels`)
 
 ```yaml
 {
-  "id": "M001",
+  "id": "M00001",
   "source": "APPLICATION|PROCESS|KSM|KUBELET|SCRAPE|SCHEDULER|ISTIO|RECORDING_RULE",
   "category": "BUSINESS|PROCESS|KUBERNETES",
   "family": "<metric family>",
@@ -207,7 +207,7 @@ Each approved record has exactly:
 {
   "id": "AM001",
   "source_artifact": "application-metrics|kubernetes-metrics",
-  "source_metric_id": "M001",
+  "source_metric_id": "M00001",
   "source": "APPLICATION|PROCESS|KSM|KUBELET|SCRAPE|SCHEDULER|ISTIO|RECORDING_RULE",
   "category": "BUSINESS|PROCESS|KUBERNETES",
   "family": "<metric family>",

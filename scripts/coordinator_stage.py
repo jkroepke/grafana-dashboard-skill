@@ -154,6 +154,21 @@ def acceptance_path(workspace: Path, run_id: str, agent: str) -> Path:
     return workspace / "coordinator" / run_id / "records" / "stages" / f"{agent}.yaml"
 
 
+def active_ticket(workspace: Path, agent: str) -> Path:
+    """Find the one active ticket for an explicitly named workflow role."""
+    candidates: list[Path] = []
+    for state_path in sorted((workspace / "coordinator").glob("*/state.yaml")):
+        if state_path.is_symlink():
+            continue
+        state = read_yaml(state_path)
+        if state.get("status") == "IN_PROGRESS" and agent in state.get("pending", []):
+            candidates.append(workspace / agent / state_path.parent.name / "inbox" / "job.yaml")
+    require(len(candidates) == 1, f"no unique active ticket for {agent}")
+    ticket = candidates[0]
+    require(ticket.is_file() and not ticket.is_symlink(), "active stage ticket is unavailable")
+    return ticket
+
+
 def require_accepted(workspace: Path, run_id: str, artifact_type: str, artifact_path: Path) -> None:
     if artifact_type == "run-contract":
         return
@@ -499,10 +514,15 @@ def dispatch(args: argparse.Namespace) -> str:
 
 
 def accept(args: argparse.Namespace) -> str:
-    ticket_path = Path(args.ticket).resolve()
+    if args.ticket is not None:
+        ticket_path = Path(args.ticket).resolve()
+    else:
+        require(args.agent is not None, "accept requires --agent when --ticket is omitted")
+        ticket_path = active_ticket(Path.cwd().resolve(), args.agent)
     ticket, run, root, workspace, inputs, supports = validate_ticket(ticket_path)
     require(Path.cwd().resolve() == workspace, "run coordinator commands from workspace")
     agent = ticket["agent"]
+    require(args.agent is None or args.agent == agent, "--agent does not match the ticket")
     response = args.response
     if args.response_file is not None:
         response_path = path_within(Path(args.response_file), root, "response file")
@@ -649,7 +669,8 @@ def parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--ticket", type=Path, default=Path("inbox/job.yaml"))
 
     accept_parser = subparsers.add_parser("accept", help="validate and accept one specialist response")
-    accept_parser.add_argument("--ticket", required=True)
+    accept_parser.add_argument("--ticket", type=Path)
+    accept_parser.add_argument("--agent", choices=sorted(STAGES), help="active stage when --ticket is omitted")
     response_group = accept_parser.add_mutually_exclusive_group(required=True)
     response_group.add_argument("--response")
     response_group.add_argument("--response-file")

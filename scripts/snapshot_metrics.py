@@ -323,7 +323,7 @@ def write_snapshots(
                 "source_ref": source_ref,
                 "warnings": family.warnings,
             }
-            (temporary / f"{position:05d}.yaml").write_bytes(yaml_bytes(record))
+            (temporary / f"F{position:05d}.yaml").write_bytes(yaml_bytes(record))
         manifest = {
             "schema_version": 1,
             "kind": "metric-snapshot-manifest",

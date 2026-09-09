@@ -198,7 +198,7 @@ This is an agent-write rule, not a restriction on implementation language:
 - Use one file per metric family, approved/rejected metric, question, panel,
   query, finding, or validation result. Keep each structured record at most
   8 KiB; put large/raw bodies in `evidence/` and reference their paths.
-- Give files sortable neutral names such as `0001-M001.yaml` or
+- Give files sortable neutral names such as `F00001-M00001.yaml` or
   `0007-T003.yaml`. Never put target endpoints, customer, cluster, environment,
   or credential material in a filename.
 - Write to `tmp/`, validate with `yq`, then rename into `records/` or `outbox/`.
@@ -227,7 +227,7 @@ This is an agent-write rule, not a restriction on implementation language:
   ```bash
   upstream_artifact="${UPSTREAM_ARTIFACT:?set upstream artifact path}"
   yq eval '.metrics[].id' "$upstream_artifact"
-  export METRIC_ID=M001
+  export METRIC_ID=M00001
   yq eval '.metrics[] | select(.id == strenv(METRIC_ID))' \
     "$upstream_artifact"
   unset METRIC_ID
@@ -241,9 +241,9 @@ Create a small YAML record atomically:
 ```bash
 agent_run_dir="${DASHBOARD_AGENT_RUN_DIR:?set agent run directory}"
 mkdir -p "$agent_run_dir/records/metrics"
-export RECORD_ID=M001 RECORD_TYPE=gauge
-draft="$agent_run_dir/tmp/0001-M001.yaml"
-final="$agent_run_dir/records/metrics/0001-M001.yaml"
+export RECORD_ID=M00001 RECORD_TYPE=gauge
+draft="$agent_run_dir/tmp/F00001-M00001.yaml"
+final="$agent_run_dir/records/metrics/F00001-M00001.yaml"
 yq -n \
   '.id = strenv(RECORD_ID) | .type = strenv(RECORD_TYPE) | .limitations = []' \
   > "$draft"
@@ -257,26 +257,35 @@ write an optional-unit conditional such as `if strenv(UNIT) ...`. Use the
 workspace-local deterministic initializer instead:
 
 ```text
-./metric-record <pending-item.yaml> M001 [BUSINESS|PROCESS]
+./metric-record <pending-item.yaml> [BUSINESS|PROCESS]
 ```
 
 It preserves a missing unit as YAML `null`; an unclassified family requires the
-single category argument. The command writes `records/metrics/M001.yaml`.
+single category argument. If the pending item is
+`records/pending/F00001.yaml`, pass **only** `F00001.yaml`; the helper derives
+`M00001` from the full snapshot ID and returns `record=records/metrics/M00001.yaml`.
+Finish the single queue transition with:
 
-Update the progress snapshot after the record is durable:
-
-```bash
-agent_run_dir="${DASHBOARD_AGENT_RUN_DIR:?set agent run directory}"
-export RECORD_REF=records/metrics/0001-M001.yaml
-yq -i \
-  '.completed = ((.completed // []) + [strenv(RECORD_REF)] | unique) |
-   .next_action = "inspect-next-item"' \
-  "$agent_run_dir/state.yaml"
-unset RECORD_REF
+```text
+./metric-queue complete F00001.yaml records/metrics/M00001.yaml
 ```
 
-`yq -i` uses a temporary output before replacing the file, but it is still
-restricted to the single-writer `state.yaml`; it is not a multi-writer lock.
+Do not pass the `records/pending/` prefix, search for the created record after
+the PASS response, or update `state.yaml` separately. `metric-queue complete`
+atomically moves the item into `records/done/` and updates the queue state.
+Snapshot files use their exact IDs: `F00002.yaml` maps directly to
+`M00002.yaml`; never manufacture or abbreviate a numeric filename.
+The initializer owns mechanical facts: it maps the exact snapshot ID to
+`evidence/metric-discovery/responses/<snapshot-id>.json`, records its returned
+stored-label keys, and keeps `availability: OBSERVED` for an exposition family
+with samples. Do not abbreviate snapshot IDs or rewrite those facts in the
+metric record; `metric-queue complete` independently verifies and rejects
+changed mechanics before completion. Only add evidence-backed semantic
+judgments before completion.
+A successful `metric-queue complete` has already verified those mechanical
+facts. Do not reopen a completed item, batch-update its record, read helper
+source, or manually move queue files. On failure, preserve evidence and return
+the assigned failure report.
 
 ## Stage assembly
 

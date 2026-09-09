@@ -212,6 +212,17 @@ ticket path. Use the workspace-relative run-contract path recorded during
 bootstrap (for example, `coordinator/run-001/outbox/run-contract.yaml`) or an
 absolute path.
 
+Accept a response without copying a ticket path:
+
+```text
+./workflow accept application-metrics 'DONE application-metrics artifact=outbox/application-metrics.yaml sha256=sha256:<64-hex-digest>'
+```
+
+The workflow resolves the one active ticket for that named role. Do not pass
+`--ticket` in the normal coordinator flow. `--ticket` remains only for a
+specific recovery/debug invocation; if used, it must name a regular
+`inbox/job.yaml` file.
+
 When creating a coordinator `failure-report`, every repeated `--evidence`
 argument must name an existing regular file. It is never prose, a ticket label,
 or a workspace-relative shorthand such as `application-metrics/...`. Use the

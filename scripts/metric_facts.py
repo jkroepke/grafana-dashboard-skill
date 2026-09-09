@@ -18,6 +18,13 @@ class FactsError(ValueError):
 KNOWN_PROCESS_FAMILIES = {
     "fastapi_app_info": "FastAPI application identity metadata",
 }
+HTTP_SERVER_FAMILIES = {
+    "http_requests_total": ("counter", {"handler", "method", "status"}, "total number of requests"),
+    "http_request_size_bytes": ("summary", {"handler"}, "content length of incoming requests"),
+    "http_response_size_bytes": ("summary", {"handler"}, "content length of outgoing responses"),
+    "http_request_duration_seconds": ("histogram", {"handler", "method"}, "latency with"),
+    "http_request_duration_highr_seconds": ("histogram", set(), "latency with"),
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -31,6 +38,32 @@ def process_classification(family: str) -> str | None:
         return KNOWN_PROCESS_FAMILIES[family]
     if family.endswith("_build_info") and len(family) > len("_build_info"):
         return "build identity metadata"
+    return None
+
+
+def pinned_classification(record: dict[str, Any]) -> tuple[str, str] | None:
+    """Classify only exact, evidence-checked framework families."""
+    family = record.get("family")
+    if not isinstance(family, str):
+        return None
+    process = process_classification(family)
+    if process:
+        return "PROCESS", process
+    expected = HTTP_SERVER_FAMILIES.get(family)
+    if expected is None:
+        return None
+    metric_type, required_labels, help_fragment = expected
+    labels = record.get("observed_labels")
+    help_text = record.get("help")
+    if (
+        record.get("declared_type") == metric_type
+        and isinstance(labels, list)
+        and all(isinstance(label, str) for label in labels)
+        and required_labels <= set(labels)
+        and isinstance(help_text, str)
+        and help_fragment in help_text.lower()
+    ):
+        return "BUSINESS", "FastAPI server workload instrumentation"
     return None
 
 
@@ -54,7 +87,7 @@ def fact(record: dict[str, Any]) -> dict[str, Any]:
     require(record.get("kind") == "metric-family-snapshot", "record is not a metric snapshot")
     # Exact, pinned framework families are safe to classify. Everything else is
     # deliberately left to evidence-backed judgment rather than name heuristics.
-    known = process_classification(record["family"])
+    known = pinned_classification(record)
     return {
         "id": record["id"],
         "family": record["family"],
@@ -68,8 +101,8 @@ def fact(record: dict[str, Any]) -> dict[str, Any]:
         "has_exemplars": record["has_exemplars"],
         "source_ref": record["source_ref"],
         "warnings": record["warnings"],
-        "classification": "PROCESS" if known else "NEEDS_AI",
-        "classification_reason": known,
+        "classification": known[0] if known else "NEEDS_AI",
+        "classification_reason": known[1] if known else None,
     }
 
 

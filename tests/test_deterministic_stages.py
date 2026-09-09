@@ -81,7 +81,7 @@ class DeterministicStagesTest(unittest.TestCase):
                 "kind: metric-snapshot-manifest\nfamily_count: 1\nschema_version: 1\nsource_ref: metrics\nline_count: 1\nparse_warnings: []\n",
                 encoding="utf-8",
             )
-            (snapshots / "00001.yaml").write_text(
+            (snapshots / "F00001.yaml").write_text(
                 "kind: metric-family-snapshot\nid: F00001\nfamily: demo_total\ndeclared_type: counter\nunit: null\nhelp: demo\nmembers: [demo_total]\nobserved_labels: [pod]\nsample_count: 1\nfirst_sample_line: 1\nlast_sample_line: 1\nhas_timestamps: false\nhas_exemplars: false\nsource_ref: metrics\nwarnings: []\nschema_version: 1\n",
                 encoding="utf-8",
             )
@@ -109,25 +109,64 @@ class DeterministicStagesTest(unittest.TestCase):
         self.assertEqual("PROCESS", fact["classification"])
         self.assertEqual("build identity metadata", fact["classification_reason"])
 
+    def test_metric_facts_classifies_only_verified_fastapi_server_workload(self) -> None:
+        record = {
+            "kind": "metric-family-snapshot", "id": "F00002", "family": "http_requests_total",
+            "declared_type": "counter", "unit": None,
+            "help": "Total number of requests by method, status and handler.",
+            "members": ["http_requests_total"], "observed_labels": ["handler", "method", "status"],
+            "sample_count": 1, "has_timestamps": False, "has_exemplars": False,
+            "source_ref": "metrics", "warnings": [],
+        }
+        fact = metric_facts.fact(record)
+        self.assertEqual("BUSINESS", fact["classification"])
+        self.assertIn("server workload", fact["classification_reason"])
+
+        record["declared_type"] = "gauge"
+        self.assertEqual("NEEDS_AI", metric_facts.fact(record)["classification"])
+
     def test_metric_record_preserves_a_null_unit_without_yq_conditionals(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "records" / "pending").mkdir(parents=True)
             (root / "records" / "done").mkdir(parents=True)
+            responses = root / "evidence" / "metric-discovery" / "responses"
+            responses.mkdir(parents=True)
+            (responses / "F00001.json").write_text(
+                '{"status":"success","data":[{"kubernetes_namespace":"team-a","kubernetes_pod_name":"demo"}]}\n',
+                encoding="utf-8",
+            )
             (root / "state.yaml").write_text("pending: []\ncompleted: []\n", encoding="utf-8")
             (root / "records" / "pending" / "F00001.yaml").write_text(
-                "kind: metric-family-snapshot\nfamily: demo\ndeclared_type: gauge\nunit: null\nhelp: demo\nmembers: [demo]\nobserved_labels: []\nwarnings: []\n",
+                "kind: metric-family-snapshot\nid: F00001\nfamily: demo\ndeclared_type: gauge\nunit: null\nhelp: demo\nmembers: [demo]\nobserved_labels: []\nwarnings: []\n",
                 encoding="utf-8",
             )
             previous = Path.cwd()
             try:
                 os.chdir(root)
-                output = metric_record.create("F00001.yaml", "M001", "BUSINESS")
+                output = metric_record.create("F00001.yaml", "BUSINESS")
             finally:
                 os.chdir(previous)
             record = json.loads(subprocess.run(["yq", "eval", "-o=json", ".", str(output)], capture_output=True, text=True, check=True).stdout)
+            self.assertEqual("M00001.yaml", output.name)
             self.assertIsNone(record["unit"])
             self.assertEqual("APPLICATION", record["source"])
+            self.assertEqual(["kubernetes_namespace", "kubernetes_pod_name"], record["stored_labels"])
+            self.assertEqual(
+                ["evidence/metric-facts.json", "evidence/metric-discovery/responses/F00001.json"],
+                record["evidence_refs"],
+            )
+
+            (root / "records" / "pending" / "F00002.yaml").write_text(
+                "kind: metric-family-snapshot\nid: F00002\nfamily: fastapi_app_info\ndeclared_type: gauge\nunit: null\nhelp: identity\nmembers: [fastapi_app_info]\nobserved_labels: []\nwarnings: []\n",
+                encoding="utf-8",
+            )
+            try:
+                os.chdir(root)
+                with self.assertRaisesRegex(metric_record.RecordError, "pinned family category is PROCESS"):
+                    metric_record.create("F00002.yaml", "BUSINESS")
+            finally:
+                os.chdir(previous)
 
     def test_metrics_discovery_probes_every_snapshot_and_summarizes_candidates(self) -> None:
         with TemporaryDirectory() as temporary:

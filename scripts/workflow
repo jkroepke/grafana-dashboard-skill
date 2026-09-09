@@ -33,6 +33,11 @@ def main() -> int:
     command = sys.argv[1]
     target = Path(__file__).resolve().parent / COMMANDS[command]
     arguments = list(sys.argv[2:])
+    if command == "accept" and arguments and not arguments[0].startswith("-"):
+        if len(arguments) != 2:
+            print("usage: workflow accept <agent> <single-line-response>", file=sys.stderr)
+            return 2
+        arguments = ["--agent", arguments[0], "--response", arguments[1]]
     if command in {"run-contract", "failure-report", "dispatch", "reset-stage", "accept", "validate-ticket"}:
         arguments.insert(0, command)
     elif command == "promote":

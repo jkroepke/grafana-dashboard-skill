@@ -215,7 +215,7 @@ class SnapshotMetricsTest(unittest.TestCase):
 
             records = [
                 load_yaml(path)
-                for path in sorted(output.glob("[0-9]*.yaml"))
+                for path in sorted(output.glob("F*.yaml"))
             ]
             by_family = {record["family"]: record for record in records}
 

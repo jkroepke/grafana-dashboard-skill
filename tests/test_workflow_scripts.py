@@ -987,6 +987,26 @@ class WorkflowScriptsTest(unittest.TestCase):
             result = self.run_tool(*command)
             self.assertIn("[--ticket TICKET]", result.stdout)
 
+    def test_accept_can_resolve_the_named_active_ticket(self) -> None:
+        workspace = self.root / "dashboards" / "test-project" / "workspace"
+        ticket = workspace / "application-metrics" / "run-test" / "inbox" / "job.yaml"
+        ticket.parent.mkdir(parents=True)
+        ticket.write_text("placeholder\n", encoding="utf-8")
+        state = workspace / "coordinator" / "run-test" / "state.yaml"
+        state.parent.mkdir(parents=True)
+        state.write_text(
+            "status: IN_PROGRESS\npending: [application-metrics]\n",
+            encoding="utf-8",
+        )
+        command = (
+            "import pathlib,sys; "
+            f"sys.path.insert(0, {str(REPOSITORY / 'scripts')!r}); "
+            "import coordinator_stage as stage; "
+            f"print(stage.active_ticket(pathlib.Path({str(workspace)!r}), 'application-metrics'))"
+        )
+        result = self.run_tool("-c", command)
+        self.assertEqual(str(ticket), result.stdout.strip())
+
     def test_reset_stage_reissues_ticket_without_changing_agent_workspace(self) -> None:
         workspace = self.root / "dashboards" / "test-project" / "workspace"
         initialized = subprocess.run(
