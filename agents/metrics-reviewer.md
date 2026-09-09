@@ -33,7 +33,7 @@ unresolved disposition in a small YAML file with `yq`. Update `state.yaml` after
 each decision and resume from it; never accumulate all review decisions in
 context for a final write.
 
-First validate YAML and input digests. Then independently verify each capability considered for approval:
+Independently verify each capability considered for approval:
 
 - the family exists in cited evidence
 - category is exactly `BUSINESS`, `PROCESS`, or `KUBERNETES`

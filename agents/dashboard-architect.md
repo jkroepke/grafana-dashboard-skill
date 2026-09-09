@@ -33,7 +33,7 @@ consumer, and omission as its own bounded YAML record with `yq`, updating
 `state.yaml` after each decision. Resume from these files and never retain the
 complete plan in context for one final write.
 
-Validate the contract digest before planning. Select operational questions in this order:
+Select operational questions in this order:
 
 1. business/application work, outcomes, failures, and duration
 2. saturation, concurrency, queues, retries, and dependency behavior

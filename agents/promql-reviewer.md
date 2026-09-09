@@ -33,7 +33,7 @@ checkpoint its result/finding as a bounded YAML file with `yq`, and update
 `state.yaml`. Resume from the queue; never retain every query or finding in
 context for a final write.
 
-Validate all input digests. Independently check:
+Independently check:
 
 - every query maps to a planned question, required variable, or approved annotation
 - every referenced metric is approved

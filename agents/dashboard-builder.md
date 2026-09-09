@@ -36,8 +36,7 @@ and validation result as a small YAML record with `yq`, updating `state.yaml`
 before moving on. Keep rendered JSON and command outputs in `evidence/`. Resume
 from the filesystem; never retain the whole construction history in context.
 
-Refuse to build unless the metrics contract, plan, and query review are `PASS` and all digests match.
-Refuse to build unless the run contract records Grafana v13+ and Dashboard Schema V2, and any existing baseline renders as V2. Classic dashboards and migrations are out of scope.
+Build only from the ticketed metrics contract, plan, query pack, and query review.
 
 ## Construction rules
 
@@ -56,7 +55,7 @@ Do not edit shared helpers in this workflow version. If a helper change is requi
 
 ## Validation and artifact
 
-Format and render the candidate with repository commands. Parse rendered JSON and run available schema/lint checks. Verify mechanically:
+Run `jsonnetfmt -i` on the candidate, render it with `jsonnet -J vendor`, and parse the rendered file with `jq empty`. Then run `scripts/dashboard_integrity.py --ticket <job.yaml>` for the fixed V2, query-parity, and preservation checks. Verify:
 
 - required variables and datasource references
 - every planned/integrated query ID
@@ -66,8 +65,8 @@ Format and render the candidate with repository commands. Parse rendered JSON an
 - no unplanned panels or queries
 - every explicitly non-Prometheus panel, variable, and annotation consumer is unchanged from the rendered baseline; adding, changing, or removing one is `BLOCKED`
 
-Run `scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml>`, `scripts/verify_dashboard_contract.py <rendered-dashboard.json>`, `scripts/verify_query_parity.py <query-pack.yaml> <query-review.yaml> <rendered-dashboard.json>`, and `scripts/verify_non_prometheus_preservation.py <rendered-dashboard.json> [--baseline <baseline-render.json>]`. Because the build manifest is needed for the first command, assemble it with `yq`, run all verifiers, and update only its check statuses if necessary. A failure is a build `FAIL`, never permission to edit an approved expression.
+Only after that integrity check passes may you write a `PASS` build artifact. A failure is a build `FAIL`, never permission to edit an approved expression.
 
-Write a `PASS` `dashboard-build.yaml` using `knowledge/workflow/artifacts.md`, including all input/output digests and baseline final-source digest, only after local checks pass. Write `failure-report.yaml` for a failed or blocked build.
+Write a `PASS` `dashboard-build.yaml` using `knowledge/workflow/artifacts.md` only after those commands pass. Write `failure-report.yaml` for a failed or blocked build.
 
 Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

@@ -19,10 +19,8 @@ dashboards/<project-name>/workspace/<agent>/<run-id>/
 └── state.yaml   small resumable progress snapshot
 ```
 
-`dashboards/<project-name>/workspace/.env` is the shared access
-configuration for this run. It is created only by the coordinator through
-`scripts/set_workflow_env`, never appears in artifacts, and is loaded by
-workflow wrappers when they run from this workspace or a descendant role
+The shared access configuration is never included in artifacts and workflow
+wrappers load it automatically from this workspace or a descendant role
 directory.
 
 The coordinator's dispatch operation initializes this directory. Specialists
@@ -31,10 +29,10 @@ receive its path in their ticket and do not initialize it themselves.
 `scripts/stage_check.py` validates the checkpoint area and assigned artifact
 before a specialist returns its response.
 
-The validator rejects missing layout/state, inbox/record symlinks, non-YAML
+`scripts/validate_agent_workspace.sh` rejects missing layout/state, inbox/record symlinks, non-YAML
 structured files, invalid/non-mapping YAML, inbox/record files over 8 KiB, and
-state over 16 KiB. When an outbox contains a terminal stage artifact, the
-validator also requires `state.status` to equal the artifact status and
+state over 16 KiB. When an outbox contains a terminal stage artifact,
+`scripts/validate_agent_workspace.sh` also requires `state.status` to equal the artifact status and
 `state.next_action` to be `complete`, `pending` to be empty, and `completed` to
 contain the terminal artifact path. A coordinator run contract alone is not a
 terminal artifact.
@@ -45,8 +43,8 @@ all bindings, and updates coordinator state. The ticket contains the
 run/stage/revision, approved input paths and digests, assigned output paths,
 budgets, and opaque capability references—never artifact bodies or raw
 evidence. The dispatch prompt contains only the agent ID, absolute project workspace path,
-and ticket path. The specialist runs `coordinator_stage.py validate-ticket` before work;
-the coordinator runs `coordinator_stage.py accept` on its bounded response.
+and ticket path. The specialist runs `scripts/coordinator_stage.py validate-ticket` before work;
+the coordinator uses `accept` on its bounded response.
 
 A job ticket uses this bounded shape; unused maps/lists stay empty rather than
 growing the dispatch prompt:
@@ -214,8 +212,9 @@ yq -n \
 unset ITEMS_FILE
 ```
 
-Add the remaining required envelope and artifact fields using `yq`, run the
-workspace validator and complete artifact validator, then atomically rename it
+Add the remaining required envelope and artifact fields using `yq`, run
+`scripts/validate_agent_workspace.sh <agent-run-dir>` and
+`scripts/validate_workflow_artifact.py`, then atomically rename it
 to `outbox/<artifact>.yaml`. The
 artifact remains the digest-bound stage gate; the record files are its
 human-reviewable construction log and recovery snapshots.
@@ -228,7 +227,8 @@ JSON and Grafonnet source remains Jsonnet.
 ## Large metrics exposition
 
 Never load a complete `/metrics` response into agent context. Stream Prometheus
-or OpenMetrics text through the repository helper:
+or OpenMetrics text through `scripts/metrics_reader.py` and
+`scripts/snapshot_metrics.py`:
 
 ```bash
 agent_run_dir="${DASHBOARD_AGENT_RUN_DIR:?set agent run directory}"
@@ -238,7 +238,7 @@ scripts/metrics_reader.py | scripts/snapshot_metrics.py \
   --source-ref metrics-evidence
 ```
 
-`snapshot_metrics.py` intentionally has no URL, credential,
+`scripts/snapshot_metrics.py` intentionally has no URL, credential,
 or input-file option: exposition bytes enter only through stdin. It emits no raw
 sample or label values to stdout. It writes one small YAML snapshot per family
 plus `manifest.yaml`, preserving declared `HELP`, `TYPE`, and `UNIT`, member and
@@ -247,5 +247,5 @@ bounded parse warnings.
 
 These are discovery snapshots, not approved metric records. Analysts still
 verify semantics, lifecycle, stored labels, availability, category, and risks.
-In particular, the helper preserves declared type literally and never infers a
+In particular, `scripts/snapshot_metrics.py` preserves declared type literally and never infers a
 counter from `_total` or another name suffix.

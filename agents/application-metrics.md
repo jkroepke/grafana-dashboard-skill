@@ -25,17 +25,17 @@ First run `scripts/coordinator_stage.py validate-ticket --ticket
 or copy the complete conversation. It supplies the assigned metric evidence,
 run-contract binding, output path, limits, and configured discovery access.
 
-The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Run `metric_queue.py reconcile` before processing and use `metric_queue.py complete <pending-item> <record>` after each durable checkpoint. Treat `records/pending/` as the
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Run `scripts/metric_queue.py reconcile` before processing and use `scripts/metric_queue.py complete <pending-item> <record>` after each durable checkpoint. Treat `records/pending/` as the
 metric-family work queue and `records/done/` as its completed queue. Process
 one metric family at a time: create its bounded `records/metrics/*.yaml`
-checkpoint with `yq`, then complete its work item through the queue helper.
+checkpoint with `yq`, then complete its work item with `scripts/metric_queue.py complete`.
 Never hold the complete inventory in context or emit it through one large
 write-tool call.
 
 Always pipe `scripts/metrics_reader.py` into `scripts/snapshot_metrics.py`, assigning
 `records/pending` as its output directory and a neutral source reference. The
-helper accepts metrics only through stdin. Enumerate its family files and
-inspect them one at a time; complete each through the queue helper. Leave
+`scripts/snapshot_metrics.py` accepts metrics only through stdin. Enumerate its family files and
+inspect them one at a time; complete each with `scripts/metric_queue.py complete`. Leave
 `manifest.yaml` in place as queue metadata.
 For discovery work without an exposition snapshot, create one bounded pending
 work-item YAML before inspection and complete it by the same protocol.
@@ -91,6 +91,9 @@ Always surface a verified process/application start-timestamp metric as a capabi
 Assemble the assigned `application-metrics.yaml` shortlist from the small metric
 records with `yq` using the contract in `knowledge/workflow/artifacts.md`.
 Inventory entries MUST contain no query text. Avoid duplicate family/member
-entries and keep large evidence in referenced evidence files.
+entries and keep large evidence in referenced evidence files. Include
+`catalog_ref` (or `null`) and `omission_counts` (`{}` when none) in the
+shortlist top level. Its payload fields are exactly `catalog_ref`, `metrics`,
+`omission_counts`, and `namespace_scope`.
 
 Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

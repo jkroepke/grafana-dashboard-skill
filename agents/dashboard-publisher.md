@@ -33,13 +33,13 @@ and readback results as separate bounded YAML records with `yq`; keep raw bodies
 in `evidence/` and update `state.yaml` after each step. Never accumulate the
 publication transcript in context for one final write.
 
-Refuse to publish unless publication was explicitly requested, the workflow chain passed, the final source digest equals the reviewed candidate digest, `scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml> --source <final-source.jsonnet>` proves the exact final-path render equals the reviewed rendered digest, and the dashboard review is `PASS`.
+Refuse to publish unless publication was explicitly requested and the dashboard review is `PASS`. Before any target write, run `scripts/dashboard_integrity.py --ticket <job.yaml>`; it verifies that the promoted final source produces the reviewed dashboard.
 
 Refuse to publish unless the run contract records Grafana v13+ and Dashboard
 Schema V2. The target must advertise stable Dashboard V2; classic dashboards,
 other structured API versions, and the legacy endpoint are out of scope.
 
-Use the pinned/local stable V2 request model through the configured access method.
+Use only the ticketed opaque publishing capability with the pinned/local stable V2 request model.
 Do not fetch or inspect target OpenAPI/Swagger. Always use resource namespace
 `default`. Create only when no existing resource identity is recorded;
 otherwise GET and update/replace the existing resource. Never create a

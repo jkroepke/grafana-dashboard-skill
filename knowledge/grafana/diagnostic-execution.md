@@ -120,8 +120,8 @@ Do not remove/add unrelated fields randomly.
 Once the exact invalid field/composition is proven:
 
 1. fix Jsonnet/Grafonnet source
-2. render normally
-3. run local checks
+2. run `jsonnet -J vendor` to render the corrected candidate
+3. run `jq empty` and `scripts/dashboard_integrity.py --ticket <job.yaml>`
 4. run the full target strict dry-run once
 
 If the full candidate now passes, continue review.

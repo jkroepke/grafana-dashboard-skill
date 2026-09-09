@@ -35,7 +35,7 @@ query at a time, immediately checkpointing the complete query record as a small
 YAML file with `yq` and updating `state.yaml`. Resume from those files; never
 hold the complete query pack in context or emit it in one large write.
 
-Validate input YAML and digests first. For every planned query:
+For every planned query:
 
 1. identify the approved metric IDs and actual type/lifecycle
 2. apply the exact stored-label or Kubernetes selector contract

@@ -11,8 +11,7 @@ Create or update only Dashboard Schema V2 Grafonnet dashboard resources for Graf
 
 This skill is V2-only and requires Grafana v13+.
 
-- Require a verified Grafana version in `v<major>[.<minor>[.<patch>]]` form, with major version 13 or higher, before dispatching any specialist.
-- Require a successful configured `GET /version` check whose `gitTreeState` reports Grafana v13 or later. Ignore its Kubernetes API-style `major`, `minor`, and `gitVersion` fields.
+- Require the fixed Grafana v13+ eligibility gate before dispatching any specialist.
 - Create, update, validate, and publish only Dashboard Schema V2 resources (`apiVersion: dashboard.grafana.app/v2`, `kind: Dashboard`).
 - Do not create, update, convert, validate, or publish classic dashboard JSON. An existing source is assessed by the designated specialist stages; if it renders to a non-V2 dashboard, stop. Classic-to-V2 migration is outside this workflow.
 
@@ -95,11 +94,8 @@ raw task inputs, query a datasource, or construct specialist artifacts.
 
 Do not require publication intent before using an already configured Dashboard API credential/wrapper for a non-persisting dry-run validation request.
 
-The parsed `gitTreeState` establishes only Grafana v13+ eligibility. It does
-not establish that the credential may create or update a dashboard, even with
-`dryRun=All`; the later reviewer dry-run is the permission/admission check. A
-Prometheus datasource is a separate capability and must not be inferred from
-the `/version` result.
+Grafana eligibility does not authorize a dashboard write; the later reviewer
+dry-run is the permission/admission check. Datasource access is separate.
 
 The Grafana Dashboard resource API namespace is always `default`. Do not ask for, infer, discover, or configure another Dashboard API namespace. This API namespace is unrelated to the dashboard variable named `namespace`.
 
@@ -155,14 +151,14 @@ before dispatch. Use `dispatch` to initialize the role workspace, validate
 prerequisites, create its immutable `inbox/job.yaml`, and update coordinator
 state. Do not hand-build tickets or digests. Give the fresh specialist only its
 agent ID, absolute project workspace path, and ticket path. The specialist runs
-`coordinator_stage.py validate-ticket` before reading assignments. Use `accept`
+`scripts/coordinator_stage.py validate-ticket` before reading assignments. Use `accept`
 to verify its bounded response, artifact, and digest. Use a fresh specialist
 instance at every author/reviewer boundary. Do not create recursive subagent
 trees.
 
 The ticket contains paths, expected digests, configured access references, and
 transitive validation paths. Support artifacts
-are validator-only unless they are direct role inputs.
+are for `scripts/validate_workflow_artifact.py` only unless they are direct role inputs.
 
 The mandatory state machine is:
 
@@ -181,11 +177,9 @@ application-metrics
 
 Any upstream artifact change invalidates every downstream approval derived from its previous digest.
 
-When a stage cannot produce its normal artifact, create the terminal report
-with `scripts/create_coordinator_artifact.py failure-report`. Every supplied
-evidence reference must identify an existing regular file inside the repository.
-The helper validates the report and marks coordinator state `FAIL` or `BLOCKED`
-with `next_action: complete`.
+When a specialist cannot produce its normal artifact, it writes its assigned
+`failure-report.yaml`. The coordinator uses its fixed `failure-report` action
+only for a coordinator-owned blocker.
 
 ### 1. Metric inventories
 
@@ -204,7 +198,7 @@ Analysts MUST NOT write final or candidate PromQL, variable queries, annotation 
 
 The analyst always streams `scripts/metrics_reader.py` through
 `scripts/snapshot_metrics.py` on stdin.
-The helper has no network, credential, or input-file interface and writes small
+`scripts/snapshot_metrics.py` has no network, credential, or input-file interface and writes small
 per-family YAML snapshots without exposing raw sample or label values to agent
 context. The analyst inspects those snapshots selectively. Both metric analysts
 use `records/pending/` and `records/done/` as a durable queue: after a metric
@@ -293,9 +287,8 @@ After writing, the publisher GETs the resource again through the same API versio
 - Do not give subagents the complete conversation.
 - Do not give subagents the complete `SKILL.md`; their registered agent definition is their role contract.
 - Queue each subagent's approved upstream paths/digests and assignments in its
-  small immutable `inbox/job.yaml`; create and validate it with
-  `scripts/coordinator_stage.py`, then give the model only its agent ID, project
-  workspace path, and ticket path.
+  small immutable `inbox/job.yaml` through `dispatch`, then give the model only
+  its agent ID, project workspace path, and ticket path.
 - Every agent treats context as disposable and its assigned workspace as durable
   memory. It writes one bounded YAML record as soon as each logical item is
   resolved, then updates `state.yaml`; it never accumulates a complete result in
@@ -389,12 +382,12 @@ create or update operation, server-side dry-run validation is mandatory before
 review can pass. Use the pinned/local stable V2 contract, namespace `default`, and
 `knowledge/grafana/grafana-v2-dry-run.md`. A successful HTTP status alone is
 insufficient: inspect warnings and the returned resource structure. Do not
-fetch target OpenAPI/Swagger; `/version` is the only target-version request.
+fetch target OpenAPI/Swagger.
 
-Do not replace the configured local command with direct `curl`, a guessed
-`GRAFANA_URL`, or an environment scan. The command is the access boundary for
-targets that are reachable only through a local proxy, tunnel, or authenticated
-helper.
+Do not replace the ticketed `scripts/grafana_dry_run.py` capability with direct
+`curl`, a guessed `GRAFANA_URL`, or an environment scan. That capability is the
+access boundary for targets reachable only through a local proxy, tunnel, or
+authenticated wrapper.
 
 If target dry-run fails, read `knowledge/grafana/v2-validation-errors.md` before changing source. Read `knowledge/grafana/diagnostic-execution.md` and use bounded target-side isolation only when the configured wrapper preserves the failed response and supports those probe operations. Otherwise retain the wrapper failure locally and return it as a validation failure; do not bypass the wrapper with a direct request. CUE disjunction errors can list discriminator conflicts from every rejected branch; those conflicts are not evidence that the request contains multiple variants. Do not disable strict validation or invent union-wrapper fields as a workaround.
 

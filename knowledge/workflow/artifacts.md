@@ -14,10 +14,7 @@ protocol throughout every stage.
 - Any upstream change invalidates all downstream approvals.
 - Only `promql-builder` may author or change query text that can enter the dashboard.
 - Use `scripts/stage_check.py` to validate the assigned artifact and produce the stage response.
-- Run `scripts/verify_candidate_render.py` to prove the rendered JSON is the exact output of the candidate source.
-- Run `scripts/verify_dashboard_contract.py` to prove the mandatory variable structure.
-- Run `scripts/verify_query_parity.py` after rendering.
-- Run `scripts/verify_non_prometheus_preservation.py` to reject any non-Prometheus consumer change.
+- Dashboard build, review, and publication stages use `scripts/dashboard_integrity.py` before their terminal action. It derives fixed paths and runs the required mechanical checks from the ticket.
 - Run `scripts/workflow_chain.py` before promotion.
 - The run contract must record Dashboard Schema V2 and a Grafana version of v13 or later. This workflow rejects classic dashboard sources and does not perform migrations.
 
@@ -57,13 +54,13 @@ show types without ambiguity:
 }
 ```
 
-Schemas are closed: unknown fields fail validation. Input names and digests are stage-specific. The validator recomputes every supplied input digest and rejects missing, extra, or mismatched inputs. Direct dependencies use `--input`; transitive dependencies use `--support`. The validator recursively validates the entire supplied upstream graph, and rejects missing or extra support artifacts. A role receives support paths only for validation and MUST NOT read their bodies unless they are also direct role inputs.
+Schemas are closed: unknown fields fail validation. Input names and digests are stage-specific. `scripts/validate_workflow_artifact.py` recomputes every supplied input digest and rejects missing, extra, or mismatched inputs. Direct dependencies use `--input`; transitive dependencies use `--support`. It recursively validates the entire supplied upstream graph and rejects missing or extra support artifacts. A role receives support paths only for validation and MUST NOT read their bodies unless they are also direct role inputs.
 
 Every `evidence_ref` and `evidence_refs` entry is a local file reference, with
 an optional `:line` or `#fragment` locator. Relative references resolve from the
 agent run directory when the artifact is in `outbox/`, otherwise from the
 artifact directory. The referenced file must exist as a regular, non-symlink
-file inside `repository_root`; labels such as `runtime-capabilities` without a
+file inside the repository; labels such as `runtime-capabilities` without a
 corresponding file are invalid.
 
 `revision` is limited to `1..3`. A fourth correction artifact is invalid and must become a `BLOCKED` failure report for user direction.
@@ -88,113 +85,26 @@ the coordinator accepts it through its fixed control operation.
 
 ## Run contract
 
-The coordinator creates a `run-contract` artifact with the deterministic helper:
+The coordinator creates and validates the immutable run contract before any
+specialist dispatch. It carries the fixed source, rendering, compatibility,
+limit, and capability bindings for the run. Specialists receive only its
+ticketed binding; they do not create, edit, or inspect run-contract internals.
 
-```bash
-scripts/create_coordinator_artifact.py run-contract
-```
-
-Run this command from the project workspace. It derives the repository root and
-project name and generated run ID from that directory, uses the project working directory's
-`dashboard.jsonnet` as the final source, uses `scripts/grafana_version.py`, and
-renders with `jsonnet -J vendor {source}`. Bootstrap the workspace-private `.env`
-through `scripts/set_workflow_env` before this command. The configuration must
-explicitly provide the datasource, dashboard-validation, and publication capability
-values; datasource access additionally requires `scripts/set_datasource`.
-The version helper reads
-that file, performs `GET /version`, and returns HTTP-200 JSON only on stdout. The helper
-executes it once, stores the raw response privately, and extracts Grafana's version only from
-`gitTreeState: "grafana v<version>"`. It ignores `major`, `minor`, and
-`gitVersion`, which may identify the backing Kubernetes API server. The helper
-infers the source baseline and a unique locally locked and vendored Grafonnet
-revision, writes immutable YAML through `yq`, validates it, and updates the
-coordinator state. A repeated version-gate attempt for the same run is refused.
-
-The resulting artifact is at most 16 KiB, with `status: PASS`, `inputs: {}`, and:
-
-```yaml
-{
-  "repository_root": "<absolute repository path>",
-  "workspace": "<repository>/dashboards/<project-name>/workspace",
-  "source": {
-    "final_path": "<dashboard.jsonnet>",
-    "candidate_path": "<adjacent .candidate.jsonnet>",
-    "baseline_state": "ABSENT|PRESENT",
-    "baseline_sha256": "sha256:<digest>|null"
-  },
-  "rendered_candidate_path": "<workspace>/dashboard-builder/<run-id>/evidence/rendered.json",
-  "render": {
-    "cwd": "<absolute repository path>",
-    "argv": ["jsonnet", "-J", "vendor", "{source}"],
-    "timeout_seconds": 120
-  },
-  "schema": {
-    "dashboard": "V2",
-    "grafana_version": "v13.0.0 or later, extracted from /version.gitTreeState",
-    "grafonnet_revision": "<revision>|null"
-  },
-  "limits": {
-    "approved_metrics": 40,
-    "changed_questions": 12,
-    "changed_panels": 12,
-    "changed_queries": 24,
-    "total_panels": 48,
-    "total_queries": 64,
-    "findings": 20
-  },
-  "capabilities": {
-    "datasource_access": true,
-    "dashboard_api_validation": true,
-    "publish_requested": false
-  },
-  "selector_proposals": {}
-}
-```
-
-Run all workflow validators and gates with their working directory set to `repository_root`; the validator requires that field to equal its current working directory. This confines promotion to absolute `.jsonnet` paths inside the active repository. The candidate must be adjacent and named `<final-stem>.candidate.jsonnet`. `render.argv` is executed directly without a shell, contains exactly one standalone `{source}` argument, and must emit the rendered dashboard JSON on stdout. Candidate source containing `std.thisFile` is rejected because renaming it could change the final render.
-
-Validation requires `render.argv[0]` to resolve to an executable. When
-`jsonnetfile.lock.json` declares Grafonnet, `schema.grafonnet_revision` must
-match a locked revision whose dependency is present under `vendor/`.
-
-Limits may be lowered per run but never raised above these hard ceilings. `changed_*` limits count `NEW` and `MODIFIED` records; preserved existing records count only against `total_*`. If an existing dashboard exceeds a hard total ceiling, stop and ask the user to split or explicitly redesign the workflow rather than dropping queries from attestation.
-
-`selector_proposals` are unapproved evidence. Only selectors in the later metrics contract are authoritative downstream.
-
-Validate:
-
-```bash
-scripts/validate_workflow_artifact.py <run-contract.yaml>
-```
-
-### Grafana `/version` gate
-
-The coordinator bootstraps the workspace-private `.env` with
-`scripts/set_workflow_env` and then uses `scripts/grafana_version.py` to perform
-this request:
-
-```text
-GET <GRAFANA_URL>/version
-```
-
-The zero-argument wrapper reads the private configuration and invokes the
-configured client. Exit status `0` must mean it received HTTP 200 and emits only
-the JSON response to stdout. The coordinator executes it once before delegation
-and stores stdout and stderr in neutral scratch files.
-It parses only `gitTreeState`, which must exactly be
-`grafana v<major>[.<minor>[.<patch>]]`; this value supplies
-`schema.grafana_version` and must be v13 or later. Ignore `major`, `minor`,
-and `gitVersion`: a Kubernetes API server may populate them with its own
-version. Do not fetch, inspect, or cache target OpenAPI/Swagger.
-
-The coordinator does not retry an unchanged `/version` result. A successful
-version gate neither proves a Prometheus datasource is usable nor proves the
-credential can create/update with `dryRun=All`.
+Run limits are enforced by dispatch and validators. The metrics contract, not
+the run contract, is the authoritative selector/population contract.
 
 ## Metric shortlists
 
 `application-metrics` and `kubernetes-metrics` each write at most 64 KiB and 48
-records in `metrics`. `application-metrics` runs first and additionally writes
+records in `metrics`. Every shortlist includes:
+
+```yaml
+catalog_ref: <local catalog/index reference or null>
+metrics: [<metric records>]
+omission_counts: {<omission-code>: <non-negative count>}
+```
+
+Use `omission_counts: {}` when no families were omitted. `application-metrics` runs first and additionally writes
 one immutable local scope evidence file containing the exact non-empty namespace
 set represented by verified application stored series. Its artifact includes:
 
@@ -208,7 +118,7 @@ namespace_scope:
 The namespace values themselves are never included in an artifact. The
 `kubernetes-metrics` artifact requires `application-metrics` as a direct input
 and repeats the exact `namespace_scope_ref` and `namespace_scope_sha256`; the
-validator requires both to match the application artifact. The Kubernetes agent
+`scripts/validate_workflow_artifact.py` requires both to match the application artifact. The Kubernetes agent
 uses that set, including every member when it contains multiple namespaces, for
 every discovery request. During discovery analysts write one YAML file per
 metric family under `records/metrics/`, update `state.yaml`, and assemble the
@@ -361,7 +271,7 @@ Every Prometheus query that will exist in the final dashboard—including preser
 }
 ```
 
-The artifact validator rejects `rate()`, `irate()`, `increase()`, or `resets()`
+`scripts/validate_workflow_artifact.py` rejects `rate()`, `irate()`, `increase()`, or `resets()`
 when the referenced approved metric is a gauge, info, stateset, or unknown type.
 This is checked from approved metadata and expression structure; a `_total`
 suffix never upgrades a gauge to a counter.
@@ -440,20 +350,7 @@ validation results are checkpointed separately before manifest assembly:
 }
 ```
 
-`PASS` requires every query-pack ID exactly once, no omissions, all mandatory checks `PASS`, and candidate/rendered/baseline values equal to the run contract and current files.
-
-Run:
-
-```bash
-scripts/verify_candidate_render.py \
-  <run-contract.yaml> <dashboard-build.yaml>
-scripts/verify_dashboard_contract.py \
-  <rendered-dashboard.json>
-scripts/verify_query_parity.py \
-  <query-pack.yaml> <query-review.yaml> <rendered-dashboard.json>
-scripts/verify_non_prometheus_preservation.py \
-  <rendered-dashboard.json> [--baseline <baseline-render.json>]
-```
+`PASS` requires every query-pack ID exactly once, no omissions, all mandatory checks `PASS`, and candidate/rendered/baseline values equal to the current ticketed files. Run `scripts/dashboard_integrity.py --ticket <job.yaml>` before writing it.
 
 Required inputs: `run-contract`, `metrics-contract`, `dashboard-plan`, `query-pack`, `query-review`.
 
@@ -491,20 +388,11 @@ Required inputs: `run-contract`, `dashboard-plan`, `query-pack`, `query-review`,
 
 When a normal artifact cannot be produced, first write one or more
 evidence files below the relevant agent workspace, then create
-`failure-report.yaml` with:
+`failure-report.yaml` in the assigned outbox. `scripts/stage_check.py`
+validates the specialist report. The coordinator uses its fixed
+`failure-report` action only for a coordinator-owned blocker.
 
-```bash
-scripts/create_coordinator_artifact.py failure-report \
-  --run-contract <run-contract.yaml> \
-  --status BLOCKED \
-  --failed-stage <agent-id> \
-  --owner <agent-id-or-USER> \
-  --code <stable-code> \
-  --summary '<summary>' \
-  --evidence evidence/<neutral-file>
-```
-
-The helper produces an artifact at most 16 KiB, containing only:
+A failure report is at most 16 KiB and contains only:
 
 ```yaml
 {
@@ -516,8 +404,7 @@ The helper produces an artifact at most 16 KiB, containing only:
 }
 ```
 
-Use status `FAIL` or `BLOCKED`. It requires the run-contract input. The helper
-validates every evidence file reference and sets terminal coordinator state.
+Use status `FAIL` or `BLOCKED`. It requires the run-contract input.
 
 ## Chain and promotion gate
 
@@ -556,6 +443,6 @@ from its checkpointed request/readback results:
 }
 ```
 
-Required inputs: `run-contract`, `dashboard-build`, `dashboard-review`. The validator requires explicit publication intent, the exact reviewed source at the final repository path, and successful target readback. Publication failures use `failure-report`; the coordinator never constructs or repairs API payloads.
+Required inputs: `run-contract`, `dashboard-build`, `dashboard-review`. `scripts/validate_workflow_artifact.py` requires explicit publication intent, the exact reviewed source at the final repository path, and successful target readback. Publication failures use `failure-report`; the coordinator never constructs or repairs API payloads.
 
-After promotion, recursive build validation accepts the reviewed source digest at the final path when the candidate path is absent. The publisher verifies that path explicitly with `verify_candidate_render.py ... --source <final-source.jsonnet>` before any target write.
+Before the target write, the publisher runs `scripts/dashboard_integrity.py --ticket <job.yaml>` to verify the promoted final source.

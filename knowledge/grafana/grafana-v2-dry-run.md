@@ -29,10 +29,8 @@ validation, stop with a bounded validation-gap failure.
 
 ## Source of truth
 
-The coordinator's run contract records the Grafana version parsed from the one
-opaque `GET /version` response. It extracts only `gitTreeState` in the form
-`grafana v<version>` and rejects versions below v13; the Kubernetes API-style
-`major`, `minor`, and `gitVersion` fields are not Grafana version evidence.
+The coordinator establishes Grafana compatibility before dispatch. Reviewers
+do not repeat or inspect that gate.
 
 Use the repository's pinned/local stable V2 request shapes. Do not fetch,
 inspect, or cache target OpenAPI/Swagger in this stage or any other workflow
@@ -170,4 +168,4 @@ Current Grafana server code also skips some write-time checks during dry-run, in
 
 The reviewer may return `PASS` only when all applicable checks pass, including server-side dry-run when target Grafana API access is available/required.
 
-On failure, report the exact Grafana error concisely and point back to the Jsonnet/Grafonnet source correction. Do not patch the rendered JSON as the final fix. Do not replace unresolved evidence with a speculative server/version explanation.
+On failure, report the exact Grafana error concisely and point back to the Jsonnet/Grafonnet source correction. Do not patch the rendered JSON as the final fix. Do not replace unresolved evidence with a speculative compatibility explanation.

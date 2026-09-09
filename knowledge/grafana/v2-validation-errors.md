@@ -234,8 +234,7 @@ When local knowledge and target behavior disagree, use evidence in this order:
 2. locally pinned Grafana/Grafonnet generated schema/code for the target version
 3. repository knowledge
 
-Do not fetch target OpenAPI/Swagger; the only target-version request is the
-coordinator's one opaque `/version` command.
+Do not fetch target OpenAPI/Swagger.
 
 Do not use a newer public schema to override a pinned target.
 

@@ -37,8 +37,7 @@ finding, and target-validation result in its own bounded YAML file with `yq`,
 then update `state.yaml`. Keep complete responses in `evidence/` and resume from
 the queue instead of accumulating the review in context.
 
-Refuse review unless upstream artifacts are `PASS`, all digests match, and the candidate has not changed since the build manifest was written.
-Refuse review unless the run contract records Grafana v13+ and Dashboard Schema V2, and the candidate (plus any baseline) is a V2 resource. Classic dashboards and migrations are out of scope.
+Review only the ticketed candidate and upstream artifacts.
 
 ## Query integration gate
 
@@ -52,7 +51,7 @@ Treat the approved query pack as immutable. Exhaustively extract every Prometheu
 - every preserved legacy expression in an updated dashboard is represented in the approved pack
 - the query-review digest approves the exact current query-pack digest
 
-Independently run `scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml>`, `scripts/verify_dashboard_contract.py <rendered-dashboard.json>`, `scripts/verify_query_parity.py <query-pack.yaml> <query-review.yaml> <rendered-dashboard.json>`, and `scripts/verify_non_prometheus_preservation.py <rendered-dashboard.json> [--baseline <baseline-render.json>]`. If the pinned representation uses another field for Prometheus text, require the verifier to cover it before review can pass.
+Independently run `scripts/dashboard_integrity.py --ticket <job.yaml>` before returning `PASS`. It derives every fixed input from the ticket and verifies rendering, V2 structure, approved query parity, and preservation of non-Prometheus consumers. If the pinned representation uses another field for Prometheus text, require the integrity check to cover it before review can pass.
 
 Do not repeat semantic PromQL review and do not propose replacement query text. A semantic/query-text correction is classified `QUERY_PACK_CHANGE_REQUIRED` and must return through the coordinator to `promql-builder`, followed by a new PromQL review and rebuild.
 

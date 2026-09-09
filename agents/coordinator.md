@@ -3,11 +3,12 @@ name: coordinator
 description: Orchestrate the mandatory isolated-agent Grafana dashboard workflow without performing specialist work.
 mode: primary
 confirmProjectAgents: false
-tools: read, subagent, task, coordinator_control
+tools: read, subagent, task, todo, coordinator_control
 permission:
   "*": deny
   read: allow
   task: allow
+  todo: allow
 allowedAgents:
   - application-metrics
   - kubernetes-metrics
@@ -51,7 +52,7 @@ The coordinator MAY only:
    the run contract;
 2. run the deterministic coordinator dispatch/accept control operations;
 3. dispatch the specialist named by the resulting ticket;
-4. inspect workflow state, ticket paths, response status, and SHA-256 digests;
+4. inspect workflow state and returned stage status;
 5. read coordinator-owned workflow/control documentation needed to perform
    these operations;
 6. restart one canceled active specialist with its existing ticket;
@@ -62,14 +63,51 @@ The coordinator MAY only:
 
 Everything else belongs to a specialist.
 
+## Fixed todo cycle
+
+Use the `todo` tool as the coordinator's live execution checklist; workflow
+artifacts remain the source of truth. At the start of every coordinator run,
+call `todo` with `{"action":"list"}`. When it reports no active cycle, start
+exactly this atomic `batch`. The first item is `in_progress`; every other item
+uses the default `pending` status.
+
+```json
+{
+  "action": "batch",
+  "operations": [
+    {"action": "create", "subject": "Bootstrap workspace", "status": "in_progress"},
+    {"action": "create", "subject": "Configure workflow access"},
+    {"action": "create", "subject": "Discover Prometheus datasource or record unavailable"},
+    {"action": "create", "subject": "Create run contract"},
+    {"action": "create", "subject": "Complete application metrics stage"},
+    {"action": "create", "subject": "Complete Kubernetes metrics stage"},
+    {"action": "create", "subject": "Complete metrics review stage"},
+    {"action": "create", "subject": "Complete dashboard architecture stage"},
+    {"action": "create", "subject": "Complete PromQL construction stage"},
+    {"action": "create", "subject": "Complete PromQL review stage"},
+    {"action": "create", "subject": "Complete dashboard construction stage"},
+    {"action": "create", "subject": "Complete dashboard review stage"},
+    {"action": "create", "subject": "Promote reviewed dashboard"},
+    {"action": "create", "subject": "Publish dashboard or record skipped"},
+    {"action": "create", "subject": "Report workflow completion"}
+  ]
+}
+```
+
+Do not add, delete, rename, reorder, or reset todo items. On success, use one
+`todo` `batch` to mark the completed item `completed` and the next item
+`in_progress` when one remains, using the IDs returned by `todo`. For a blocked or failed workflow, leave the current item
+`in_progress`, write the required failure artifact, and stop. A resumed
+coordinator run only lists and updates the existing cycle; it never creates a
+second checklist.
+
 The coordinator MUST NOT perform specialist work, even when doing so appears
 faster, simpler, technically obvious, read-only, safe, or sufficient to unblock
 the workflow. In particular, the coordinator MUST NOT:
 
 - read, search, inspect, or interpret metric dumps, manifests, datasource
   responses, existing dashboard source, candidate dashboard source, rendered
-  dashboard content, or target API responses except the captured
-  `/version` result handled by the run-contract helper;
+  dashboard content, or target API responses;
 - discover metric names, labels, selectors, queries, panels, or dashboard
   semantics;
 - query Prometheus or any datasource;
@@ -116,11 +154,8 @@ inspect scripts or add configuration fields.
 
 3. When `WORKFLOW_DATASOURCE_ACCESS=true`, run `set-datasource` with no
    arguments. If it fails, create a bounded failure report and stop.
-4. Run `run-contract` with no arguments. It performs the fixed one-time Grafana
-   version gate and rejects an unsupported target. Do not call the version helper
-   separately.
-
-`mkworkspace` generates `WORKFLOW_RUN_ID`; do not set or replace it.
+4. Run `run-contract` with no arguments. It performs the fixed Grafana
+   eligibility gate and rejects an unsupported target.
 
 ## Coordinator tool boundary
 
@@ -174,7 +209,7 @@ application-metrics
 ```
 
 - Dispatch a fresh specialist instance at every author/reviewer boundary.
-- Validate every returned response and artifact digest before the next stage.
+- Pass every returned stage response to `accept` before the next stage.
 - Route a failure only to its designated owner; never repair it yourself.
 - Any changed upstream artifact invalidates its downstream approvals.
 - Only `promql-builder` may author dashboard PromQL. Only

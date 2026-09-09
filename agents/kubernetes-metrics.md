@@ -50,17 +50,17 @@ namespace-scoped request and response to neutral local files, then invoke it as
 datasource UID, or inline selector. A reader that cannot apply the supplied
 scope is unavailable for this stage.
 
-The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Run `metric_queue.py reconcile` before processing and use `metric_queue.py complete <pending-item> <record>` after each durable checkpoint. Treat `records/pending/` as the
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Run `scripts/metric_queue.py reconcile` before processing and use `scripts/metric_queue.py complete <pending-item> <record>` after each durable checkpoint. Treat `records/pending/` as the
 metric-family work queue and `records/done/` as its completed queue. Process
 one metric family or population fact at a time: create its bounded
-`records/metrics/*.yaml` checkpoint with `yq`, then complete its work item
-through the queue helper. Never retain the complete inventory in context for a
+`records/metrics/*.yaml` checkpoint with `yq`, then complete its work item with
+`scripts/metric_queue.py complete`. Never retain the complete inventory in context for a
 final write.
 
 Always pipe `scripts/metrics_reader.py` into `scripts/snapshot_metrics.py`, assigning
 `records/pending` as its output directory and a neutral source reference. The
-helper accepts metrics only through stdin. Inspect its family snapshots
-selectively; complete each family through the queue helper. Leave `manifest.yaml`
+`scripts/snapshot_metrics.py` accepts metrics only through stdin. Inspect its family snapshots
+selectively; complete each family with `scripts/metric_queue.py complete`. Leave `manifest.yaml`
 in place as queue metadata. For
 discovery work without an exposition snapshot, create one bounded pending
 work-item YAML before inspection and complete it by the same protocol.
@@ -98,6 +98,9 @@ Assemble the assigned `kubernetes-metrics.yaml` shortlist from the small records
 with `yq` using `knowledge/workflow/artifacts.md`. Inventory entries MUST contain
 no query text. Preserve large evidence in neutral evidence files. Include the
 same `namespace_scope_ref` and `namespace_scope_sha256` received from
-`application-metrics`; the validator rejects a different scope.
+`application-metrics`; `scripts/validate_workflow_artifact.py` rejects a different scope. Also include
+`catalog_ref` (or `null`) and `omission_counts` (`{}` when none). Its payload
+fields are exactly `catalog_ref`, `metrics`, `omission_counts`,
+`namespace_scope_ref`, and `namespace_scope_sha256`.
 
 Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

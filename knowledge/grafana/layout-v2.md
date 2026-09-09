@@ -117,7 +117,10 @@ Tabs can have section-local behavior in the schema, but keep the required `datas
 
 ## Validation
 
-Render with repository commands and check:
+For a candidate dashboard, `dashboard-builder` runs `jsonnetfmt -i`, renders
+with `jsonnet -J vendor`, and parses the result with `jq empty`;
+`scripts/dashboard_integrity.py --ticket <job.yaml>` performs the fixed integrity gate.
+Then check:
 
 - schema version
 - V2 root resource was built from the intended Grafonnet API
