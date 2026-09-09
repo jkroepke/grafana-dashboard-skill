@@ -1,6 +1,6 @@
 ---
 name: kubernetes-metrics
-description: Inventory and categorize Kubernetes workload, resource, capacity, lifecycle, and scrape metrics without designing queries or dashboards.
+description: Emit fixed Kubernetes and Istio workload metric candidates for an application-derived namespace scope without designing queries or dashboards.
 mode: subagent
 tools: read, bash
 ---
@@ -9,7 +9,12 @@ tools: read, bash
 
 ## Purpose
 
-Inventory verified Kubernetes-related metric capabilities and categorize them as `KUBERNETES`.
+Emit the fixed Kubernetes and Istio workload catalogue and categorize its
+candidates as `KUBERNETES`. This stage completes a deterministic artefact
+assembly: validate the application scope binding, emit the fixed catalogue,
+checkpoint each emitted record, and assemble the shortlist. The metrics
+reviewer verifies whether each candidate is actually present and usable in the
+target.
 
 Do not analyze business semantics. Do not write PromQL, Grafana variable or annotation queries, panel plans, Jsonnet, or dashboard files.
 
@@ -23,63 +28,31 @@ Read:
 
 First run `scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
-or copy the complete conversation. It supplies the relevant evidence, exact
-workload/container identity, run-contract and `application-metrics` bindings,
-namespace-scope reference and digest, output path, limits, and configured discovery
-access.
+or copy the complete conversation. It supplies the run-contract and
+`application-metrics` bindings, namespace-scope reference and digest, output
+path, and limits.
 
-Do not start Kubernetes discovery until the completed application artifact and
-its namespace scope validate. The scope is an exact, non-empty set and may
-contain multiple namespaces. Every live request, local inventory filter, and
-metric-family inspection MUST be restricted to that set. Never scrape, list, or
-query Kubernetes metrics unconditionally across the cluster; do not replace the
-set with an empty selector, `.*`, an `All` value, or a guessed namespace.
+Start by validating the completed application artifact and its namespace scope.
+The scope is an exact, non-empty set and may contain multiple namespaces. Treat
+the namespace values as opaque. Carry the exact scope reference and digest
+unchanged into the output; later validation and query stages use that binding.
 
-Use an exact equality selector for one namespace or an escaped, anchored
-alternation containing only the supplied namespace values for multiple
-namespaces. When request or matcher-size limits require batching, split only
-the supplied set into bounded batches and union the resulting facts; each batch
-remains namespace-scoped. Keep namespace values in local evidence/request files
-in local evidence. If the application scope is missing, empty, invalid,
-or cannot be applied by the available access method, return a bounded failure
-report instead of widening discovery.
+The supplied project workspace is the shared workflow root. Complete the
+entire deterministic stage with one command:
 
-When the configured capability is `scripts/prometheus_reader.py`, write each
-namespace-scoped request and response to neutral local files, then invoke it as
-`prometheus_reader.py <request-file> <response-file>`. Never pass a URL,
-datasource UID, or inline selector. A reader that cannot apply the supplied
-scope is unavailable for this stage.
+```bash
+scripts/kubernetes_presets.py --ticket <job.yaml>
+```
 
-The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Run `scripts/metric_queue.py reconcile` before processing and use `scripts/metric_queue.py complete <pending-item> <record>` after each durable checkpoint. Treat `records/pending/` as the
-metric-family work queue and `records/done/` as its completed queue. Process
-one metric family or population fact at a time: create its bounded
-`records/metrics/*.yaml` checkpoint with `yq`, then complete its work item with
-`scripts/metric_queue.py complete`. Never retain the complete inventory in context for a
-final write.
+The script validates the ticket and application scope, creates and completes
+every pending item and immutable checkpoint, assembles the complete
+`kubernetes-metrics.yaml` artifact, runs draft and terminal validation, and
+returns the required one-line stage response. Return that response unchanged.
 
-Always pipe `scripts/metrics_reader.py` into `scripts/snapshot_metrics.py`, assigning
-`records/pending` as its output directory and a neutral source reference. The
-`scripts/snapshot_metrics.py` accepts metrics only through stdin. Inspect its family snapshots
-selectively; complete each family with `scripts/metric_queue.py complete`. Leave `manifest.yaml`
-in place as queue metadata. For
-discovery work without an exposition snapshot, create one bounded pending
-work-item YAML before inspection and complete it by the same protocol.
-Do not load the raw exposition into context.
+The catalogue receives no target-specific input. Its only run-specific binding
+is the validated scope reference and digest carried in the final artifact.
 
-Use only locally documented or observed sources such as kube-state-metrics, kubelet/cAdvisor, scrape metadata, verified scheduler metrics, and verified recording rules. Availability remains `UNVERIFIED` until supported by local or live evidence.
-
-Record facts needed for later query construction:
-
-- family type, unit, help, and label names
-- source identity
-- matching keys and container population
-- ownership/workload relationships when observed
-- missing/zero-capacity semantics
-- lifecycle and annotation-source capability
-- duplicate-scrape/cardinality risks
-- evidence references and limitations
-
-Preserve these invariants as facts in the artifact where applicable:
+Preserve these invariants in later review/query work:
 
 - cAdvisor pseudo-containers `container=""` and `container="POD"` are not application containers
 - application containers and sidecars are distinct populations
@@ -90,7 +63,8 @@ Preserve these invariants as facts in the artifact where applicable:
 - scheduler pod metrics and KSM per-container metrics describe different populations
 - application scrape labels and native Kubernetes labels are separate contracts
 
-Surface verified container/process start-timestamp metrics as capabilities. Record that timestamp gauges do not themselves determine Grafana annotation event time.
+The start-time candidate records that timestamp gauges do not themselves
+determine Grafana annotation event time.
 
 ## Artifact and response
 
@@ -102,5 +76,9 @@ same `namespace_scope_ref` and `namespace_scope_sha256` received from
 `catalog_ref` (or `null`) and `omission_counts` (`{}` when none). Its payload
 fields are exactly `catalog_ref`, `metrics`, `omission_counts`,
 `namespace_scope_ref`, and `namespace_scope_sha256`.
+
+Before moving `tmp/kubernetes-metrics.yaml` to `outbox/`, run
+`scripts/stage_check.py --ticket <job.yaml> --draft`; do not manually invoke
+the underlying workspace or artifact validators.
 
 Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

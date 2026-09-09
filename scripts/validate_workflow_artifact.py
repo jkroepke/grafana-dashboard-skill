@@ -378,10 +378,13 @@ def validate_metric_record(record: Any, where: str, artifact_type: str) -> None:
         "observed_labels", "stored_labels", "match_keys", "population", "lifecycle",
         "availability", "cardinality_risk", "evidence_refs", "limitations",
     }
-    item = strict_object(record, fields, where)
+    require(isinstance(record, dict), f"{where} must be an object")
+    require(set(record) == fields or set(record) == fields | {"documented_labels"},
+            f"{where} fields mismatch")
+    item = record
     identifier(item["id"], f"{where}.id")
     source = enum(item["source"], {
-        "APPLICATION", "PROCESS", "KSM", "KUBELET", "SCRAPE", "SCHEDULER", "RECORDING_RULE"
+        "APPLICATION", "PROCESS", "KSM", "KUBELET", "SCRAPE", "SCHEDULER", "ISTIO", "RECORDING_RULE"
     }, f"{where}.source")
     category = enum(item["category"], {"BUSINESS", "PROCESS", "KUBERNETES"}, f"{where}.category")
     if artifact_type == "application-metrics":
@@ -389,7 +392,7 @@ def validate_metric_record(record: Any, where: str, artifact_type: str) -> None:
         require(source in {"APPLICATION", "PROCESS", "RECORDING_RULE"}, f"{where} has invalid application source")
     else:
         require(category == "KUBERNETES", f"{where} must use KUBERNETES category")
-        require(source in {"KSM", "KUBELET", "SCRAPE", "SCHEDULER", "RECORDING_RULE"},
+        require(source in {"KSM", "KUBELET", "SCRAPE", "SCHEDULER", "ISTIO", "RECORDING_RULE"},
                 f"{where} has invalid Kubernetes source")
     text(item["family"], f"{where}.family", 256)
     string_array(item["members"], f"{where}.members", 16, item_max=256)
@@ -399,6 +402,7 @@ def validate_metric_record(record: Any, where: str, artifact_type: str) -> None:
     text(item["help"], f"{where}.help", 512, nullable=True)
     string_array(item["observed_labels"], f"{where}.observed_labels", 32, item_max=128)
     string_array(item["stored_labels"], f"{where}.stored_labels", 32, item_max=128)
+    string_array(item.get("documented_labels", []), f"{where}.documented_labels", 32, item_max=128)
     string_array(item["match_keys"], f"{where}.match_keys", 16, item_max=128)
     text(item["population"], f"{where}.population", 256)
     text(item["lifecycle"], f"{where}.lifecycle", 256)
@@ -453,12 +457,14 @@ def validate_metric_shortlist(
 def validate_selector_contract(value: Any) -> None:
     item = strict_object(value, {
         "application_namespace_label", "application_pod_label", "kubernetes_namespace_label",
-        "kubernetes_pod_label", "cluster_label", "fixed_selector_refs", "population_notes",
+        "kubernetes_pod_label", "istio_source_namespace_label", "istio_destination_namespace_label",
+        "cluster_label", "fixed_selector_refs", "population_notes",
         "scrape_interval_ref",
     }, "selector_contract")
     for name in {
         "application_namespace_label", "application_pod_label", "kubernetes_namespace_label",
-        "kubernetes_pod_label", "cluster_label"
+        "kubernetes_pod_label", "istio_source_namespace_label", "istio_destination_namespace_label",
+        "cluster_label"
     }:
         text(item[name], f"selector_contract.{name}", 128, nullable=True)
     string_array(item["fixed_selector_refs"], "selector_contract.fixed_selector_refs", 8, item_max=512)
@@ -517,7 +523,12 @@ def validate_metrics_contract(data: dict[str, Any], inputs: dict[str, dict[str, 
         expected_layer = "KUBERNETES_NATIVE" if item["category"] == "KUBERNETES" else "APPLICATION_STORED"
         require(label_layer == expected_layer,
                 f"{where}.label_layer must be {expected_layer} for {item['category']} metrics")
-        discovered_labels = set(original["observed_labels"]) | set(original["stored_labels"]) | set(original["match_keys"])
+        discovered_labels = (
+            set(original["observed_labels"])
+            | set(original["stored_labels"])
+            | set(original.get("documented_labels", []))
+            | set(original["match_keys"])
+        )
         identity_labels = set(string_array(
             item["identity_labels"], f"{where}.identity_labels", 16, item_max=128
         ))
@@ -563,7 +574,10 @@ def validate_metrics_contract(data: dict[str, Any], inputs: dict[str, dict[str, 
         if label is not None:
             require(label in approved_labels_by_layer["APPLICATION_STORED"],
                     f"selector_contract.{name} is absent from approved application evidence")
-    for name in {"kubernetes_namespace_label", "kubernetes_pod_label"}:
+    for name in {
+        "kubernetes_namespace_label", "kubernetes_pod_label", "istio_source_namespace_label",
+        "istio_destination_namespace_label",
+    }:
         label = selectors[name]
         if label is not None:
             require(label in approved_labels_by_layer["KUBERNETES_NATIVE"],

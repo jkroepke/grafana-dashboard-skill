@@ -10,7 +10,7 @@ This skill and its workflow support only Dashboard Schema V2 resources on Grafan
 - The target must advertise the stable Dashboard V2 resource API.
 - Existing sources must render as Dashboard Schema V2 resources. Classic dashboard JSON, classic-to-V2 migrations, and the legacy dashboard API are out of scope.
 
-The workflow is designed for air-gapped DeepSeek V3.7 agents with a 256k context window running through OpenCode or Pi. It uses fresh specialist contexts and bounded file-backed artifacts. Give it file paths and local datasource/API access instead of pasting large metric dumps or query responses.
+The workflow is designed for air-gapped DeepSeek V4 Flash agents with a 256k context window running through OpenCode or Pi. It uses fresh specialist contexts and bounded file-backed artifacts. Give it file paths and local datasource/API access instead of pasting large metric dumps or query responses.
 
 ## Start a task
 
@@ -57,10 +57,12 @@ metric inventories -> metrics review -> dashboard architecture
 
 ## Runtime setup
 
-The project has one primary agent, `coordinator`, and nine specialist
-subagents. The coordinator may create the run contract and route artifacts,
-but may not gather metric semantics, author queries, build, review, or publish
-in place of a specialist.
+The project has one primary agent, `coordinator`, and eight specialist
+subagents. Kubernetes and Istio preset inventory is a deterministic coordinator
+stage, generated after application namespace scope is available. The
+coordinator may create the run contract and route artifacts, but may not gather
+metric semantics, author queries, build, review, or publish in place of a
+specialist.
 
 ### OpenCode
 
@@ -88,7 +90,7 @@ dashboard task:
 for the session. It does not provide a child-agent tool. Install and enable a
 compatible Pi subagent extension as well; configure it to discover project
 agents with `agentScope: "project"` or `"both"`. The repository's
-`.pi/agents` symlink then supplies the same nine specialist definitions used by
+`.pi/agents` symlink then supplies the same eight specialist definitions used by
 OpenCode. If that tool or a required specialist is unavailable, the
 coordinator must stop rather than gather or implement the missing stage.
 

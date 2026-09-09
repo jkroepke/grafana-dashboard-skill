@@ -33,10 +33,16 @@ unresolved disposition in a small YAML file with `yq`. Update `state.yaml` after
 each decision and resume from it; never accumulate all review decisions in
 context for a final write.
 
+Shortlist records are immutable evidence. Inspect their evidence, limitations,
+and semantics, then decide their disposition; never edit a record to make it
+approvable. In particular, copy `source`, `category`, `family`, and `type`
+unchanged into an approved record. If any of those facts conflict with evidence,
+reject the record with an evidence-backed reason and route the correction to the
+owning analyst. `unresolved` is always a list of evidence-gap strings, or `[]`.
+
 Independently verify each capability considered for approval:
 
 - the family exists in cited evidence
-- category is exactly `BUSINESS`, `PROCESS`, or `KUBERNETES`
 - type, unit, help semantics, lifecycle, and availability do not exceed evidence
 - exposition and stored-label claims remain distinct
 - label names and matching keys support the proposed capability
@@ -44,6 +50,12 @@ Independently verify each capability considered for approval:
 - Kubernetes populations are internally consistent
 - approved semantics and allowed use follow from the metric evidence
 - unknown facts remain unknown
+
+For fixed Kubernetes/Istio candidates, use the application artifact's exact
+namespace scope for every target probe. Do not perform an unscoped metric-name
+listing or a cluster-wide query merely to test a preset. Verify the family and
+every planned selector label with that bound scope before changing
+`DOCUMENTED` to `VERIFIED`.
 
 Reject or mark unresolved any invented metric, inferred counter type, unsupported workload identity, guessed label, unsafe cardinality, contradictory population, or semantics not grounded in evidence.
 
@@ -56,9 +68,9 @@ conflict to the coordinator for an instrumentation fix; do not silently repair
 the exporter in the contract. The metric may be planned only with genuine gauge
 semantics supported by evidence.
 
-Approved identity/dimension labels and every non-null selector-contract label must already occur in the corresponding shortlist evidence. When live review discovers a missing label, route the evidence back to the owning analyst for a revised shortlist; do not introduce it directly in the approved contract.
+Approved identity/dimension labels and every non-null selector-contract label must already occur in the corresponding shortlist evidence. A fixed preset may list `documented_labels`, but they become usable only after this stage verifies their target presence. When live review discovers a missing label, reject the candidate; do not introduce it directly in the approved contract. For Istio, set only the verified source and/or destination namespace selector labels, preserving direction.
 
-Select only distinct capabilities with operational value, up to the declared approved-metric budget. Equivalent metric families should not all pass simply because they exist. Preserve rejected IDs with short reasons so later stages cannot rediscover them.
+Select only distinct capabilities with operational value. Equivalent metric families should not all pass simply because they exist. Preserve rejected IDs with evidence-backed reasons so later stages cannot rediscover them.
 
 For an update, account for metric families used by every Prometheus query that will remain in the dashboard. If a legacy dependency cannot be verified, mark the evidence gap and allowed use explicitly; do not invent semantics merely to preserve it. A blocking conflict returns to the coordinator for user direction rather than silently dropping or rewriting an unrelated panel.
 
@@ -69,5 +81,11 @@ Assemble `metrics-contract.yaml` from the checkpoint records with `yq` using
 `PLAN` capability has sufficient evidence, every `PRESERVE_ONLY` uncertainty is
 explicit, and all blocking selector/population contradictions are resolved.
 Write `failure-report.yaml` otherwise. `PASS` does not approve any query.
+
+Before moving `tmp/metrics-contract.yaml` to `outbox/`, run
+`scripts/stage_check.py --ticket <job.yaml> --draft`. It performs every schema,
+array-shape, size, length, digest, evidence-reference, and input-binding check.
+Do not compute a workspace path, resolve input paths, calculate evidence
+digests, or manually check static limits.
 
 Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

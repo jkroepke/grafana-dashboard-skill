@@ -67,12 +67,13 @@ evidence. Never infer namespaces from a workload name, pod-name pattern, or a
 cluster-wide Kubernetes metric. Preserve the exact non-empty set only in one
 local, absolute-path namespace-scope evidence file; do not put namespace values
 in the visible response or the shortlist. The file may contain more than one
-namespace and is the sole authority for downstream Kubernetes discovery.
+namespace and is the sole authority for downstream Kubernetes/Istio preset
+validation and queries.
 
 Publish its path, digest, and count as `namespace_scope` in the application
 artifact. The scope evidence is immutable after this stage. If no namespace can
-be verified, return a bounded failure report; do not permit an unscoped
-Kubernetes inventory.
+be verified, return a bounded failure report; the fixed preset stage requires
+the scope binding.
 
 When the configured capability is `scripts/prometheus_reader.py`, write a
 neutral request file and a separate neutral response path in the assigned
@@ -95,5 +96,9 @@ entries and keep large evidence in referenced evidence files. Include
 `catalog_ref` (or `null`) and `omission_counts` (`{}` when none) in the
 shortlist top level. Its payload fields are exactly `catalog_ref`, `metrics`,
 `omission_counts`, and `namespace_scope`.
+
+Before moving `tmp/application-metrics.yaml` to `outbox/`, run
+`scripts/stage_check.py --ticket <job.yaml> --draft`; do not manually invoke
+the underlying workspace or artifact validators.
 
 Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

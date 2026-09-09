@@ -1,6 +1,19 @@
 # Kubernetes dashboard metric contracts
 
-Use only metric families available locally or documented by pinned/local sources. Mark availability unverified until observed or queried.
+Use only metric families available locally or documented by pinned/local sources. Mark availability unverified until observed or queried. The fixed workload candidates and their panel-profile guidance are in `knowledge/kubernetes/presets.md`; they are documentation claims until independently verified.
+
+## Fixed workload presets
+
+`scripts/kubernetes_presets.py` emits the offline Kubernetes and Istio
+candidate catalogue. The application stage establishes the exact namespace
+scope; the Kubernetes stage carries that scope unchanged and emits catalogue
+records for review. Preset metrics and labels remain documentation claims until
+the reviewer verifies them against the target.
+
+For Istio, select the verified `source_workload_namespace` or
+`destination_workload_namespace` label that matches the operational question.
+Istio telemetry overrides may alter standard families and labels, so it remains
+an optional profile. Do not apply the Kubernetes pod selector to Istio traffic.
 
 ## Common signals
 

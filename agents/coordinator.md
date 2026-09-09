@@ -191,7 +191,8 @@ manually. Give the specialist only its agent ID, absolute project workspace
 path, and ticket path.
 
 Dispatch is sequential and enforces every stage prerequisite, including the
-validated application namespace scope before `kubernetes-metrics`.
+validated application namespace scope before the deterministic
+`kubernetes-metrics` preset stage.
 
 Follow this order exactly:
 
@@ -209,6 +210,8 @@ application-metrics
 ```
 
 - Dispatch a fresh specialist instance at every author/reviewer boundary.
+- `kubernetes-metrics` is generated and accepted inside `dispatch`; it has no
+  specialist instance or response to route.
 - Pass every returned stage response to `accept` before the next stage.
 - Route a failure only to its designated owner; never repair it yourself.
 - Any changed upstream artifact invalidates its downstream approvals.

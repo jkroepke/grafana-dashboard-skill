@@ -135,12 +135,12 @@ namespace_scope_ref: <the exact application namespace_scope.evidence_ref>
 namespace_scope_sha256: sha256:<the exact application namespace_scope.sha256>
 ```
 
-Each metric record has exactly:
+Each metric record has these required fields (plus optional `documented_labels`):
 
 ```yaml
 {
   "id": "M001",
-  "source": "APPLICATION|PROCESS|KSM|KUBELET|SCRAPE|SCHEDULER|RECORDING_RULE",
+  "source": "APPLICATION|PROCESS|KSM|KUBELET|SCRAPE|SCHEDULER|ISTIO|RECORDING_RULE",
   "category": "BUSINESS|PROCESS|KUBERNETES",
   "family": "<metric family>",
   "members": ["<family member>"],
@@ -149,6 +149,7 @@ Each metric record has exactly:
   "help": "<observed help text>|null",
   "observed_labels": ["<label name>"],
   "stored_labels": ["<verified label name>"],
+  "documented_labels": ["<catalog label name>"],
   "match_keys": ["<label name>"],
   "population": "<observed population>|unknown",
   "lifecycle": "<observed fact>|unknown",
@@ -161,6 +162,11 @@ Each metric record has exactly:
 
 Analysts record facts only. These artifacts contain no operational questions, dashboard priorities, query text, or source fragments.
 
+`documented_labels` is optional and is used only by a fixed local preset
+catalogue. It records a documentation claim, not target observation. A reviewer
+must independently verify every documented family and label before approving it
+for `PLAN`.
+
 Required input: `run-contract`.
 
 ## Approved metrics contract
@@ -172,7 +178,23 @@ its approved, rejected, and not-considered entries from separate YAML records:
 - `rejected`: bounded IDs/reason codes for reviewed-but-rejected records
 - `not_considered`: remaining shortlist IDs so they cannot be rediscovered silently
 - `selector_contract`: approved application/Kubernetes labels, populations, and fixed-selector references
-- `unresolved`: concise evidence gaps
+- `unresolved`: a list of concise evidence-gap strings; use `[]` when none
+
+The payload has this fixed top-level shape:
+
+```yaml
+approved: [<reviewed metric records>]
+rejected:
+  - source_artifact: application-metrics|kubernetes-metrics
+    metric_id: <source metric ID>
+    reason_code: <stable reason code>
+    reason: <evidence-backed reason>
+not_considered:
+  - source_artifact: application-metrics|kubernetes-metrics
+    metric_id: <source metric ID>
+selector_contract: <selector contract object>
+unresolved: [<evidence-gap string>]
+```
 
 Each approved record has exactly:
 
@@ -181,7 +203,7 @@ Each approved record has exactly:
   "id": "AM001",
   "source_artifact": "application-metrics|kubernetes-metrics",
   "source_metric_id": "M001",
-  "source": "APPLICATION|PROCESS|KSM|KUBELET|SCRAPE|SCHEDULER|RECORDING_RULE",
+  "source": "APPLICATION|PROCESS|KSM|KUBELET|SCRAPE|SCHEDULER|ISTIO|RECORDING_RULE",
   "category": "BUSINESS|PROCESS|KUBERNETES",
   "family": "<metric family>",
   "type": "<verified type>",
@@ -198,9 +220,15 @@ Each approved record has exactly:
 }
 ```
 
-`selector_contract` has exactly `application_namespace_label`, `application_pod_label`, `kubernetes_namespace_label`, `kubernetes_pod_label`, `cluster_label`, `fixed_selector_refs`, `population_notes`, and `scrape_interval_ref`. Nullable labels remain null when unavailable; references point to neutral evidence rather than embedding target-specific selector values in prompts.
+`selector_contract` has exactly `application_namespace_label`, `application_pod_label`, `kubernetes_namespace_label`, `kubernetes_pod_label`, `istio_source_namespace_label`, `istio_destination_namespace_label`, `cluster_label`, `fixed_selector_refs`, `population_notes`, and `scrape_interval_ref`. Nullable labels remain null when unavailable; references point to neutral evidence rather than embedding target-specific selector values in prompts.
 
-Approved identity/dimension labels and selector labels must already occur in the corresponding shortlist evidence. The reviewer cannot introduce a new label name; it routes missing evidence back to the owning analyst.
+`source`, `category`, `family`, and `type` are copied unchanged from the
+shortlist record. The reviewer cannot correct a source record: when its facts
+or classification conflict with evidence, reject it with an evidence-backed
+reason and route it to the owning analyst for revision. Approved
+identity/dimension labels and selector labels must already occur in the
+corresponding shortlist evidence. The reviewer cannot introduce a new label
+name; it routes missing evidence back to the owning analyst.
 
 `PRESERVE_ONLY` is allowed only for an unchanged legacy dependency whose uncertainty is explicit. It cannot support a new or modified question/query. A blocking legacy conflict requires user direction; it is not silently dropped or rewritten.
 

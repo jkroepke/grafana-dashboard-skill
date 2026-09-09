@@ -53,7 +53,6 @@ it with `/agent coordinator` before starting a dashboard task.
 Invoke specialists by agent ID:
 
 - `application-metrics`
-- `kubernetes-metrics`
 - `metrics-reviewer`
 - `dashboard-architect`
 - `promql-builder`
@@ -71,6 +70,10 @@ option, enable project agents (`project` or `both`) so it discovers the
 repository `.pi/agents` definitions.
 
 Do not duplicate agent definitions for individual runtimes.
+
+`kubernetes-metrics` is a deterministic coordinator stage, not a model role.
+Dispatch runs `scripts/kubernetes_presets.py` with its immutable ticket and
+accepts the resulting artifact automatically.
 
 ## Scope
 
@@ -138,6 +141,14 @@ Kubernetes support metrics normally use native workload labels:
 <metric>{namespace="$namespace",pod=~"${pod:regex}"}
 ```
 
+Kubernetes and Istio workload candidates come from the fixed local catalogue
+emitted by `scripts/kubernetes_presets.py`. The application analyst alone
+derives the target namespace set, which the preset stage carries unchanged.
+Presets are documented candidates only: the metrics reviewer verifies target
+metric and label availability before planning. Istio queries use a verified
+source or destination workload namespace selector rather than the Kubernetes
+pod selector.
+
 Apply verified fixed application and cluster selectors consistently. Do not substitute an unbounded `.*` for the pod population unless every affected query independently enforces application scope.
 
 Read `knowledge/grafana/variables.md` when implementing or reviewing variables.
@@ -155,6 +166,9 @@ agent ID, absolute project workspace path, and ticket path. The specialist runs
 to verify its bounded response, artifact, and digest. Use a fresh specialist
 instance at every author/reviewer boundary. Do not create recursive subagent
 trees.
+
+`kubernetes-metrics` has no specialist handoff. Its `dispatch` operation
+generates and accepts the fixed preset artifact immediately.
 
 The ticket contains paths, expected digests, configured access references, and
 transitive validation paths. Support artifacts
@@ -186,24 +200,25 @@ only for a coordinator-owned blocker.
 Run `application-metrics` first. It discovers the exact non-empty namespace set
 represented by verified application stored series and records that set only in
 local namespace-scope evidence. Then run `kubernetes-metrics` with the
-completed application artifact as a direct input. It may cover one or multiple
-namespaces, but every Kubernetes discovery request must be limited to that
-exact set; it must never perform an unconditional cluster-wide scrape or query.
-If the scope cannot be verified or applied, stop the Kubernetes stage with a
-bounded failure report rather than widening it. The analysts inventory observed
-facts and categorize capabilities as `BUSINESS`, `PROCESS`, or `KUBERNETES` in
-separate artifacts.
+completed application artifact as a direct input. It copies the exact scope
+binding into a fixed offline Kubernetes/Istio candidate catalogue. The metrics
+reviewer validates candidates with selectors bound to that exact scope. A
+verified scope is the prerequisite for the preset stage. The analysts
+categorize capabilities as `BUSINESS`, `PROCESS`, or `KUBERNETES` in separate
+artifacts.
 
 Analysts MUST NOT write final or candidate PromQL, variable queries, annotation queries, operational panel plans, or dashboard source. Large catalogs and raw evidence remain on disk; their visible response contains only stage status, artifact path, and digest.
 
-The analyst always streams `scripts/metrics_reader.py` through
+`application-metrics` always streams `scripts/metrics_reader.py` through
 `scripts/snapshot_metrics.py` on stdin.
 `scripts/snapshot_metrics.py` has no network, credential, or input-file interface and writes small
 per-family YAML snapshots without exposing raw sample or label values to agent
-context. The analyst inspects those snapshots selectively. Both metric analysts
-use `records/pending/` and `records/done/` as a durable queue: after a metric
-record is durable, complete its work item with `scripts/metric_queue.py`; on
-restart, reconcile the queue before processing remaining pending items.
+context. The application analyst inspects those snapshots selectively. Both
+metric stages use `records/pending/` and `records/done/` as a durable queue:
+the preset stage queues its deterministic catalogue records without an
+exposition snapshot. After a metric record is durable, complete its work item
+with `scripts/metric_queue.py`; on restart, reconcile the queue before
+processing remaining pending items.
 
 ### 2. Independent metrics review
 

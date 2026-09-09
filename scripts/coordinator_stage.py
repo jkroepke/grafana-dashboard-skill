@@ -20,6 +20,7 @@ import validate_workflow_artifact as workflow
 SCRIPT_DIR = Path(__file__).resolve().parent
 INIT_WORKSPACE = SCRIPT_DIR / "init_agent_workspace.sh"
 ARTIFACT_VALIDATOR = SCRIPT_DIR / "validate_workflow_artifact.py"
+KUBERNETES_PRESETS = SCRIPT_DIR / "kubernetes_presets.py"
 
 STAGES = {
     "application-metrics": ("application-metrics", "application-metrics.yaml"),
@@ -479,6 +480,18 @@ def dispatch(args: argparse.Namespace) -> str:
     )
     coordinator_artifact.validate_workspace(agent_root)
     coordinator_artifact.validate_workspace(coordinator_root)
+    if agent == "kubernetes-metrics":
+        generated = subprocess.run(
+            [str(KUBERNETES_PRESETS), "--ticket", str(ticket_path)],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        require(generated.returncode == 0,
+                generated.stderr.strip() or "could not generate Kubernetes preset artifact")
+        response = generated.stdout.strip().splitlines()[-1]
+        return accept(argparse.Namespace(ticket=ticket_path, response=response, response_file=None))
     return f"{agent} workspace={workspace} ticket={ticket_path.relative_to(root)}"
 
 

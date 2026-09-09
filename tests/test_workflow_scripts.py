@@ -22,6 +22,8 @@ INIT_WORKSPACE = REPOSITORY / "scripts" / "init_agent_workspace.sh"
 VALIDATE_WORKSPACE = REPOSITORY / "scripts" / "validate_agent_workspace.sh"
 CREATE_COORDINATOR_ARTIFACT = REPOSITORY / "scripts" / "create_coordinator_artifact.py"
 COORDINATOR_STAGE = REPOSITORY / "scripts" / "coordinator_stage.py"
+STAGE_CHECK = REPOSITORY / "scripts" / "stage_check.py"
+KUBERNETES_PRESETS = REPOSITORY / "scripts" / "kubernetes_presets.py"
 
 
 def digest(path: Path) -> str:
@@ -261,6 +263,8 @@ class WorkflowScriptsTest(unittest.TestCase):
                 "application_pod_label": "kubernetes_pod_name",
                 "kubernetes_namespace_label": None,
                 "kubernetes_pod_label": None,
+                "istio_source_namespace_label": None,
+                "istio_destination_namespace_label": None,
                 "cluster_label": None,
                 "fixed_selector_refs": [],
                 "population_notes": ["application pods"],
@@ -852,6 +856,74 @@ class WorkflowScriptsTest(unittest.TestCase):
             f"'sha256': {digest(self.root / 'application-namespace-scope.yaml')!r}}}"
         )
         self.run_tool("-c", command)
+
+    def test_stage_check_validates_ticket_derived_metrics_draft(self) -> None:
+        agent_root = self.root / "draft-agent"
+        (agent_root / "tmp").mkdir(parents=True)
+        (agent_root / "outbox").mkdir()
+        (agent_root / "metrics.ndjson").write_bytes((self.root / "metrics.ndjson").read_bytes())
+        draft = agent_root / "tmp" / "metrics-contract.yaml"
+        draft.write_bytes(self.paths["metrics-contract"].read_bytes())
+        ticket = {
+            "agent": "metrics-reviewer",
+            "outputs": {
+                "artifact": "outbox/metrics-contract.yaml",
+                "failure_report": "outbox/failure-report.yaml",
+            },
+        }
+        command = (
+            "import pathlib,sys; "
+            f"sys.path.insert(0, {str(REPOSITORY / 'scripts')!r}); "
+            "import stage_check; "
+            f"ticket={ticket!r}; "
+            f"agent_root=pathlib.Path({str(agent_root)!r}); "
+            "inputs={"
+            f"'run-contract': pathlib.Path({str(self.paths['run-contract'])!r}), "
+            f"'application-metrics': pathlib.Path({str(self.paths['application-metrics'])!r}), "
+            f"'kubernetes-metrics': pathlib.Path({str(self.paths['kubernetes-metrics'])!r})}}; "
+            "assert stage_check.validate_draft(ticket, inputs, {}, agent_root) == "
+            "agent_root / 'tmp' / 'metrics-contract.yaml'"
+        )
+        self.run_tool("-c", command)
+
+    def test_kubernetes_presets_emit_documented_candidates_without_cross_profile_leakage(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(KUBERNETES_PRESETS), "--preset", "istio-workload"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        catalogue = json.loads(result.stdout)
+        self.assertTrue(Path(catalogue["catalog_ref"]).is_file())
+        self.assertEqual([f"I{index:03d}" for index in range(1, 11)],
+                         [metric["id"] for metric in catalogue["metrics"]])
+        for metric in catalogue["metrics"]:
+            self.assertEqual("ISTIO", metric["source"])
+            self.assertEqual("DOCUMENTED", metric["availability"])
+            self.assertEqual([], metric["observed_labels"])
+            self.assertTrue(metric["documented_labels"])
+
+    def test_kubernetes_presets_checkpoint_the_complete_catalogue(self) -> None:
+        initialized = subprocess.run(
+            [str(INIT_WORKSPACE), str(self.root), "test-project", "test-run", "kubernetes-metrics"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, initialized.returncode, initialized.stdout + initialized.stderr)
+        workspace = Path(initialized.stdout.strip())
+        result = subprocess.run(
+            [str(KUBERNETES_PRESETS), "--workspace", str(workspace)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(23, json.loads(result.stdout.splitlines()[-1])["checkpoint_count"])
+        self.assertEqual(23, len(list((workspace / "records" / "metrics").glob("*.yaml"))))
+        self.assertEqual(23, len(list((workspace / "records" / "done").glob("*.yaml"))))
+        self.assertEqual([], list((workspace / "records" / "pending").glob("*.yaml")))
 
     def test_coordinator_stage_requires_workspace_cwd(self) -> None:
         workspace = self.root / "dashboards" / "test-project" / "workspace"

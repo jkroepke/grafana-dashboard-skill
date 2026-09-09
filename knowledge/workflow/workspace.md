@@ -212,10 +212,14 @@ yq -n \
 unset ITEMS_FILE
 ```
 
-Add the remaining required envelope and artifact fields using `yq`, run
-`scripts/validate_agent_workspace.sh <agent-run-dir>` and
-`scripts/validate_workflow_artifact.py`, then atomically rename it
-to `outbox/<artifact>.yaml`. The
+Add the remaining required envelope and artifact fields using `yq`, then run
+`scripts/stage_check.py --ticket <job.yaml> --draft`. It validates the assigned
+`tmp/<artifact>.yaml` using the ticketed inputs, support artifacts, evidence
+base path, and repository working directory. Do not call
+`validate_agent_workspace.sh` or `validate_workflow_artifact.py` directly and
+do not reconstruct their arguments. After a `PASS` draft result, atomically
+rename it to `outbox/<artifact>.yaml`, finish `state.yaml`, and run
+`scripts/stage_check.py --ticket <job.yaml>` for the terminal response. The
 artifact remains the digest-bound stage gate; the record files are its
 human-reviewable construction log and recovery snapshots.
 

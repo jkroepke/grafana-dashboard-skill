@@ -38,7 +38,7 @@ hold the complete query pack in context or emit it in one large write.
 For every planned query:
 
 1. identify the approved metric IDs and actual type/lifecycle
-2. apply the exact stored-label or Kubernetes selector contract
+2. apply the exact stored-label, Kubernetes, or Istio selector contract
 3. define the output population and result identity
 4. select instant/range behavior from the operational question
 5. author the smallest correct dashboard-ready query
@@ -56,6 +56,11 @@ do not substitute `delta()`, `deriv()`, or offset arithmetic to disguise the
 same counter assumption. Return `NEEDS_EVIDENCE` for the type/semantics conflict.
 
 For required variables, author the exact Prometheus variable-query text and record the target/pinned query-model fields such as query type and editor reference. For annotations, author only event-like queries whose sample-time behavior is understood. Every Prometheus datasource query consumes the declared budget.
+
+For Istio candidates, scope each query with the approved source and/or
+destination workload namespace label that matches its direction. Do not reuse
+the Kubernetes `pod` selector for mesh traffic, collapse source and destination
+reporting, or use a documented label that the reviewer did not verify.
 
 HTTP success alone is not validation. Record evidence references for errors/warnings, series count, returned label keys, duplicates, representative values, and one/multiple/All pod behavior where applicable. Keep raw responses on disk.
 

@@ -21,6 +21,7 @@ Read:
 - `knowledge/workflow/artifacts.md`
 - `knowledge/grafana/panel-selection.md`
 - `knowledge/grafana/layout-v2.md` only when layout constraints materially affect the plan
+- `knowledge/kubernetes/presets.md` when approved Kubernetes or Istio preset candidates are present
 
 First run `scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
@@ -43,6 +44,11 @@ Select operational questions in this order:
 Each question must reference approved metric IDs and state the desired result shape. Choose conceptual visualization, grouping, placement, and priority, but do not invent plugin IDs or query text.
 
 Respect the declared question, panel, and query budgets. Prefer one panel that answers a coherent question over metric-per-panel coverage. Preserve existing unrelated panels on updates, and list intentional omissions with reasons.
+
+For approved preset candidates, use the compact panel groups in
+`knowledge/kubernetes/presets.md`; do not reproduce external dashboard layouts
+or add a panel per catalogue metric. Add the optional Istio group only when a
+compatible, direction-preserving set is approved.
 
 Required dashboard variables and annotations are plan items whose query text will be authored by `promql-builder`.
 
