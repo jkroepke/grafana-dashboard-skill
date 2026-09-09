@@ -22,21 +22,14 @@ dashboards/<project-name>/workspace/<agent>/<run-id>/
 `dashboards/<project-name>/workspace/.env` is the shared access
 configuration for this run. It is created only by the coordinator through
 `scripts/set_workflow_env`, never appears in artifacts, and is loaded by
-Grafana wrappers when they run from this workspace or a descendant role
+workflow wrappers when they run from this workspace or a descendant role
 directory.
 
-Initialize the directory with:
+The coordinator's dispatch operation initializes this directory. Specialists
+receive its path in their ticket and do not initialize it themselves.
 
-```bash
-scripts/init_agent_workspace.sh \
-  <repository-root> <project-name> <run-id> <agent>
-```
-
-Before assembling or returning a stage artifact, validate the checkpoint area:
-
-```bash
-scripts/validate_agent_workspace.sh <agent-run-dir>
-```
+`scripts/stage_check.py` validates the checkpoint area and assigned artifact
+before a specialist returns its response.
 
 The validator rejects missing layout/state, inbox/record symlinks, non-YAML
 structured files, invalid/non-mapping YAML, inbox/record files over 8 KiB, and
@@ -46,8 +39,8 @@ validator also requires `state.status` to equal the artifact status and
 contain the terminal artifact path. A coordinator run contract alone is not a
 terminal artifact.
 
-The coordinator runs `python3 scripts/coordinator_stage.py dispatch` before
-each stage. It writes one immutable, at-most-8-KiB `inbox/job.yaml`, validates
+The coordinator runs its `dispatch` operation before each stage. It writes one
+immutable, at-most-8-KiB `inbox/job.yaml`, validates
 all bindings, and updates coordinator state. The ticket contains the
 run/stage/revision, approved input paths and digests, assigned output paths,
 budgets, and opaque capability references—never artifact bodies or raw
@@ -106,6 +99,9 @@ Use Mike Farah `yq` v4 for YAML creation and mutation. If it is unavailable or
 not v4, return a `MISSING_YQ` failure report instead of falling back to a large
 write-tool call.
 
+Run executable repository scripts directly; their shebang selects Python. For
+example, use `scripts/stage_check.py`, not `python3 scripts/stage_check.py`.
+
 This is an agent-write rule, not a restriction on implementation language:
 
 - When an agent directly creates or changes a YAML job ticket, state,
@@ -131,11 +127,10 @@ This is an agent-write rule, not a restriction on implementation language:
   A promoted record is immutable. Corrections create a new revision; they do
   not edit a file already consumed downstream.
 - Metric analysts use `records/pending/` as the queue of unprocessed
-  metric-family work items and `records/done/` for processed items. After the
-  metric record is durable and `state.yaml` records completion, move the exact
-  pending item to `done/` with `mv`. On resume, reconcile completed state
-  entries first: move their still-pending item without reprocessing it. A
-  pending item without a completed state entry remains eligible for processing.
+  metric-family work items and `records/done/` for processed items. Run
+  `scripts/metric_queue.py reconcile` before processing. After a metric record
+  is durable, run `scripts/metric_queue.py complete <pending-item> <record>`.
+  A pending item without a completed state entry remains eligible for processing.
   For discovery that has no exposition snapshot, create a bounded pending YAML
   work item before inspection. Leave a snapshot `manifest.yaml` in `pending/`;
   it is queue metadata, not a work item.
@@ -233,14 +228,13 @@ or OpenMetrics text through the repository helper:
 
 ```bash
 agent_run_dir="${DASHBOARD_AGENT_RUN_DIR:?set agent run directory}"
-metrics_input="${METRICS_INPUT:?set private metrics input path}"
-python3 scripts/snapshot_metrics.py \
+set -o pipefail
+scripts/metrics_reader.py | scripts/snapshot_metrics.py \
   --output-dir "$agent_run_dir/records/pending" \
-  --source-ref metrics-evidence < "$metrics_input"
+  --source-ref metrics-evidence
 ```
 
-For live access, pipe the output of the configured opaque metrics reader into
-the same command. `snapshot_metrics.py` intentionally has no URL, credential,
+`snapshot_metrics.py` intentionally has no URL, credential,
 or input-file option: exposition bytes enter only through stdin. It emits no raw
 sample or label values to stdout. It writes one small YAML snapshot per family
 plus `manifest.yaml`, preserving declared `HELP`, `TYPE`, and `UNIT`, member and

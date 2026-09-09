@@ -23,7 +23,7 @@ Read:
 - `knowledge/grafana/variables.md` for variable queries
 - `knowledge/grafana/annotations.md` for annotation queries
 
-First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+First run `scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 builder conclusions or the complete conversation. It supplies the approved
 bindings, targeted evidence, output path, limits, and configured datasource access.
@@ -65,4 +65,4 @@ contain a corrected query.
 
 Return `PASS` only when there are no findings and all mandatory validation available to the task has completed. When live access is unavailable, record the live-validation gap explicitly according to the task's policy.
 
-Run `python3 scripts/validate_workflow_artifact.py` with all four required named `--input` arguments and coordinator-supplied shortlist paths as `--support`. Support paths exist only for recursive validation; do not read their bodies. Return only the bounded response defined by the artifact contract.
+Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

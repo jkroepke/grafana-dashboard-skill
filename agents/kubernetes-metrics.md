@@ -21,7 +21,7 @@ Read:
 - `knowledge/workflow/artifacts.md`
 - `knowledge/kubernetes/metrics.md`
 
-First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+First run `scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 or copy the complete conversation. It supplies the relevant evidence, exact
 workload/container identity, run-contract and `application-metrics` bindings,
@@ -50,23 +50,20 @@ namespace-scoped request and response to neutral local files, then invoke it as
 datasource UID, or inline selector. A reader that cannot apply the supplied
 scope is unavailable for this stage.
 
-The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Treat `records/pending/` as the
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Run `metric_queue.py reconcile` before processing and use `metric_queue.py complete <pending-item> <record>` after each durable checkpoint. Treat `records/pending/` as the
 metric-family work queue and `records/done/` as its completed queue. Process
 one metric family or population fact at a time: create its bounded
-`records/metrics/*.yaml` checkpoint with `yq`, update `state.yaml`, then
-atomically move its work item into `records/done/`. Never retain the complete
-inventory in context for a final write. On restart, first reconcile any item
-whose checkpoint and completed state entry exist but which remains in
-`records/pending/`, moving it to `records/done/` without reprocessing it.
+`records/metrics/*.yaml` checkpoint with `yq`, then complete its work item
+through the queue helper. Never retain the complete inventory in context for a
+final write.
 
-For a large Prometheus/OpenMetrics exposition, pipe the configured opaque reader
-or redirect local evidence into `scripts/snapshot_metrics.py`, assigning
+Always pipe `scripts/metrics_reader.py` into `scripts/snapshot_metrics.py`, assigning
 `records/pending` as its output directory and a neutral source reference. The
 helper accepts metrics only through stdin. Inspect its family snapshots
-selectively; after each durable checkpoint, move that family file into
-`records/done/`. Leave `manifest.yaml` in place as queue metadata. For
+selectively; complete each family through the queue helper. Leave `manifest.yaml`
+in place as queue metadata. For
 discovery work without an exposition snapshot, create one bounded pending
-work-item YAML before inspection and move it to `done/` by the same protocol.
+work-item YAML before inspection and complete it by the same protocol.
 Do not load the raw exposition into context.
 
 Use only locally documented or observed sources such as kube-state-metrics, kubelet/cAdvisor, scrape metadata, verified scheduler metrics, and verified recording rules. Availability remains `UNVERIFIED` until supported by local or live evidence.
@@ -103,4 +100,4 @@ no query text. Preserve large evidence in neutral evidence files. Include the
 same `namespace_scope_ref` and `namespace_scope_sha256` received from
 `application-metrics`; the validator rejects a different scope.
 
-Run `python3 scripts/validate_workflow_artifact.py <artifact.yaml> --input run-contract=<run-contract.yaml> --input application-metrics=<application-metrics.yaml>`. If the shortlist cannot be produced, validate a `failure-report.yaml` instead. Return only the bounded response defined by the artifact contract.
+Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

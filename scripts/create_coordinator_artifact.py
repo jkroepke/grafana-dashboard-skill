@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from grafana_access import grafana_env
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 INIT_WORKSPACE = SCRIPT_DIR / "init_agent_workspace.sh"
@@ -96,24 +98,49 @@ def grafonnet_dependencies(root: Path) -> list[tuple[str, Path]]:
     return dependencies
 
 
-def infer_grafonnet_revision(root: Path, requested: str | None) -> str | None:
+def infer_grafonnet_revision(root: Path) -> str | None:
     dependencies = grafonnet_dependencies(root)
-    if requested is not None:
-        if dependencies:
-            matches = [path for revision, path in dependencies if revision == requested]
-            require(matches, "requested Grafonnet revision is not present in jsonnetfile.lock.json")
-            require(any(path.is_dir() for path in matches), "requested Grafonnet revision is not vendored locally")
-        return requested
     if not dependencies:
         return None
     revisions = {revision for revision, _ in dependencies}
-    require(len(revisions) == 1, "multiple Grafonnet revisions are locked; pass --grafonnet-revision")
+    require(len(revisions) == 1, "multiple Grafonnet revisions are locked")
     revision = next(iter(revisions))
     require(
         any(path.is_dir() for locked_revision, path in dependencies if locked_revision == revision),
         "locked Grafonnet revision is not vendored locally",
     )
     return revision
+
+
+def workflow_settings(workspace: Path) -> tuple[str, dict[str, bool]]:
+    values = grafana_env(workspace / ".env")
+
+    def flag(name: str) -> bool:
+        value = values.get(name)
+        require(value in {"true", "false"}, f"{name} must be configured as true or false")
+        return value == "true"
+
+    run_id = values.get("WORKFLOW_RUN_ID", "")
+    require(SAFE_COMPONENT_RE.fullmatch(run_id) is not None, "WORKFLOW_RUN_ID is invalid")
+    datasource_access = flag("WORKFLOW_DATASOURCE_ACCESS")
+    dashboard_api_validation = flag("WORKFLOW_DASHBOARD_API_VALIDATION")
+    publish_requested = flag("WORKFLOW_PUBLISH_REQUESTED")
+    has_client = bool(values.get("GRAFANA_TARGET") and values.get("GRAFANA_HTTP_CLIENT"))
+    if datasource_access:
+        require(has_client, "datasource access requires configured Grafana target and client")
+        require(
+            values.get("GRAFANA_PROMETHEUS_DATASOURCE_UID") is not None,
+            "datasource access requires GRAFANA_PROMETHEUS_DATASOURCE_UID",
+        )
+    if dashboard_api_validation:
+        require(has_client, "dashboard API validation requires configured Grafana target and client")
+    require(not publish_requested or dashboard_api_validation,
+            "publication requires dashboard API validation")
+    return run_id, {
+        "datasource_access": datasource_access,
+        "dashboard_api_validation": dashboard_api_validation,
+        "publish_requested": publish_requested,
+    }
 
 
 def render_executable(root: Path, program: str) -> str:
@@ -283,9 +310,8 @@ def create_run_contract(args: argparse.Namespace) -> str:
     project_name = workspace.parent.name
     require(root.is_dir() and not root.is_symlink(), "repository root must be a regular directory")
     require(SAFE_COMPONENT_RE.fullmatch(project_name) is not None, "project name is not filesystem-safe")
-    require(SAFE_COMPONENT_RE.fullmatch(args.run_id) is not None, "run ID is not filesystem-safe")
-
-    coordinator = initialize_coordinator(root, project_name, args.run_id)
+    run_id, capabilities = workflow_settings(workspace)
+    coordinator = initialize_coordinator(root, project_name, run_id)
     grafana_version = read_grafana_version(
         root,
         str(SCRIPT_DIR / "grafana_version.py"),
@@ -303,7 +329,7 @@ def create_run_contract(args: argparse.Namespace) -> str:
         baseline_sha256 = None
 
     render_argv = [render_executable(root, "jsonnet"), "-J", "vendor", "{source}"]
-    grafonnet_revision = infer_grafonnet_revision(root, args.grafonnet_revision)
+    grafonnet_revision = infer_grafonnet_revision(root)
     for name, label in {
         "application namespace label": args.application_namespace_label,
         "application pod label": args.application_pod_label,
@@ -317,7 +343,7 @@ def create_run_contract(args: argparse.Namespace) -> str:
     artifact = {
         "schema_version": 1,
         "artifact_type": "run-contract",
-        "run_id": args.run_id,
+        "run_id": run_id,
         "revision": 1,
         "inputs": {},
         "status": "PASS",
@@ -330,7 +356,7 @@ def create_run_contract(args: argparse.Namespace) -> str:
             "baseline_sha256": baseline_sha256,
         },
         "rendered_candidate_path": str(
-            workspace / "dashboard-builder" / args.run_id / "evidence" / "rendered.json"
+            workspace / "dashboard-builder" / run_id / "evidence" / "rendered.json"
         ),
         "render": {"cwd": str(root), "argv": render_argv, "timeout_seconds": args.timeout_seconds},
         "schema": {
@@ -339,11 +365,7 @@ def create_run_contract(args: argparse.Namespace) -> str:
             "grafonnet_revision": grafonnet_revision,
         },
         "limits": HARD_LIMITS,
-        "capabilities": {
-            "datasource_access": args.datasource_access,
-            "dashboard_api_validation": args.dashboard_api_validation,
-            "publish_requested": args.publish_requested,
-        },
+        "capabilities": capabilities,
         "selector_proposals": {
             "application_namespace_label": args.application_namespace_label,
             "application_pod_label": args.application_pod_label,
@@ -437,12 +459,7 @@ def parser() -> argparse.ArgumentParser:
     subparsers = result.add_subparsers(dest="command", required=True)
 
     run = subparsers.add_parser("run-contract", help="create and validate a coordinator run contract")
-    run.add_argument("--run-id", required=True)
-    run.add_argument("--grafonnet-revision")
     run.add_argument("--timeout-seconds", type=int, default=120)
-    run.add_argument("--datasource-access", action="store_true")
-    run.add_argument("--dashboard-api-validation", action="store_true")
-    run.add_argument("--publish-requested", action="store_true")
     run.add_argument("--application-namespace-label", default="kubernetes_namespace")
     run.add_argument("--application-pod-label", default="kubernetes_pod_name")
     run.add_argument("--kubernetes-namespace-label", default="namespace")

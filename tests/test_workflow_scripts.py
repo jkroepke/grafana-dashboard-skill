@@ -16,7 +16,6 @@ VALIDATOR = REPOSITORY / "scripts" / "validate_workflow_artifact.py"
 PARITY = REPOSITORY / "scripts" / "verify_query_parity.py"
 CHAIN = REPOSITORY / "scripts" / "verify_workflow_chain.py"
 DASHBOARD_CONTRACT = REPOSITORY / "scripts" / "verify_dashboard_contract.py"
-RESPONSE_VALIDATOR = REPOSITORY / "scripts" / "validate_stage_response.py"
 NON_PROMETHEUS = REPOSITORY / "scripts" / "verify_non_prometheus_preservation.py"
 RENDER_VERIFIER = REPOSITORY / "scripts" / "verify_candidate_render.py"
 INIT_WORKSPACE = REPOSITORY / "scripts" / "init_agent_workspace.sh"
@@ -1081,23 +1080,16 @@ class WorkflowScriptsTest(unittest.TestCase):
         result = self.run_tool(DASHBOARD_CONTRACT, bad, expected=1)
         self.assertIn("qryType is missing", result.stderr)
 
-    def test_stage_response_grammar_is_enforced(self) -> None:
+    def test_coordinator_stage_response_grammar_is_enforced(self) -> None:
         digest_value = "sha256:" + "a" * 64
-        valid = self.root / "response.txt"
-        valid.write_text(
-            f"PASS promql-reviewer artifact=work/query-review.yaml sha256={digest_value}\n",
-            encoding="utf-8",
+        command = (
+            "import sys; "
+            f"sys.path.insert(0, {str(REPOSITORY / 'scripts')!r}); "
+            "from coordinator_stage import RESPONSE_RE; "
+            f"assert RESPONSE_RE.fullmatch('PASS promql-reviewer artifact=work/query-review.yaml sha256={digest_value}'); "
+            "assert RESPONSE_RE.fullmatch('PASS promql-reviewer') is None"
         )
-        self.run_tool(RESPONSE_VALIDATOR, valid)
-        valid.write_text(
-            f"PASS promql-reviewer artifact=work/query-review.json sha256={digest_value}\n",
-            encoding="utf-8",
-        )
-        result = self.run_tool(RESPONSE_VALIDATOR, valid, expected=1)
-        self.assertIn("must use a .yaml filename", result.stderr)
-        valid.write_text("PASS promql-reviewer\nextra context\n", encoding="utf-8")
-        result = self.run_tool(RESPONSE_VALIDATOR, valid, expected=1)
-        self.assertIn("one line", result.stderr)
+        self.run_tool("-c", command)
 
     def test_platform_atomic_exchange_swaps_without_deleting_either_file(self) -> None:
         first = self.root / "first.txt"
@@ -1249,7 +1241,12 @@ class WorkflowScriptsTest(unittest.TestCase):
         environment_file.write_text(
             "GRAFANA_TARGET=https://grafana.example.test\n"
             f"GRAFANA_HTTP_CLIENT={version_tool}\n"
-            "GRAFANA_HTTP_CLIENT_ARGS_JSON=[\"--netrc\"]\n",
+            "GRAFANA_HTTP_CLIENT_ARGS_JSON=[\"--netrc\"]\n"
+            "GRAFANA_PROMETHEUS_DATASOURCE_UID=prometheus-main\n"
+            "WORKFLOW_RUN_ID=run-1\n"
+            "WORKFLOW_DATASOURCE_ACCESS=true\n"
+            "WORKFLOW_DASHBOARD_API_VALIDATION=true\n"
+            "WORKFLOW_PUBLISH_REQUESTED=true\n",
             encoding="utf-8",
         )
         environment_file.chmod(0o600)
@@ -1276,8 +1273,6 @@ class WorkflowScriptsTest(unittest.TestCase):
                 sys.executable,
                 str(CREATE_COORDINATOR_ARTIFACT),
                 "run-contract",
-                "--run-id",
-                "run-1",
             ],
             capture_output=True,
             text=True,
@@ -1299,8 +1294,8 @@ class WorkflowScriptsTest(unittest.TestCase):
             cwd=workspace,
             env=environment,
         )
-        self.assertEqual(1, conflicting_run.returncode, conflicting_run.stdout + conflicting_run.stderr)
-        self.assertIn("already invoked", conflicting_run.stderr)
+        self.assertEqual(2, conflicting_run.returncode, conflicting_run.stdout + conflicting_run.stderr)
+        self.assertIn("unrecognized arguments", conflicting_run.stderr)
         self.assertEqual("x", Path(f"{version_tool}.invocations").read_text(encoding="utf-8"))
         coordinator = (
             helper_root / "dashboards/demo-project/workspace/coordinator/run-1"
@@ -1309,6 +1304,14 @@ class WorkflowScriptsTest(unittest.TestCase):
         run = load_artifact(run_contract)
         self.assertEqual("v13.2.1", run["schema"]["grafana_version"])
         self.assertEqual("helper-revision", run["schema"]["grafonnet_revision"])
+        self.assertEqual(
+            {
+                "datasource_access": True,
+                "dashboard_api_validation": True,
+                "publish_requested": True,
+            },
+            run["capabilities"],
+        )
         state = load_artifact(coordinator / "state.yaml")
         self.assertEqual("IN_PROGRESS", state["status"])
 
@@ -1337,6 +1340,7 @@ class WorkflowScriptsTest(unittest.TestCase):
             capture_output=True,
             text=True,
             check=False,
+            env=environment,
         )
         self.assertEqual(0, create_failure.returncode, create_failure.stdout + create_failure.stderr)
         repeated_failure = subprocess.run(
@@ -1344,6 +1348,7 @@ class WorkflowScriptsTest(unittest.TestCase):
             capture_output=True,
             text=True,
             check=False,
+            env=environment,
         )
         self.assertEqual(
             0,

@@ -13,12 +13,12 @@ protocol throughout every stage.
 - An approval applies only to the exact SHA-256 digests it records.
 - Any upstream change invalidates all downstream approvals.
 - Only `promql-builder` may author or change query text that can enter the dashboard.
-- Run every artifact through `scripts/validate_workflow_artifact.py` with all required `--input type=path` arguments.
+- Use `scripts/stage_check.py` to validate the assigned artifact and produce the stage response.
 - Run `scripts/verify_candidate_render.py` to prove the rendered JSON is the exact output of the candidate source.
 - Run `scripts/verify_dashboard_contract.py` to prove the mandatory variable structure.
 - Run `scripts/verify_query_parity.py` after rendering.
 - Run `scripts/verify_non_prometheus_preservation.py` to reject any non-Prometheus consumer change.
-- Run `scripts/verify_workflow_chain.py` before promotion.
+- Run `scripts/workflow_chain.py` before promotion.
 - The run contract must record Dashboard Schema V2 and a Grafana version of v13 or later. This workflow rejects classic dashboard sources and does not perform migrations.
 
 This workflow version stages exactly one dashboard source file. If a task requires a shared-helper edit, return `BLOCKED` rather than editing or promoting multiple files without an atomic candidate-set contract.
@@ -83,31 +83,29 @@ BLOCKED <stage> report=<neutral-path>.yaml sha256=sha256:<64-lowercase-hex>
 
 The referenced workflow file MUST have the exact `.yaml` suffix. Do not include
 metrics, queries, findings, source, rendered JSON, API responses, or rejected
-alternatives in the response. Accept a saved response with
-`python3 scripts/coordinator_stage.py accept --ticket <job.yaml>
---response-file <response-file>`; otherwise pass the exact one-line response
-with `--response`. The helper validates the grammar, artifact, bindings, and
-digest before recording acceptance.
+alternatives in the response. `scripts/stage_check.py` produces the response;
+the coordinator accepts it through its fixed control operation.
 
 ## Run contract
 
 The coordinator creates a `run-contract` artifact with the deterministic helper:
 
 ```bash
-python3 scripts/create_coordinator_artifact.py run-contract \
-  --run-id <run-id>
+scripts/create_coordinator_artifact.py run-contract
 ```
 
 Run this command from the project workspace. It derives the repository root and
-project name from that directory, uses the project working directory's
+project name and generated run ID from that directory, uses the project working directory's
 `dashboard.jsonnet` as the final source, uses `scripts/grafana_version.py`, and
 renders with `jsonnet -J vendor {source}`. Bootstrap the workspace-private `.env`
-through `scripts/set_workflow_env` before this command. The version helper reads
+through `scripts/set_workflow_env` before this command. The configuration must
+explicitly provide the datasource, dashboard-validation, and publication capability
+values; datasource access additionally requires `scripts/set_datasource`.
+The version helper reads
 that file, performs `GET /version`, and returns HTTP-200 JSON only on stdout. The helper
 executes it once, stores the raw response privately, and extracts Grafana's version only from
 `gitTreeState: "grafana v<version>"`. It ignores `major`, `minor`, and
-`gitVersion`, which may identify the backing Kubernetes API server. Other
-capability flags are opt-in. The helper
+`gitVersion`, which may identify the backing Kubernetes API server. The helper
 infers the source baseline and a unique locally locked and vendored Grafonnet
 revision, writes immutable YAML through `yq`, validates it, and updates the
 coordinator state. A repeated version-gate attempt for the same run is refused.
@@ -166,7 +164,7 @@ Limits may be lowered per run but never raised above these hard ceilings. `chang
 Validate:
 
 ```bash
-python3 scripts/validate_workflow_artifact.py <run-contract.yaml>
+scripts/validate_workflow_artifact.py <run-contract.yaml>
 ```
 
 ### Grafana `/version` gate
@@ -447,13 +445,13 @@ validation results are checkpointed separately before manifest assembly:
 Run:
 
 ```bash
-python3 scripts/verify_candidate_render.py \
+scripts/verify_candidate_render.py \
   <run-contract.yaml> <dashboard-build.yaml>
-python3 scripts/verify_dashboard_contract.py \
+scripts/verify_dashboard_contract.py \
   <rendered-dashboard.json>
-python3 scripts/verify_query_parity.py \
+scripts/verify_query_parity.py \
   <query-pack.yaml> <query-review.yaml> <rendered-dashboard.json>
-python3 scripts/verify_non_prometheus_preservation.py \
+scripts/verify_non_prometheus_preservation.py \
   <rendered-dashboard.json> [--baseline <baseline-render.json>]
 ```
 
@@ -496,7 +494,7 @@ evidence files below the relevant agent workspace, then create
 `failure-report.yaml` with:
 
 ```bash
-python3 scripts/create_coordinator_artifact.py failure-report \
+scripts/create_coordinator_artifact.py failure-report \
   --run-contract <run-contract.yaml> \
   --status BLOCKED \
   --failed-stage <agent-id> \
@@ -521,20 +519,6 @@ The helper produces an artifact at most 16 KiB, containing only:
 Use status `FAIL` or `BLOCKED`. It requires the run-contract input. The helper
 validates every evidence file reference and sets terminal coordinator state.
 
-## Validation commands
-
-Example with required upstream digest checks:
-
-```bash
-python3 scripts/validate_workflow_artifact.py query-pack.yaml \
-  --input run-contract=run-contract.yaml \
-  --input metrics-contract=metrics-contract.yaml \
-  --input dashboard-plan=dashboard-plan.yaml \
-  --support application-metrics=application-metrics.yaml
-```
-
-Also supply `--support kubernetes-metrics=kubernetes-metrics.yaml` when that shortlist is in the metrics-contract input graph. Later stages additionally supply any earlier artifacts that are transitive rather than direct. The validator output supplies the artifact digest for the bounded response. Do not copy any artifact body into the coordinator context.
-
 ## Chain and promotion gate
 
 Limit query build/review and dashboard build/review correction loops to three revisions. On a third failure, return `BLOCKED` rather than continuing.
@@ -542,16 +526,15 @@ Limit query build/review and dashboard build/review correction loops to three re
 Before promotion, run the read-only full-chain check:
 
 ```bash
-python3 scripts/verify_workflow_chain.py \
-  run-contract.yaml metrics-contract.yaml dashboard-plan.yaml query-pack.yaml \
-  query-review.yaml dashboard-build.yaml dashboard-review.yaml \
-  --application-metrics application-metrics.yaml \
-  --kubernetes-metrics kubernetes-metrics.yaml
+scripts/workflow_chain.py
 ```
 
-Supply only the metric shortlist paths that exist. The gate recomputes every digest, checks the DAG/status invariants, checks query parity, and verifies the final source baseline and exact reviewed candidate.
+The gate derives the canonical artifacts for the active workspace run, recomputes every digest, checks the DAG/status invariants, checks query parity, and verifies the final source baseline and exact reviewed candidate.
 
-Only after that command returns `PASS`, promote the candidate with the same command plus `--promote`. It repeats all checks, refuses to overwrite a changed destination, and verifies the final-path render before returning `PASS`. Publication is separate and requires explicit user intent.
+Only after that command returns `PASS`, the coordinator runs its fixed promote
+operation. It repeats all checks, refuses to overwrite a changed destination,
+and verifies the final-path render before returning `PASS`. Publication is
+separate and requires explicit user intent.
 
 The chain re-renders both baseline and candidate with the shell-free run-contract command, requires the complete rendered panel set to equal the bounded plan, checks objective `NEW`/`MODIFIED`/`PRESERVED` classification, validates mandatory variables, compares every approved Prometheus consumer, and requires the complete explicitly non-Prometheus consumer fingerprint to remain unchanged. Promotion uses atomic no-clobber creation for an absent destination or an atomic exchange for an existing destination; a baseline or final-render mismatch rolls the exchange back.
 

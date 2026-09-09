@@ -22,7 +22,7 @@ Read:
 - `knowledge/grafana/panel-selection.md`
 - `knowledge/grafana/layout-v2.md` only when layout constraints materially affect the plan
 
-First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+First run `scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 raw dumps, analyst prose, or the complete conversation. It supplies the
 run-contract and metrics-contract bindings, existing-dashboard evidence,
@@ -53,4 +53,4 @@ Assemble a `PASS` `dashboard-plan.yaml` from the small records with `yq` using
 or the plan cannot fit the declared budgets without losing the user's objective,
 write `failure-report.yaml` instead.
 
-Run `python3 scripts/validate_workflow_artifact.py` with the required run-contract and metrics-contract `--input` arguments and coordinator-supplied shortlist paths as `--support`. Support paths exist only for recursive validation; do not read their bodies. Return only the bounded response defined by the artifact contract.
+Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

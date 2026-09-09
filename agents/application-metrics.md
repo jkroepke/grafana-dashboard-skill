@@ -20,28 +20,25 @@ Read:
 - `knowledge/workflow/workspace.md`
 - `knowledge/workflow/artifacts.md`
 
-First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+First run `scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 or copy the complete conversation. It supplies the assigned metric evidence,
 run-contract binding, output path, limits, and configured discovery access.
 
-The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Treat `records/pending/` as the
+The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Run `metric_queue.py reconcile` before processing and use `metric_queue.py complete <pending-item> <record>` after each durable checkpoint. Treat `records/pending/` as the
 metric-family work queue and `records/done/` as its completed queue. Process
 one metric family at a time: create its bounded `records/metrics/*.yaml`
-checkpoint with `yq`, update `state.yaml`, then atomically move its work item
-into `records/done/`. Never hold the complete inventory in context or emit it
-through one large write-tool call. On restart, first reconcile any item whose
-checkpoint and completed state entry exist but which remains in
-`records/pending/`, moving it to `records/done/` without reprocessing it.
+checkpoint with `yq`, then complete its work item through the queue helper.
+Never hold the complete inventory in context or emit it through one large
+write-tool call.
 
-For a large Prometheus/OpenMetrics exposition, pipe the configured opaque reader
-or redirect local evidence into `scripts/snapshot_metrics.py`, assigning
+Always pipe `scripts/metrics_reader.py` into `scripts/snapshot_metrics.py`, assigning
 `records/pending` as its output directory and a neutral source reference. The
 helper accepts metrics only through stdin. Enumerate its family files and
-inspect them one at a time; after each durable checkpoint, move that family
-file into `records/done/`. Leave `manifest.yaml` in place as queue metadata.
+inspect them one at a time; complete each through the queue helper. Leave
+`manifest.yaml` in place as queue metadata.
 For discovery work without an exposition snapshot, create one bounded pending
-work-item YAML before inspection and move it to `done/` by the same protocol.
+work-item YAML before inspection and complete it by the same protocol.
 Never print or read the complete exposition into context.
 
 Parse each metric family once. Preserve raw dumps on disk and never paste them into output. Record:
@@ -96,4 +93,4 @@ records with `yq` using the contract in `knowledge/workflow/artifacts.md`.
 Inventory entries MUST contain no query text. Avoid duplicate family/member
 entries and keep large evidence in referenced evidence files.
 
-Run `python3 scripts/validate_workflow_artifact.py <artifact.yaml> --input run-contract=<run-contract.yaml>`. If the shortlist cannot be produced, validate a `failure-report.yaml` instead. Return only the bounded response defined by the artifact contract.
+Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

@@ -9,11 +9,11 @@ const MAX_OUTPUT_BYTES = 16 * 1024;
 const SAFE_COMPONENT = /^[A-Za-z0-9._-]+$/;
 
 const Action = StringEnum(
-  ["mkworkspace", "set-workflow-env", "run-contract", "dispatch", "accept", "promote", "failure-report"] as const,
+  ["mkworkspace", "set-workflow-env", "set-datasource", "run-contract", "dispatch", "accept", "promote", "failure-report"] as const,
 );
 
 const OPERATIONS: Record<
-  "mkworkspace" | "set-workflow-env" | "run-contract" | "dispatch" | "accept" | "promote" | "failure-report",
+  "mkworkspace" | "set-workflow-env" | "set-datasource" | "run-contract" | "dispatch" | "accept" | "promote" | "failure-report",
   { script: string; prefix: string[]; suffix?: string[] }
 > = {
   mkworkspace: {
@@ -22,6 +22,10 @@ const OPERATIONS: Record<
   },
   "set-workflow-env": {
     script: "scripts/set_workflow_env",
+    prefix: [],
+  },
+  "set-datasource": {
+    script: "scripts/set_datasource",
     prefix: [],
   },
   "run-contract": {
@@ -37,7 +41,7 @@ const OPERATIONS: Record<
     prefix: ["accept"],
   },
   promote: {
-    script: "scripts/verify_workflow_chain.py",
+    script: "scripts/workflow_chain.py",
     prefix: [],
     suffix: ["--promote"],
   },
@@ -73,7 +77,7 @@ async function runOperation(
   const argv = [script, ...operation.prefix, ...args, ...(operation.suffix ?? [])];
 
   return await new Promise((resolveResult) => {
-    const child = spawn("python3", argv, {
+    const child = spawn(argv[0], argv.slice(1), {
       cwd,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
@@ -130,7 +134,7 @@ export default function coordinatorControlExtension(pi: ExtensionAPI): void {
     promptSnippet:
       "Use coordinator_control for coordinator-owned workflow execution; never fall back to bash.",
     promptGuidelines: [
-      "coordinator_control is only for mkworkspace, set-workflow-env, run-contract, dispatch, accept, promote, and failure-report operations.",
+      "coordinator_control is only for mkworkspace, set-workflow-env, set-datasource, run-contract, dispatch, accept, promote, and failure-report operations.",
       "Never use coordinator_control to reproduce specialist work or inspect specialist-owned content.",
     ],
     parameters: Type.Object({

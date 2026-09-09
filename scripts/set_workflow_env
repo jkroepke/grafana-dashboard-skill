@@ -4,13 +4,11 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
-import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from grafana_access import ENV_KEYS, UID_RE, AccessError, grafana_env, workflow_env_path
+from grafana_access import ENV_KEYS, UID_RE, AccessError, grafana_env, workflow_env_path, write_workflow_env
 
 
 def fail(message: str) -> int:
@@ -19,7 +17,11 @@ def fail(message: str) -> int:
 
 
 def valid(name: str, value: str) -> bool:
-    if not value or "\x00" in value:
+    if "\x00" in value:
+        return False
+    if name == "METRICS_HTTP_CLIENT":
+        return not value or "/" not in value or Path(value).is_absolute()
+    if not value:
         return False
     if name == "GRAFANA_TARGET":
         parsed = urlsplit(value)
@@ -31,7 +33,17 @@ def valid(name: str, value: str) -> bool:
         )
     if name == "GRAFANA_HTTP_CLIENT":
         return "/" not in value or Path(value).is_absolute()
-    if name == "GRAFANA_HTTP_CLIENT_ARGS_JSON":
+    if name == "METRICS_TARGET":
+        parsed = urlsplit(value)
+        if parsed.scheme:
+            return (
+                parsed.scheme in {"http", "https"}
+                and bool(parsed.netloc)
+                and not parsed.fragment
+            )
+        path = Path(value)
+        return path.is_file() and not path.is_symlink()
+    if name in {"GRAFANA_HTTP_CLIENT_ARGS_JSON", "METRICS_HTTP_CLIENT_ARGS_JSON"}:
         try:
             values = json.loads(value)
         except json.JSONDecodeError:
@@ -41,6 +53,8 @@ def valid(name: str, value: str) -> bool:
             and len(values) <= 16
             and all(isinstance(item, str) and len(item) <= 1024 for item in values)
         )
+    if name.startswith("WORKFLOW_"):
+        return value in {"true", "false"}
     return UID_RE.fullmatch(value) is not None
 
 
@@ -50,22 +64,21 @@ def main() -> int:
     name, value = sys.argv[1:]
     if name not in ENV_KEYS:
         return fail("environment variable is not allowed")
+    if name == "WORKFLOW_RUN_ID":
+        return fail("WORKFLOW_RUN_ID is created by mkworkspace")
+    if name == "GRAFANA_PROMETHEUS_DATASOURCE_UID":
+        return fail("GRAFANA_PROMETHEUS_DATASOURCE_UID is created by set_datasource")
     if not valid(name, value):
         return fail("environment variable value is invalid")
+    if name == "METRICS_TARGET" and not urlsplit(value).scheme:
+        value = str(Path(value).resolve())
     path = workflow_env_path()
     if path is None:
         return fail("set_workflow_env must run from a dashboard workspace")
     try:
         values = grafana_env(path)
         values[name] = value
-        with tempfile.NamedTemporaryFile(
-            "w", encoding="utf-8", dir=path.parent, prefix=".env.", delete=False,
-        ) as temporary:
-            temporary_path = Path(temporary.name)
-            os.chmod(temporary_path, 0o600)
-            for key in sorted(values):
-                temporary.write(f"{key}={values[key]}\n")
-        os.replace(temporary_path, path)
+        write_workflow_env(path, values)
     except (AccessError, OSError) as error:
         return fail(str(error))
     print("PASS workflow-env")

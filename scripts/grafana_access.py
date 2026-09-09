@@ -24,6 +24,13 @@ ENV_KEYS = frozenset({
     "GRAFANA_HTTP_CLIENT",
     "GRAFANA_HTTP_CLIENT_ARGS_JSON",
     "GRAFANA_PROMETHEUS_DATASOURCE_UID",
+    "METRICS_TARGET",
+    "METRICS_HTTP_CLIENT",
+    "METRICS_HTTP_CLIENT_ARGS_JSON",
+    "WORKFLOW_RUN_ID",
+    "WORKFLOW_DATASOURCE_ACCESS",
+    "WORKFLOW_DASHBOARD_API_VALIDATION",
+    "WORKFLOW_PUBLISH_REQUESTED",
 })
 
 
@@ -79,6 +86,22 @@ def grafana_env(path: Path | None = None) -> dict[str, str]:
         require(key not in values and "\x00" not in value, f"Grafana .env line {number} is invalid")
         values[key] = value
     return values
+
+
+def write_workflow_env(path: Path, values: Mapping[str, str]) -> None:
+    """Atomically replace the private workspace configuration."""
+    require(set(values).issubset(ENV_KEYS), "Grafana .env key is not allowed")
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=path.parent, prefix=".env.", delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            os.chmod(temporary_path, 0o600)
+            for key in sorted(values):
+                temporary.write(f"{key}={values[key]}\n")
+        os.replace(temporary_path, path)
+    except OSError as error:
+        raise AccessError("Grafana .env could not be written") from error
 
 
 def grafana_access_from_environment(

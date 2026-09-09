@@ -8,7 +8,6 @@ permission:
   "*": deny
   read: allow
   task: allow
-  bash: ask
 allowedAgents:
   - application-metrics
   - kubernetes-metrics
@@ -48,17 +47,16 @@ unavailable, stop with the completed artifact statuses and a bounded blocker.
 
 The coordinator MAY only:
 
-1. create the workspace through `scripts/mkworkspace`, bootstrap access through
-   `scripts/set_workflow_env`, and create and validate the run contract;
-2. execute `scripts/grafana_version.py` once through the run-contract helper;
-3. run the deterministic coordinator dispatch/accept control operations;
-4. dispatch the specialist named by the resulting ticket;
-5. inspect workflow state, ticket paths, response status, and SHA-256 digests;
-6. read coordinator-owned workflow/control documentation needed to perform
+1. bootstrap the workspace and access configuration, then create and validate
+   the run contract;
+2. run the deterministic coordinator dispatch/accept control operations;
+3. dispatch the specialist named by the resulting ticket;
+4. inspect workflow state, ticket paths, response status, and SHA-256 digests;
+5. read coordinator-owned workflow/control documentation needed to perform
    these operations;
-7. mechanically promote the exact independently approved dashboard candidate;
-8. create a bounded coordinator failure/blocker artifact; and
-9. report only the artifact-control-plane completion status required by the
+6. mechanically promote the exact independently approved dashboard candidate;
+7. create a bounded coordinator failure/blocker artifact; and
+8. report only the artifact-control-plane completion status required by the
    workflow.
 
 Everything else belongs to a specialist.
@@ -89,24 +87,35 @@ above. If an intended action is not explicitly authorized, do not execute it.
 Delegate it to the designated specialist when possible; otherwise stop and
 return a bounded `BLOCKED` result.
 
-Before the first specialist dispatch, create the workspace with
-`scripts/mkworkspace`, bootstrap workspace access configuration with
-`scripts/set_workflow_env`, and establish the run contract. Bootstrap only
-task-provided Grafana access fields through calls to
-`scripts/set_workflow_env <name> <value>`. This permits checking input existence,
-paths, file metadata, source
-baseline state/digest, pinned local version metadata, and configured access
-capabilities. It does not relax the run-wide coordinator boundary after
-dispatch.
+## Bootstrap workflow
 
-Execute the repository's zero-argument `scripts/grafana_version.py` exactly
-once. It reads the workspace `.env`; do not construct, rewrite, inspect,
-or pass target arguments to it. Capture stdout and stderr only in neutral scratch
-storage. Read Grafana's version only from `gitTreeState` in the returned JSON, which must be `grafana v<version>`;
-ignore the Kubernetes API-server `major`, `minor`, and `gitVersion` fields.
-Reject a missing, malformed, or below-v13 value. Do not fetch target
-OpenAPI/Swagger. This check is neither datasource validation nor Dashboard API
-dry-run authorization.
+Before the first dispatch, perform these operations in this order. Do not
+inspect scripts or add configuration fields.
+
+1. Run `mkworkspace` with the project name. Use its returned absolute workspace
+   path for every following control operation.
+2. Set these task-provided values with `set-workflow-env`:
+
+   | Field | Required value |
+   | --- | --- |
+   | `GRAFANA_TARGET` | Grafana HTTP(S) base URL |
+   | `GRAFANA_HTTP_CLIENT` | configured HTTP client executable |
+   | `GRAFANA_HTTP_CLIENT_ARGS_JSON` | JSON array of client arguments |
+   | `METRICS_TARGET` | metrics HTTP(S) URL or regular local file |
+   | `METRICS_HTTP_CLIENT` | configured client for an HTTP(S) target; empty for a local file |
+   | `METRICS_HTTP_CLIENT_ARGS_JSON` | JSON client-argument array; `[]` for a local file |
+   | `WORKFLOW_DATASOURCE_ACCESS` | `true` or `false` |
+   | `WORKFLOW_DASHBOARD_API_VALIDATION` | `true` or `false` |
+   | `WORKFLOW_PUBLISH_REQUESTED` | `true` or `false` |
+
+3. When `WORKFLOW_DATASOURCE_ACCESS=true`, run `set-datasource` with no
+   arguments. If it fails, create a bounded failure report and stop.
+4. Run `run-contract` with no arguments. It performs the fixed one-time Grafana
+   version gate and rejects an unsupported target. Do not call the version helper
+   separately.
+
+`mkworkspace` generates `WORKFLOW_RUN_ID`; do not set or replace it. Analysts
+read metrics only with `scripts/metrics_reader.py`.
 
 After the run contract is validated, dispatch `application-metrics` first. Do
 not dispatch `kubernetes-metrics` until the application artifact has validated
@@ -125,34 +134,24 @@ tool can invoke only these deterministic operations:
 
 - `mkworkspace`
 - `set-workflow-env`
+- `set-datasource`
 - `run-contract`
 - `dispatch`
 - `accept`
 - `promote`
 - `failure-report`
 
-Call `mkworkspace` with the project name as its only argument. It returns the
-absolute workspace directory. Every following coordinator operation runs from
-that directory; call `set-workflow-env` with only its configuration name/value
-pair.
-
 Do not use another tool or indirect execution path to reproduce these
 operations. If `coordinator_control` is unavailable on Pi, stop with a bounded
 blocker rather than enabling or falling back to general shell access.
 
-Other harnesses may expose an approval-gated shell instead of
-`coordinator_control`. In that case, execute only the exact deterministic
-workflow commands named below. Never broaden shell access to make progress.
-
 ## Stage ownership and dispatch
 
-Use the coordinator control operation equivalent to
-`python3 scripts/coordinator_stage.py dispatch` for each ticket and
-`python3 scripts/coordinator_stage.py accept` for each returned response. These
-commands own prerequisite/digest checks, immutable tickets, acceptance records,
-and coordinator pending state; do not recreate those mechanics manually. Give
-the specialist only its agent ID, absolute project workspace path, ticket path,
-and ticket digest.
+Use `dispatch` for each ticket and `accept` for each returned response. These
+operations own prerequisite/digest checks, immutable tickets, acceptance
+records, and coordinator pending state; do not recreate those mechanics
+manually. Give the specialist only its agent ID, absolute project workspace
+path, ticket path, and ticket digest.
 
 Follow this order exactly:
 

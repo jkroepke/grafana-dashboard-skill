@@ -25,7 +25,7 @@ Read:
 - `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md`
 - `knowledge/grafana/annotations.md` only when the approved query pack contains annotations
 
-First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+First run `scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 raw metrics, upstream prose, or the complete conversation. It supplies the
 approved bindings, existing source, output/candidate/render paths, pinned
@@ -66,8 +66,8 @@ Format and render the candidate with repository commands. Parse rendered JSON an
 - no unplanned panels or queries
 - every explicitly non-Prometheus panel, variable, and annotation consumer is unchanged from the rendered baseline; adding, changing, or removing one is `BLOCKED`
 
-Run `python3 scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml>`, `python3 scripts/verify_dashboard_contract.py <rendered-dashboard.json>`, `python3 scripts/verify_query_parity.py <query-pack.yaml> <query-review.yaml> <rendered-dashboard.json>`, and `python3 scripts/verify_non_prometheus_preservation.py <rendered-dashboard.json> [--baseline <baseline-render.json>]`. Because the build manifest is needed for the first command, assemble it with `yq`, run all verifiers, and update only its check statuses if necessary. A failure is a build `FAIL`, never permission to edit an approved expression.
+Run `scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml>`, `scripts/verify_dashboard_contract.py <rendered-dashboard.json>`, `scripts/verify_query_parity.py <query-pack.yaml> <query-review.yaml> <rendered-dashboard.json>`, and `scripts/verify_non_prometheus_preservation.py <rendered-dashboard.json> [--baseline <baseline-render.json>]`. Because the build manifest is needed for the first command, assemble it with `yq`, run all verifiers, and update only its check statuses if necessary. A failure is a build `FAIL`, never permission to edit an approved expression.
 
 Write a `PASS` `dashboard-build.yaml` using `knowledge/workflow/artifacts.md`, including all input/output digests and baseline final-source digest, only after local checks pass. Write `failure-report.yaml` for a failed or blocked build.
 
-Run `python3 scripts/validate_workflow_artifact.py` with the required run-contract, metrics-contract, dashboard-plan, query-pack, and query-review `--input` arguments and coordinator-supplied shortlist paths as `--support`. Support paths exist only for recursive validation; do not read their bodies. Return only the bounded response defined by the artifact contract.
+Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

@@ -114,6 +114,10 @@ class GrafanaAccessTest(unittest.TestCase):
             workspace = root / "dashboards" / "demo" / "workspace"
             self.assertEqual(0, created.returncode, created.stdout + created.stderr)
             self.assertEqual(str(workspace), created.stdout.strip())
+            self.assertRegex(
+                (workspace / ".env").read_text(encoding="utf-8"),
+                r"(?m)^WORKFLOW_RUN_ID=run-[0-9a-f]{16}$",
+            )
             result = subprocess.run(
                 [sys.executable, str(command), "GRAFANA_TARGET", "https://grafana.example.test"],
                 capture_output=True,
@@ -122,9 +126,102 @@ class GrafanaAccessTest(unittest.TestCase):
                 cwd=workspace,
             )
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            result = subprocess.run(
+                [sys.executable, str(command), "WORKFLOW_PUBLISH_REQUESTED", "true"],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=workspace,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            metrics_file = root / "metrics.txt"
+            metrics_file.write_text("demo_metric 1\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(command), "METRICS_TARGET", str(metrics_file)],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=workspace,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            result = subprocess.run(
+                [sys.executable, str(command), "METRICS_HTTP_CLIENT", ""],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=workspace,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            result = subprocess.run(
+                [sys.executable, str(command), "GRAFANA_PROMETHEUS_DATASOURCE_UID", "manual"],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=workspace,
+            )
+            self.assertEqual(2, result.returncode)
+            self.assertIn("set_datasource", result.stderr)
             config = workspace / ".env"
             self.assertEqual(0o600, config.stat().st_mode & 0o777)
+            self.assertIn("WORKFLOW_PUBLISH_REQUESTED=true", config.read_text(encoding="utf-8"))
             self.assertEqual(
                 "https://grafana.example.test",
                 grafana_access_from_environment({}, env_path=config).target,
             )
+
+    def test_metrics_reader_streams_a_local_target_without_client(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        with TemporaryDirectory() as temporary:
+            workspace = Path(temporary) / "dashboards" / "demo" / "workspace"
+            workspace.mkdir(parents=True)
+            metrics_file = Path(temporary) / "metrics.txt"
+            metrics_file.write_bytes(b"# TYPE demo_metric gauge\ndemo_metric 1\n")
+            (workspace / ".env").write_text(
+                f"METRICS_TARGET={metrics_file}\nMETRICS_HTTP_CLIENT=\n",
+                encoding="utf-8",
+            )
+            (workspace / ".env").chmod(0o600)
+            result = subprocess.run(
+                [sys.executable, str(repository / "scripts" / "metrics_reader.py")],
+                capture_output=True,
+                check=False,
+                cwd=workspace,
+            )
+            self.assertEqual(0, result.returncode, result.stderr.decode())
+            self.assertEqual(metrics_file.read_bytes(), result.stdout)
+
+    def test_set_datasource_persists_the_default_prometheus_uid(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / "dashboards" / "demo" / "workspace"
+            workspace.mkdir(parents=True)
+            client = root / "client"
+            client.write_text(
+                "#!/bin/sh\n"
+                "while [ \"$#\" -gt 0 ]; do\n"
+                "  case \"$1\" in --output) output=$2; shift 2;; *) url=$1; shift;; esac\n"
+                "done\n"
+                "test \"$url\" = https://grafana.example.test/api/datasources || exit 1\n"
+                "printf '%s' '[{\"uid\":\"first\",\"type\":\"prometheus\"},{\"uid\":\"default\",\"type\":\"prometheus\",\"isDefault\":true}]' > \"$output\"\n"
+                "printf 200\n",
+                encoding="utf-8",
+            )
+            client.chmod(0o755)
+            config = workspace / ".env"
+            config.write_text(
+                "GRAFANA_TARGET=https://grafana.example.test\n"
+                f"GRAFANA_HTTP_CLIENT={client}\n"
+                "GRAFANA_HTTP_CLIENT_ARGS_JSON=[]\n",
+                encoding="utf-8",
+            )
+            config.chmod(0o600)
+            result = subprocess.run(
+                [sys.executable, str(repository / "scripts" / "set_datasource")],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=workspace,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertIn("GRAFANA_PROMETHEUS_DATASOURCE_UID=default", config.read_text(encoding="utf-8"))

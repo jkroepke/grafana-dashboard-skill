@@ -15,7 +15,6 @@ from typing import Any
 
 import create_coordinator_artifact as coordinator_artifact
 import validate_workflow_artifact as workflow
-from validate_stage_response import RESPONSE_RE
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -36,6 +35,10 @@ STAGES = {
 ARTIFACT_OWNERS = {artifact_type: agent for agent, (artifact_type, _) in STAGES.items()}
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 SAFE_LIMIT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,63}$")
+RESPONSE_RE = re.compile(
+    r"^(DONE|PASS|FAIL|BLOCKED) ([A-Za-z][A-Za-z0-9._-]{0,63}) "
+    r"(artifact|report)=([^\s]{1,160}) sha256=(sha256:[0-9a-f]{64})$"
+)
 
 
 class StageError(ValueError):

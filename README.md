@@ -20,7 +20,7 @@ Use a focused prompt:
 Use the grafana-dashboard skill.
 
 Create or update the Grafana dashboard for <application>.
-Metrics dump: <path>
+Metrics target: <URL-or-local-file>
 Kubernetes manifests: <path or none>
 Existing dashboard: <path or none>
 Grafana access bootstrap: <target and client details>
@@ -42,14 +42,22 @@ The coordinator first runs `scripts/mkworkspace <project-name>` and uses its
 returned absolute workspace directory as the current working directory. It then configures
 `dashboards/<project-name>/workspace/.env` through
 `scripts/set_workflow_env <name> <value>`. It may set `GRAFANA_TARGET`,
-`GRAFANA_HTTP_CLIENT`, `GRAFANA_HTTP_CLIENT_ARGS_JSON`, and
-`GRAFANA_PROMETHEUS_DATASOURCE_UID`; all wrappers load the file automatically.
+`GRAFANA_HTTP_CLIENT` and `GRAFANA_HTTP_CLIENT_ARGS_JSON`. Metrics collection uses `METRICS_TARGET`,
+`METRICS_HTTP_CLIENT`, and `METRICS_HTTP_CLIENT_ARGS_JSON`; a metrics target
+may be an HTTP(S) URL or a regular local file. For a local file the client may
+be empty. All wrappers load the file automatically.
+It also sets `WORKFLOW_DATASOURCE_ACCESS`,
+`WORKFLOW_DASHBOARD_API_VALIDATION`, and `WORKFLOW_PUBLISH_REQUESTED` to
+explicit `true` or `false` values before the immutable run contract is created.
+`mkworkspace` generates `WORKFLOW_RUN_ID`; do not configure it with
+`set_workflow_env`.
+When datasource access is enabled, `scripts/set_datasource` discovers and
+stores the default Prometheus datasource UID, or the first Prometheus datasource.
 Do not shell-source or print it. The provided wrappers keep the target,
 credentials, proxy path, and datasource UID out of later agent arguments:
 
 ```text
 scripts/grafana_version.py
-scripts/grafana_prometheus_datasource.py
 scripts/prometheus_reader.py <request.json> <response.json>
 scripts/grafana_dry_run.py <resource.json> <response.json>
 ```
@@ -58,9 +66,6 @@ scripts/grafana_dry_run.py <resource.json> <response.json>
 (default first, otherwise the first returned) and accepts only the read-only
 `query`, `query_range`, `series`, `labels`, `label_values`, and `metadata`
 operations. Request and response files remain in the assigned workspace.
-`grafana_prometheus_datasource.py` is a trusted bootstrap helper; do not hand
-it to agents as an access capability.
-
 The Grafana Dashboard resource namespace is always `default`. Do not provide or derive another API namespace.
 
 The mandatory pipeline is:

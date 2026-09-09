@@ -21,7 +21,7 @@ Read:
 - `knowledge/workflow/artifacts.md`
 - `knowledge/kubernetes/metrics.md` when Kubernetes capabilities are present
 
-First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+First run `scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 analyst prose or the complete conversation. It supplies the run-contract and
 shortlist bindings, raw evidence, existing dashboard source/render evidence,
@@ -70,4 +70,4 @@ Assemble `metrics-contract.yaml` from the checkpoint records with `yq` using
 explicit, and all blocking selector/population contradictions are resolved.
 Write `failure-report.yaml` otherwise. `PASS` does not approve any query.
 
-Run `python3 scripts/validate_workflow_artifact.py` with the run contract and every received metric shortlist as named `--input` arguments. Return only the bounded response defined by the artifact contract.
+Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""Discover and persist the default-or-first Prometheus datasource UID."""
+
+from __future__ import annotations
+
+import sys
+
+from grafana_access import (
+    AccessError,
+    GrafanaAccess,
+    grafana_access_from_environment,
+    prometheus_datasource_uid,
+    workflow_env_path,
+    grafana_env,
+    write_workflow_env,
+)
+
+
+def main() -> int:
+    try:
+        path = workflow_env_path()
+        if path is None:
+            raise AccessError("set_datasource must run from a dashboard workspace")
+        access = grafana_access_from_environment()
+        discovery_access = GrafanaAccess(access.target, access.client, access.client_args, None)
+        values = grafana_env(path)
+        values["GRAFANA_PROMETHEUS_DATASOURCE_UID"] = prometheus_datasource_uid(discovery_access)
+        write_workflow_env(path, values)
+    except AccessError as error:
+        print(f"ERROR set-datasource: {error}", file=sys.stderr)
+        return 2
+    print("PASS datasource")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

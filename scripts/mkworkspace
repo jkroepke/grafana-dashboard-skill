@@ -5,11 +5,23 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 import sys
 from pathlib import Path
 
+from grafana_access import grafana_env, write_workflow_env
+
 
 SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def ensure_run_id(workspace: Path) -> None:
+    path = workspace / ".env"
+    values = grafana_env(path)
+    if "WORKFLOW_RUN_ID" in values:
+        return
+    values["WORKFLOW_RUN_ID"] = f"run-{secrets.token_hex(8)}"
+    write_workflow_env(path, values)
 
 
 def main() -> int:
@@ -19,6 +31,7 @@ def main() -> int:
     workspace = Path.cwd() / "dashboards" / sys.argv[1] / "workspace"
     workspace.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(workspace, 0o700)
+    ensure_run_id(workspace)
     print(workspace.resolve())
     return 0
 

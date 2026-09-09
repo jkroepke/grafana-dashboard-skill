@@ -81,8 +81,7 @@ Do not duplicate agent definitions for individual runtimes.
 - Read-only datasource access may be used for discovery and query validation.
 - Every candidate and existing-source baseline must render as a Dashboard Schema V2 resource.
 - Preserve existing dashboard identity, unrelated panels, repository helpers, and dependency pins.
-- Use the repository dashboard location, or
-  `dashboards/<project-name>/dashboard.jsonnet` when none exists.
+- Use `dashboards/<project-name>/dashboard.jsonnet` as the dashboard source.
 - `dashboard-builder` owns the single staged dashboard candidate. This workflow version does not stage helper edits, and it never writes the final destination.
 - The coordinator owns dispatch, stage state, digest checks, and mechanical promotion of an approved candidate. A fresh `dashboard-publisher` performs explicitly requested publication. The coordinator MUST NOT reconstruct or manually repair dashboard source, PromQL, or API payloads.
 
@@ -122,54 +121,13 @@ the missing stage.
 
 ## Establish the shared contract
 
-Before delegation, locate or record proposed facts and evidence paths without performing metric semantics or dashboard construction in the coordinator context:
-
-- application/workload identity
-- filesystem-safe project name, run ID, and the absolute
-  `dashboards/<project-name>/workspace` path
-- candidate container and sidecar evidence
-- verified Grafana version (`v13+`) and Dashboard Schema V2 compatibility
-- Grafonnet revision
-- absolute repository root, final `.jsonnet` path, adjacent candidate path, and source baseline digest
-- fixed `jsonnet -J vendor {source}` rendering from the repository root
-- proposed cluster scope
-- scrape intervals when available
-- available metric-source paths/access capabilities
-- proposed fixed-selector references
-- configured datasource access method
-- configured Grafana Dashboard resource API validation access/wrapper when available
-- `scripts/grafana_version.py` as the zero-argument `/version` command
-- existing dashboard resource identity when applicable
-- whether publication is requested
-- when publication is requested: writable authentication method and folder placement when applicable
-
-Create the coordinator run contract with
-`scripts/create_coordinator_artifact.py run-contract`; do not reconstruct its
-YAML with an ad hoc `yq` expression. The helper records the source baseline,
-requires the `jsonnet` executable, resolves locally locked Grafonnet
-revision evidence, validates the artifact, and advances coordinator state.
-
-Provide configured access capability references in the shared contract.
-
-Before `scripts/set_workflow_env`, create the project workspace with
-`scripts/mkworkspace`. It prints the absolute workspace directory; use that
-directory as the current working directory for every following workflow command.
-
-When the repository wrappers are configured, use
-`scripts/prometheus_reader.py <request-file> <response-file>` for read-only
-Prometheus access and `scripts/grafana_dry_run.py <resource-file>
-<response-file>` for a new-dashboard Dashboard V2 create dry-run. The supplied
-dry-run script does not validate an existing resource update. Treat Dashboard
-API validation as configured for an existing dashboard only when a separately
-supplied configured wrapper supports the required resource GET and update dry-run,
-including writing the response body to a local file on HTTP failure.
-Otherwise record `dashboard_api_validation: false` in the run contract and do
-not substitute a collection POST or direct request. Their target, datasource selection,
-proxy paths, and credentials are configured runtime settings; do not invoke
-the datasource resolver, supply an endpoint or UID, or read/source configuration.
-Prometheus requests may use only `query`, `query_range`, `series`, `labels`,
-`label_values`, or `metadata`, with all target-identifying input kept in the
-request file.
+Create the workspace, use its returned path as the working directory, configure
+task access through `scripts/set_workflow_env`, run `scripts/set_datasource`
+when datasource access is enabled, then create the run contract. The fixed
+helper derives the run ID, source path, renderer, version gate, baseline, and
+locked Grafonnet revision; do not reconstruct its YAML or inspect helpers to
+supply those values. Capability wrappers receive their configuration only from
+the workspace and task tickets.
 
 Do not require publication intent before using an already configured Dashboard API credential/wrapper for a non-persisting dry-run validation request.
 
@@ -280,15 +238,14 @@ separate artifacts.
 
 Analysts MUST NOT write final or candidate PromQL, variable queries, annotation queries, operational panel plans, or dashboard source. Large catalogs and raw evidence remain on disk; their visible response contains only stage status, artifact path, and digest.
 
-For large Prometheus/OpenMetrics exposition, the analyst streams the configured
-configured reader or local evidence through `scripts/snapshot_metrics.py` on stdin.
+The analyst always streams `scripts/metrics_reader.py` through
+`scripts/snapshot_metrics.py` on stdin.
 The helper has no network, credential, or input-file interface and writes small
 per-family YAML snapshots without exposing raw sample or label values to agent
 context. The analyst inspects those snapshots selectively. Both metric analysts
 use `records/pending/` and `records/done/` as a durable queue: after a metric
-record and its `state.yaml` checkpoint are durable, move its processed work item
-to `done/`; on restart, reconcile completed checkpoint entries before processing
-the remaining pending items.
+record is durable, complete its work item with `scripts/metric_queue.py`; on
+restart, reconcile the queue before processing remaining pending items.
 
 ### 2. Independent metrics review
 

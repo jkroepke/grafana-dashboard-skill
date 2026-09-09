@@ -26,7 +26,7 @@ Read:
 - `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md` when target dry-run validation fails
 - `knowledge/grafana/annotations.md` when annotations are present
 
-First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+First run `scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 upstream conclusions, raw metric dumps, or the complete conversation. It
 supplies the approved bindings, candidate/rendered evidence, pinned versions,
@@ -52,7 +52,7 @@ Treat the approved query pack as immutable. Exhaustively extract every Prometheu
 - every preserved legacy expression in an updated dashboard is represented in the approved pack
 - the query-review digest approves the exact current query-pack digest
 
-Independently run `python3 scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml>`, `python3 scripts/verify_dashboard_contract.py <rendered-dashboard.json>`, `python3 scripts/verify_query_parity.py <query-pack.yaml> <query-review.yaml> <rendered-dashboard.json>`, and `python3 scripts/verify_non_prometheus_preservation.py <rendered-dashboard.json> [--baseline <baseline-render.json>]`. If the pinned representation uses another field for Prometheus text, require the verifier to cover it before review can pass.
+Independently run `scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml>`, `scripts/verify_dashboard_contract.py <rendered-dashboard.json>`, `scripts/verify_query_parity.py <query-pack.yaml> <query-review.yaml> <rendered-dashboard.json>`, and `scripts/verify_non_prometheus_preservation.py <rendered-dashboard.json> [--baseline <baseline-render.json>]`. If the pinned representation uses another field for Prometheus text, require the verifier to cover it before review can pass.
 
 Do not repeat semantic PromQL review and do not propose replacement query text. A semantic/query-text correction is classified `QUERY_PACK_CHANGE_REQUIRED` and must return through the coordinator to `promql-builder`, followed by a new PromQL review and rebuild.
 
@@ -126,4 +126,4 @@ Classify each finding by owner:
 
 Never provide replacement source or PromQL in findings. Set `PASS` only with no findings and all applicable validation complete.
 
-Run `python3 scripts/validate_workflow_artifact.py` with all five required named `--input` arguments and coordinator-supplied metrics-contract/shortlist paths as transitive `--support`. Support paths exist only for recursive validation; do not read their bodies. Return only the bounded response defined by the artifact contract.
+Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.

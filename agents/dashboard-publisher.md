@@ -22,7 +22,7 @@ Read:
 - `knowledge/grafana/publishing-v2.md`
 - `knowledge/grafana/grafana-v2-dry-run.md`
 
-First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+First run `scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 upstream prose or the complete conversation. It supplies the approved bindings,
 promoted source and final-render evidence, output path, limits, and configured
@@ -33,7 +33,7 @@ and readback results as separate bounded YAML records with `yq`; keep raw bodies
 in `evidence/` and update `state.yaml` after each step. Never accumulate the
 publication transcript in context for one final write.
 
-Refuse to publish unless publication was explicitly requested, the workflow chain passed, the final source digest equals the reviewed candidate digest, `python3 scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml> --source <final-source.jsonnet>` proves the exact final-path render equals the reviewed rendered digest, and the dashboard review is `PASS`.
+Refuse to publish unless publication was explicitly requested, the workflow chain passed, the final source digest equals the reviewed candidate digest, `scripts/verify_candidate_render.py <run-contract.yaml> <dashboard-build.yaml> --source <final-source.jsonnet>` proves the exact final-path render equals the reviewed rendered digest, and the dashboard review is `PASS`.
 
 Refuse to publish unless the run contract records Grafana v13+ and Dashboard
 Schema V2. The target must advertise stable Dashboard V2; classic dashboards,
@@ -51,7 +51,5 @@ After the write, GET the same resource and verify the expected title, required v
 
 Assemble a `PASS` `publish-report.yaml` from the checkpoints with `yq` using
 `knowledge/workflow/artifacts.md` only after verified readback. Otherwise write
-`failure-report.yaml`. Run the artifact validator with run-contract,
-dashboard-build, and dashboard-review as direct `--input` bindings and all
-coordinator-supplied earlier artifacts as transitive `--support`; support paths
-exist only for recursive validation. Return only the bounded one-line response.
+`failure-report.yaml`. Run `scripts/stage_check.py --ticket <job.yaml>`
+after writing the assigned artifact or failure report. Return its bounded response.

@@ -23,7 +23,7 @@ Read:
 - `knowledge/grafana/variables.md` for variable queries
 - `knowledge/grafana/annotations.md` when annotations are planned
 
-First run `python3 scripts/coordinator_stage.py validate-ticket --ticket
+First run `scripts/coordinator_stage.py validate-ticket --ticket
 <job.yaml>`. Read assignments only from that validated ticket; do not request
 raw dumps or the complete conversation. It supplies the approved bindings,
 existing source/render evidence, output path, limits, and configured datasource
@@ -69,4 +69,4 @@ For updates, include every Prometheus datasource query that will remain in the f
 
 Write a `PASS` query pack only when every required query is semantically usable. Otherwise write a bounded `failure-report.yaml`; use blocker code `NEEDS_EVIDENCE` when required evidence is absent. Use `UNVERIFIED` per query when live access is unavailable, without presenting it as live validation.
 
-Run `python3 scripts/validate_workflow_artifact.py` with the required run-contract, metrics-contract, and dashboard-plan `--input` arguments and coordinator-supplied shortlist paths as `--support`. Support paths exist only for recursive validation; do not read their bodies. Return only the bounded response defined by the artifact contract.
+Run `scripts/stage_check.py --ticket <job.yaml>` after writing the assigned artifact or failure report. Return its bounded response.
