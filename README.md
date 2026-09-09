@@ -45,7 +45,8 @@ returned absolute workspace directory as the current working directory. It then 
 `GRAFANA_HTTP_CLIENT` and `GRAFANA_HTTP_CLIENT_ARGS_JSON`. Metrics collection uses `METRICS_TARGET`,
 `METRICS_HTTP_CLIENT`, and `METRICS_HTTP_CLIENT_ARGS_JSON`; a metrics target
 may be an HTTP(S) URL or a regular local file. For a local file the client may
-be empty. All wrappers load the file automatically.
+be empty. If no `*_HTTP_CLIENT` is given for an HTTP(S) target, use `curl`.
+All wrappers load the file automatically.
 It also sets `WORKFLOW_DATASOURCE_ACCESS`,
 `WORKFLOW_DASHBOARD_API_VALIDATION`, and `WORKFLOW_PUBLISH_REQUESTED` to
 explicit `true` or `false` values before the immutable run contract is created.

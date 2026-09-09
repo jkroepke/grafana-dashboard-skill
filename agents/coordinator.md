@@ -54,9 +54,10 @@ The coordinator MAY only:
 4. inspect workflow state, ticket paths, response status, and SHA-256 digests;
 5. read coordinator-owned workflow/control documentation needed to perform
    these operations;
-6. mechanically promote the exact independently approved dashboard candidate;
-7. create a bounded coordinator failure/blocker artifact; and
-8. report only the artifact-control-plane completion status required by the
+6. restart one canceled active specialist with its existing ticket;
+7. mechanically promote the exact independently approved dashboard candidate;
+8. create a bounded coordinator failure/blocker artifact; and
+9. report only the artifact-control-plane completion status required by the
    workflow.
 
 Everything else belongs to a specialist.
@@ -99,14 +100,16 @@ inspect scripts or add configuration fields.
    | Field | Required value |
    | --- | --- |
    | `GRAFANA_TARGET` | Grafana HTTP(S) base URL |
-   | `GRAFANA_HTTP_CLIENT` | configured HTTP client executable |
+   | `GRAFANA_HTTP_CLIENT` | optional HTTP client executable; defaults to `curl` |
    | `GRAFANA_HTTP_CLIENT_ARGS_JSON` | JSON array of client arguments |
    | `METRICS_TARGET` | metrics HTTP(S) URL or regular local file |
-   | `METRICS_HTTP_CLIENT` | configured client for an HTTP(S) target; empty for a local file |
+   | `METRICS_HTTP_CLIENT` | optional client for an HTTP(S) target; defaults to `curl`; empty for a local file |
    | `METRICS_HTTP_CLIENT_ARGS_JSON` | JSON client-argument array; `[]` for a local file |
    | `WORKFLOW_DATASOURCE_ACCESS` | `true` or `false` |
    | `WORKFLOW_DASHBOARD_API_VALIDATION` | `true` or `false` |
    | `WORKFLOW_PUBLISH_REQUESTED` | `true` or `false` |
+
+If no `*_HTTP_CLIENT` is given for an HTTP(S) target, use `curl`.
 
 3. When `WORKFLOW_DATASOURCE_ACCESS=true`, run `set-datasource` with no
    arguments. If it fails, create a bounded failure report and stop.
@@ -137,6 +140,7 @@ tool can invoke only these deterministic operations:
 - `set-datasource`
 - `run-contract`
 - `dispatch`
+- `reset-stage`
 - `accept`
 - `promote`
 - `failure-report`
@@ -145,13 +149,18 @@ Do not use another tool or indirect execution path to reproduce these
 operations. If `coordinator_control` is unavailable on Pi, stop with a bounded
 blocker rather than enabling or falling back to general shell access.
 
+After a specialist is canceled, use `reset-stage` with its run contract and
+agent ID. It returns the existing ticket for a fresh instance of that same
+specialist. It does not modify the specialist workspace, ticket, records,
+evidence, or checkpoints. Do not call `dispatch` again for that stage.
+
 ## Stage ownership and dispatch
 
 Use `dispatch` for each ticket and `accept` for each returned response. These
 operations own prerequisite/digest checks, immutable tickets, acceptance
 records, and coordinator pending state; do not recreate those mechanics
 manually. Give the specialist only its agent ID, absolute project workspace
-path, ticket path, and ticket digest.
+path, and ticket path.
 
 Follow this order exactly:
 

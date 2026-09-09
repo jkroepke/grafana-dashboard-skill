@@ -21,6 +21,7 @@ RENDER_VERIFIER = REPOSITORY / "scripts" / "verify_candidate_render.py"
 INIT_WORKSPACE = REPOSITORY / "scripts" / "init_agent_workspace.sh"
 VALIDATE_WORKSPACE = REPOSITORY / "scripts" / "validate_agent_workspace.sh"
 CREATE_COORDINATOR_ARTIFACT = REPOSITORY / "scripts" / "create_coordinator_artifact.py"
+COORDINATOR_STAGE = REPOSITORY / "scripts" / "coordinator_stage.py"
 
 
 def digest(path: Path) -> str:
@@ -880,6 +881,54 @@ class WorkflowScriptsTest(unittest.TestCase):
         )
         self.assertNotEqual(0, result.returncode)
         self.assertIn("run coordinator commands from workspace", result.stderr)
+
+    def test_reset_stage_reissues_ticket_without_changing_agent_workspace(self) -> None:
+        workspace = self.root / "dashboards" / "test-project" / "workspace"
+        initialized = subprocess.run(
+            [str(INIT_WORKSPACE), str(self.root), "test-project", "test-run", "coordinator"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, initialized.returncode, initialized.stdout + initialized.stderr)
+        run_contract = workspace / "coordinator" / "test-run" / "outbox" / "run-contract.yaml"
+        run_contract.write_bytes(self.paths["run-contract"].read_bytes())
+        coordinator_state = workspace / "coordinator" / "test-run" / "state.yaml"
+        updated = subprocess.run(
+            ["yq", "-i", '.status = "IN_PROGRESS" | .next_action = "dispatch-next-stage"', str(coordinator_state)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, updated.returncode, updated.stdout + updated.stderr)
+        dispatched = subprocess.run(
+            [
+                str(COORDINATOR_STAGE), "dispatch", "--run-contract", str(run_contract),
+                "--agent", "application-metrics",
+            ],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, dispatched.returncode, dispatched.stdout + dispatched.stderr)
+        agent_root = workspace / "application-metrics" / "test-run"
+        ticket = agent_root / "inbox" / "job.yaml"
+        state = agent_root / "state.yaml"
+        before = {path: path.read_bytes() for path in (ticket, state)}
+        reset = subprocess.run(
+            [
+                str(COORDINATOR_STAGE), "reset-stage", "--run-contract", str(run_contract),
+                "--agent", "application-metrics",
+            ],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, reset.returncode, reset.stdout + reset.stderr)
+        self.assertTrue(reset.stdout.startswith("RESET application-metrics workspace="))
+        self.assertEqual(before, {path: path.read_bytes() for path in (ticket, state)})
 
     def test_run_contract_requires_project_workspace_layout(self) -> None:
         run = load_artifact(self.paths["run-contract"])

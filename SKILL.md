@@ -191,7 +191,7 @@ before dispatch. Use `scripts/coordinator_stage.py dispatch` to initialize the
 role workspace, validate every accepted prerequisite, create its immutable
 `inbox/job.yaml`, and update coordinator state. Do not hand-build tickets or
 digests. Give the fresh specialist only its agent ID, absolute project workspace
-path, ticket path, and ticket digest. The specialist runs `coordinator_stage.py validate-ticket` before
+path, and ticket path. The specialist runs `coordinator_stage.py validate-ticket` before
 reading assignments. Use `coordinator_stage.py accept` to verify its bounded
 response, artifact, and digest. Use a fresh specialist instance at every
 author/reviewer boundary. Do not create recursive subagent trees.
@@ -331,7 +331,7 @@ After writing, the publisher GETs the resource again through the same API versio
 - Queue each subagent's approved upstream paths/digests and assignments in its
   small immutable `inbox/job.yaml`; create and validate it with
   `scripts/coordinator_stage.py`, then give the model only its agent ID, project
-  workspace path, and that ticket path/digest.
+  workspace path, and ticket path.
 - Every agent treats context as disposable and its assigned workspace as durable
   memory. It writes one bounded YAML record as soon as each logical item is
   resolved, then updates `state.yaml`; it never accumulates a complete result in

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -93,6 +94,13 @@ class GrafanaAccessTest(unittest.TestCase):
             config.chmod(0o644)
             with self.assertRaisesRegex(AccessError, "must not be group/world accessible"):
                 grafana_access_from_environment({}, env_path=config)
+
+    def test_grafana_access_defaults_to_curl(self) -> None:
+        with TemporaryDirectory() as temporary:
+            config = Path(temporary) / ".env"
+            config.write_text("GRAFANA_TARGET=https://grafana.example.test\n", encoding="utf-8")
+            config.chmod(0o600)
+            self.assertEqual("curl", grafana_access_from_environment({}, env_path=config).client)
 
     def test_set_workflow_env_writes_private_loadable_dotenv(self) -> None:
         repository = Path(__file__).resolve().parents[1]
@@ -189,6 +197,30 @@ class GrafanaAccessTest(unittest.TestCase):
             )
             self.assertEqual(0, result.returncode, result.stderr.decode())
             self.assertEqual(metrics_file.read_bytes(), result.stdout)
+
+    def test_metrics_reader_defaults_to_curl_for_http_target(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / "dashboards" / "demo" / "workspace"
+            workspace.mkdir(parents=True)
+            curl = root / "curl"
+            curl.write_text("#!/bin/sh\nprintf 'demo_metric 1\\n'\n", encoding="utf-8")
+            curl.chmod(0o755)
+            (workspace / ".env").write_text(
+                "METRICS_TARGET=https://metrics.example.test/metrics\n",
+                encoding="utf-8",
+            )
+            (workspace / ".env").chmod(0o600)
+            result = subprocess.run(
+                [sys.executable, str(repository / "scripts" / "metrics_reader.py")],
+                capture_output=True,
+                check=False,
+                cwd=workspace,
+                env={**os.environ, "PATH": f"{root}:{os.environ['PATH']}"},
+            )
+            self.assertEqual(0, result.returncode, result.stderr.decode())
+            self.assertEqual(b"demo_metric 1\n", result.stdout)
 
     def test_set_datasource_persists_the_default_prometheus_uid(self) -> None:
         repository = Path(__file__).resolve().parents[1]

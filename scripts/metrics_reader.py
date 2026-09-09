@@ -23,8 +23,8 @@ def metrics_source() -> tuple[str, str, tuple[str, ...], bool]:
         require(path.is_file() and not path.is_symlink(), "METRICS_TARGET must be an HTTP(S) URL or regular local file")
         return str(path), "", (), False
     require(not parsed.fragment, "METRICS_TARGET URL must not contain a fragment")
-    client = values.get("METRICS_HTTP_CLIENT", "")
-    require(client, "METRICS_HTTP_CLIENT is required for an HTTP(S) METRICS_TARGET")
+    client = values.get("METRICS_HTTP_CLIENT", "curl")
+    require(client, "METRICS_HTTP_CLIENT must not be empty for an HTTP(S) METRICS_TARGET")
     try:
         args = json.loads(values.get("METRICS_HTTP_CLIENT_ARGS_JSON", "[]"))
     except json.JSONDecodeError as error:

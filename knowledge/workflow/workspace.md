@@ -45,7 +45,7 @@ all bindings, and updates coordinator state. The ticket contains the
 run/stage/revision, approved input paths and digests, assigned output paths,
 budgets, and opaque capability references—never artifact bodies or raw
 evidence. The dispatch prompt contains only the agent ID, absolute project workspace path,
-ticket path, and digest. The specialist runs `coordinator_stage.py validate-ticket` before work;
+and ticket path. The specialist runs `coordinator_stage.py validate-ticket` before work;
 the coordinator runs `coordinator_stage.py accept` on its bounded response.
 
 A job ticket uses this bounded shape; unused maps/lists stay empty rather than
@@ -83,6 +83,10 @@ After dispatch, only the assigned specialist writes in `records/`, `evidence/`,
 `tmp/`, `outbox/`, and its `state.yaml`. No two agents write the same file.
 Downstream stages read approved `outbox/` artifacts and selected record files;
 they never edit them.
+
+After a specialist cancellation, the coordinator uses `reset-stage` to hand the
+same ticket to a fresh instance. It preserves the entire agent workspace, so
+the new instance resumes from its durable records and queue state.
 
 `application-metrics` runs before `kubernetes-metrics`. The application stage
 stores the exact non-empty namespace set in a local scope evidence file and

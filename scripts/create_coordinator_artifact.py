@@ -125,7 +125,7 @@ def workflow_settings(workspace: Path) -> tuple[str, dict[str, bool]]:
     datasource_access = flag("WORKFLOW_DATASOURCE_ACCESS")
     dashboard_api_validation = flag("WORKFLOW_DASHBOARD_API_VALIDATION")
     publish_requested = flag("WORKFLOW_PUBLISH_REQUESTED")
-    has_client = bool(values.get("GRAFANA_TARGET") and values.get("GRAFANA_HTTP_CLIENT"))
+    has_client = bool(values.get("GRAFANA_TARGET"))
     if datasource_access:
         require(has_client, "datasource access requires configured Grafana target and client")
         require(

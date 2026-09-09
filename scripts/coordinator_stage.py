@@ -479,10 +479,7 @@ def dispatch(args: argparse.Namespace) -> str:
     )
     coordinator_artifact.validate_workspace(agent_root)
     coordinator_artifact.validate_workspace(coordinator_root)
-    return (
-        f"{agent} workspace={workspace} ticket={ticket_path.relative_to(root)} "
-        f"sha256={sha256(ticket_path)}"
-    )
+    return f"{agent} workspace={workspace} ticket={ticket_path.relative_to(root)}"
 
 
 def accept(args: argparse.Namespace) -> str:
@@ -596,6 +593,27 @@ def accept(args: argparse.Namespace) -> str:
     return f"ACCEPTED {agent} artifact={record['artifact_path']} sha256={response_digest}"
 
 
+def reset_stage(args: argparse.Namespace) -> str:
+    """Reissue one canceled active stage without changing its workspace."""
+    run, root, workspace = load_run(Path(args.run_contract))
+    require(Path.cwd().resolve() == workspace, "run coordinator commands from workspace")
+    agent = args.agent
+    coordinator_root = workspace / "coordinator" / run["run_id"]
+    coordinator_state = read_yaml(coordinator_root / "state.yaml")
+    require(coordinator_state["status"] == "IN_PROGRESS", "coordinator is not active")
+    require(set(coordinator_state["pending"]) == {agent}, "only the canceled active stage may be reset")
+    agent_root = workspace / agent / run["run_id"]
+    ticket_path = agent_root / "inbox" / "job.yaml"
+    require(ticket_path.is_file() and not ticket_path.is_symlink(), "stage ticket is unavailable")
+    ticket, _, _, _, _, _ = validate_ticket(ticket_path)
+    require(ticket["agent"] == agent, "stage ticket names another agent")
+    require(not any((agent_root / "outbox").glob("*.yaml")), "stage already has terminal output")
+    require(read_yaml(agent_root / "state.yaml")["status"] == "IN_PROGRESS", "stage is not in progress")
+    coordinator_artifact.validate_workspace(agent_root)
+    coordinator_artifact.validate_workspace(coordinator_root)
+    return f"RESET {agent} workspace={workspace} ticket={ticket_path.relative_to(root)}"
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     subparsers = result.add_subparsers(dest="command", required=True)
@@ -616,6 +634,10 @@ def parser() -> argparse.ArgumentParser:
     response_group = accept_parser.add_mutually_exclusive_group(required=True)
     response_group.add_argument("--response")
     response_group.add_argument("--response-file")
+
+    reset_parser = subparsers.add_parser("reset-stage", help="reissue one canceled active stage")
+    reset_parser.add_argument("--run-contract", required=True)
+    reset_parser.add_argument("--agent", choices=sorted(STAGES), required=True)
     return result
 
 
@@ -627,6 +649,8 @@ def main() -> int:
         elif args.command == "validate-ticket":
             _, _, _, workspace, _, _ = validate_ticket(Path(args.ticket))
             print(f"PASS job-ticket workspace={workspace}")
+        elif args.command == "reset-stage":
+            print(reset_stage(args))
         else:
             print(accept(args))
     except (StageError, workflow.ArtifactError, coordinator_artifact.CreationError, OSError, KeyError) as error:
