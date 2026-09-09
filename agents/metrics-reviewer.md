@@ -21,10 +21,33 @@ Read:
 - `knowledge/workflow/artifacts.md`
 - `knowledge/kubernetes/metrics.md` when Kubernetes capabilities are present
 
-First run `scripts/coordinator_stage.py validate-ticket`. Read assignments only from that validated ticket; do not request
+First run `./workflow validate-ticket`. Read assignments only from that validated ticket; do not request
 analyst prose or the complete conversation. It supplies the run-contract and
 shortlist bindings, raw evidence, existing dashboard source/render evidence,
 output path, limits, and configured discovery access.
+
+When datasource access is enabled, run `./metrics-review-probes` before
+reviewing Kubernetes candidates. It probes every ticketed KSM/kubelet/scrape/
+scheduler family with the exact application namespace scope, writes raw
+requests/responses to `evidence/metrics-review-probes/`, and creates
+`summary.json`. Use only its generated paths—for example,
+`evidence/metrics-review-probes/responses/K002.json`—in `evidence_refs` or
+`fixed_selector_refs`. Never invent an `evidence/probes/...` filename or call
+the Prometheus reader directly for these routine checks.
+On a resumed stage, it verifies and reuses evidence only when the exact
+candidate IDs/families and namespace scope match; it never repeats the probes.
+
+Create rejection/not-considered checkpoints only with `./metric-disposition`.
+It validates every supplied ID against the ticketed shortlists and writes the
+individual records. For a shared rejection reason, pass each ID explicitly;
+never construct IDs with a shell loop or `printf`:
+
+```text
+./metric-disposition rejected kubernetes-metrics \
+  --metric-id I002 --metric-id I003 --reason-code NO_TARGET_SERIES \
+  --reason "No series were observed in the verified namespace scope."
+./metric-disposition not-considered kubernetes-metrics --metric-id I004
+```
 
 The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Review one shortlist record at a
 time and immediately checkpoint its approved, rejected, not-considered, or
@@ -52,8 +75,9 @@ Independently verify each capability considered for approval:
 
 For fixed Kubernetes/Istio candidates, use the application artifact's exact
 namespace scope for every target probe. Do not perform an unscoped metric-name
-listing or a cluster-wide query merely to test a preset. Verify the family and
-every planned selector label with that bound scope before changing
+listing or a cluster-wide query merely to test a preset. The deterministic
+probe covers routine Kubernetes candidates; verify an Istio family only when it
+is actually considered and retain its local request/response evidence before changing
 `DOCUMENTED` to `VERIFIED`.
 
 Reject or mark unresolved any invented metric, inferred counter type, unsupported workload identity, guessed label, unsafe cardinality, contradictory population, or semantics not grounded in evidence.
@@ -82,9 +106,9 @@ explicit, and all blocking selector/population contradictions are resolved.
 Write `failure-report.yaml` otherwise. `PASS` does not approve any query.
 
 Before moving `tmp/metrics-contract.yaml` to `outbox/`, run
-`scripts/stage_check.py --draft`. It performs every schema,
+`./workflow stage-check --draft`. It performs every schema,
 array-shape, size, length, digest, evidence-reference, and input-binding check.
 Do not compute a workspace path, resolve input paths, calculate evidence
 digests, or manually check static limits.
 
-Run `scripts/stage_check.py` after writing the assigned artifact or failure report. Return its bounded response.
+Run `./workflow stage-check` after writing the assigned artifact or failure report. Return its bounded response.

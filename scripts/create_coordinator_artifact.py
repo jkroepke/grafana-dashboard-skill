@@ -114,6 +114,19 @@ def infer_grafonnet_revision(root: Path) -> str | None:
 
 def workflow_settings(workspace: Path) -> tuple[str, dict[str, bool]]:
     values = grafana_env(workspace / ".env")
+    required = {
+        "GRAFANA_TARGET",
+        "GRAFANA_HTTP_CLIENT",
+        "GRAFANA_HTTP_CLIENT_ARGS_JSON",
+        "METRICS_TARGET",
+        "METRICS_HTTP_CLIENT",
+        "METRICS_HTTP_CLIENT_ARGS_JSON",
+        "WORKFLOW_DATASOURCE_ACCESS",
+        "WORKFLOW_DASHBOARD_API_VALIDATION",
+        "WORKFLOW_PUBLISH_REQUESTED",
+    }
+    missing = sorted(required - set(values))
+    require(not missing, f"workflow environment values must be explicitly configured: {', '.join(missing)}")
 
     def flag(name: str) -> bool:
         value = values.get(name)

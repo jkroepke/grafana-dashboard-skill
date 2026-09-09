@@ -25,7 +25,7 @@ Read:
 - `knowledge/grafana/grafonnet-v2.md` and `knowledge/grafana/grafonnet-builder-composition.md`
 - `knowledge/grafana/annotations.md` only when the approved query pack contains annotations
 
-First run `scripts/coordinator_stage.py validate-ticket`. Read assignments only from that validated ticket; do not request
+First run `./workflow validate-ticket`. Read assignments only from that validated ticket; do not request
 raw metrics, upstream prose, or the complete conversation. It supplies the
 approved bindings, existing source, output/candidate/render paths, pinned
 versions, repository build commands, limits, and configured capabilities.
@@ -41,6 +41,7 @@ Build only from the ticketed metrics contract, plan, query pack, and query revie
 
 - Use only planned questions, approved metric/query IDs, and exact query text from the reviewed query pack.
 - Copy datasource query strings byte-for-byte. Do not add, remove, repair, normalize, optimize, or reformat them.
+- Create or retain the required queryless `datasource` `DatasourceVariable` with `pluginId: prometheus`; it is builder-owned and deliberately has no query-pack record. `namespace` and `pod` are the planned Prometheus query variables.
 - If a query cannot be integrated exactly because of Jsonnet placement, escaping, or serialization, correct the candidate without changing the query pack. Route to `promql-builder` only when the approved query text itself must change; route an unsupported plan to `dashboard-architect`.
 - Preserve existing identity, unrelated panels, helpers, and dependency pins.
 - Implement required variables in dependency order and use `$datasource` according to the pinned V2 datasource-reference model.
@@ -54,7 +55,10 @@ Do not edit shared helpers in this workflow version. If a helper change is requi
 
 ## Validation and artifact
 
-Run `jsonnetfmt -i` on the candidate, render it with `jsonnet -J vendor`, and parse the rendered file with `jq empty`. Then run `scripts/dashboard_integrity.py` for the fixed V2, query-parity, and preservation checks. Verify:
+Run `jsonnetfmt -i` on the candidate, render it with the ticketed Jsonnet
+library path, and parse the rendered file with `jq empty`. Then run
+`./workflow dashboard-integrity` for the fixed V2, query-parity, and
+preservation checks. Verify:
 
 - required variables and datasource references
 - every planned/integrated query ID
@@ -68,4 +72,4 @@ Only after that integrity check passes may you write a `PASS` build artifact. A 
 
 Write a `PASS` `dashboard-build.yaml` using `knowledge/workflow/artifacts.md` only after those commands pass. Write `failure-report.yaml` for a failed or blocked build.
 
-Run `scripts/stage_check.py` after writing the assigned artifact or failure report. Return its bounded response.
+Run `./workflow stage-check` after writing the assigned artifact or failure report. Return its bounded response.

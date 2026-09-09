@@ -83,13 +83,28 @@ tool_link() {
   fi
 }
 
+tool_link "$agent_root/workflow" "$repository_root/scripts/workflow"
+tool_link "$agent_root/stage-check" "$repository_root/scripts/stage_check.py"
+
 case "$agent_id" in
   application-metrics)
     tool_link "$agent_root/metrics-sync" "$repository_root/scripts/metrics_sync.py"
     tool_link "$agent_root/metric-facts" "$repository_root/scripts/metric_facts.py"
+    tool_link "$agent_root/metrics-discovery" "$repository_root/scripts/metrics_discovery.py"
+    tool_link "$agent_root/metric-record" "$repository_root/scripts/metric_record.py"
+    tool_link "$agent_root/metric-queue" "$repository_root/scripts/metric_queue.py"
+    tool_link "$agent_root/prometheus-reader" "$repository_root/scripts/prometheus_reader.py"
     ;;
   promql-builder)
     tool_link "$agent_root/promql-templates" "$repository_root/scripts/promql_templates.py"
+    tool_link "$agent_root/query-work-partition" "$repository_root/scripts/query_work_partition.py"
+    ;;
+  dashboard-architect)
+    tool_link "$agent_root/dashboard-capabilities" "$repository_root/scripts/dashboard_capabilities.py"
+    ;;
+  metrics-reviewer)
+    tool_link "$agent_root/metrics-review-probes" "$repository_root/scripts/metrics_review_probes.py"
+    tool_link "$agent_root/metric-disposition" "$repository_root/scripts/metric_disposition.py"
     ;;
   promql-reviewer)
     tool_link "$agent_root/prometheus-probe-matrix" "$repository_root/scripts/prometheus_probe_matrix.py"

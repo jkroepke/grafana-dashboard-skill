@@ -9,29 +9,55 @@ import secrets
 import sys
 from pathlib import Path
 
-from grafana_access import grafana_env, write_workflow_env
+from grafana_access import AccessError, grafana_env, write_workflow_env
 
 
 SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
-def ensure_run_id(workspace: Path) -> None:
+def set_run_id(workspace: Path, *, resume: bool) -> None:
     path = workspace / ".env"
-    values = grafana_env(path)
-    if "WORKFLOW_RUN_ID" in values:
+    if resume:
+        values = grafana_env(path)
+        if "WORKFLOW_RUN_ID" not in values:
+            raise ValueError("cannot resume a workspace without WORKFLOW_RUN_ID")
         return
-    values["WORKFLOW_RUN_ID"] = f"run-{secrets.token_hex(8)}"
-    write_workflow_env(path, values)
+    # A fresh coordinator must configure every capability explicitly. Retaining
+    # an old target/client/datasource setting would silently bind this run to a
+    # previous task.
+    write_workflow_env(path, {"WORKFLOW_RUN_ID": f"run-{secrets.token_hex(8)}"})
+
+
+def install_workflow_wrapper(workspace: Path) -> None:
+    target = Path(__file__).resolve().parent / "workflow"
+    wrapper = workspace / "workflow"
+    if wrapper.is_symlink():
+        if wrapper.resolve() == target.resolve():
+            return
+        raise ValueError("workspace workflow wrapper has an unexpected target")
+    if wrapper.exists():
+        raise ValueError("workspace workflow wrapper already exists")
+    wrapper.symlink_to(target)
 
 
 def main() -> int:
-    if len(sys.argv) != 2 or SAFE_COMPONENT.fullmatch(sys.argv[1]) is None:
-        print("ERROR mkworkspace: usage: mkworkspace <project-name>", file=sys.stderr)
+    arguments = sys.argv[1:]
+    resume = arguments[-1:] == ["--resume"]
+    if resume:
+        arguments.pop()
+    if len(arguments) != 1 or SAFE_COMPONENT.fullmatch(arguments[0]) is None:
+        print("ERROR mkworkspace: usage: mkworkspace <project-name> [--resume]", file=sys.stderr)
         return 2
-    workspace = Path.cwd() / "dashboards" / sys.argv[1] / "workspace"
+    repository = Path(__file__).resolve().parents[1]
+    workspace = repository / "dashboards" / arguments[0] / "workspace"
     workspace.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(workspace, 0o700)
-    ensure_run_id(workspace)
+    try:
+        set_run_id(workspace, resume=resume)
+        install_workflow_wrapper(workspace)
+    except (AccessError, OSError, ValueError) as error:
+        print(f"ERROR mkworkspace: {error}", file=sys.stderr)
+        return 1
     print(workspace.resolve())
     return 0
 

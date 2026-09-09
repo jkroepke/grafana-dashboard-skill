@@ -11,11 +11,13 @@ from tempfile import TemporaryDirectory
 from scripts.grafana_access import (
     AccessError,
     GrafanaAccess,
+    grafana_env,
     grafana_url,
     grafana_access_from_environment,
     prometheus_datasource_uid,
     prometheus_request_url,
     select_prometheus_datasource_uid,
+    write_workflow_env,
 )
 
 
@@ -176,6 +178,32 @@ class GrafanaAccessTest(unittest.TestCase):
                 "https://grafana.example.test",
                 grafana_access_from_environment({}, env_path=config).target,
             )
+
+    def test_mkworkspace_starts_fresh_unless_resume_is_explicit(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            for name in {"mkworkspace", "workflow", "grafana_access.py"}:
+                shutil.copy2(repository / "scripts" / name, scripts / name)
+            command = [sys.executable, str(scripts / "mkworkspace"), "demo"]
+            first = subprocess.run(command, capture_output=True, text=True, check=False, cwd=root)
+            self.assertEqual(0, first.returncode, first.stdout + first.stderr)
+            config = root / "dashboards" / "demo" / "workspace" / ".env"
+            initial = grafana_env(config)["WORKFLOW_RUN_ID"]
+            self.assertEqual(str(scripts / "workflow"), (config.parent / "workflow").readlink().as_posix())
+            write_workflow_env(config, {"WORKFLOW_RUN_ID": initial, "GRAFANA_TARGET": "https://stale.example.test"})
+
+            fresh = subprocess.run(command, capture_output=True, text=True, check=False, cwd=root)
+            self.assertEqual(0, fresh.returncode, fresh.stdout + fresh.stderr)
+            current = grafana_env(config)["WORKFLOW_RUN_ID"]
+            self.assertNotEqual(initial, current)
+            self.assertNotIn("GRAFANA_TARGET", grafana_env(config))
+
+            resumed = subprocess.run(command + ["--resume"], capture_output=True, text=True, check=False, cwd=root)
+            self.assertEqual(0, resumed.returncode, resumed.stdout + resumed.stderr)
+            self.assertEqual(current, grafana_env(config)["WORKFLOW_RUN_ID"])
 
     def test_metrics_reader_streams_a_local_target_without_client(self) -> None:
         repository = Path(__file__).resolve().parents[1]

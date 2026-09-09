@@ -6,13 +6,19 @@ Create in this order:
 
 | Name | Definition | Selection |
 | --- | --- | --- |
-| `datasource` | Prometheus datasource variable | single, no All |
+| `datasource` | `DatasourceVariable` control selecting the Prometheus plugin | single, no All |
 | `namespace` | query values of `kubernetes_namespace` scoped to the application | single, `multi=false`, `includeAll=false` |
 | `pod` | query values of `kubernetes_pod_name` scoped to application and namespace | multi, `includeAll=true`, empty custom All value |
 
 Restrict `datasource` to Prometheus datasources. Use `$datasource` for every Prometheus panel target, variable query, and annotation.
 
 Never embed a discovered datasource UID.
+
+`datasource` is queryless: `pluginId: prometheus` selects a plugin but does
+not make it a Prometheus `DataQuery`. It is required dashboard structure owned
+by `dashboard-builder`, not a `required_consumers` plan item and not a
+`PROMETHEUS_VARIABLE` query-pack record. Only `namespace`, `pod`, and other
+actual Prometheus `QueryVariable` records enter the plan/query-pack contract.
 
 ## Application discovery
 

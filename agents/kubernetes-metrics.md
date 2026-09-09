@@ -9,7 +9,8 @@ tools: read, bash
 
 ## Purpose
 
-The coordinator executes this stage directly with `scripts/kubernetes_presets.py`
+The coordinator's checked `./workflow dispatch` command executes this stage directly with the fixed
+`kubernetes_presets.py` helper
 and accepts its response automatically. Do not dispatch a model for it.
 
 ## Required workflow

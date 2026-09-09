@@ -3,9 +3,10 @@ name: coordinator
 description: Orchestrate the mandatory isolated-agent Grafana dashboard workflow without performing specialist work.
 mode: primary
 confirmProjectAgents: false
-tools: read, subagent, task, todo, coordinator_control
+tools: read, bash, subagent, task, todo
 permission:
   "*": deny
+  bash: allow
   read: allow
   task: allow
   todo: allow
@@ -131,35 +132,38 @@ return a bounded `BLOCKED` result.
 Before the first dispatch, perform these operations in this order. Do not
 inspect scripts or add configuration fields.
 
-1. Run `mkworkspace` with the project name. Use its returned absolute workspace
-   path for every following control operation.
-2. Set these required task-provided values with `set-workflow-env`:
+1. From the skill repository root, run `scripts/mkworkspace <project-name>`.
+   It starts a **fresh** run, clears prior access settings, installs the checked
+   workspace-local `./workflow` command, and returns the absolute workspace
+   path. Use that path for every following control operation. Use `--resume`
+   only when the user explicitly asks to resume the current run; it deliberately
+   preserves the existing run ID and configuration.
+2. Set every value below with `set-workflow-env`, including the displayed
+   defaults. Do not rely on a wrapper's fallback value:
 
-   Invoke it once for each value, as `set-workflow-env <name> <value>`.
-   It accepts exactly one name/value pair per call; do not pass a map, a list,
-   or multiple pairs. The repository executable is `scripts/set_workflow_env`;
-   `coordinator_control` exposes that operation as `set-workflow-env`.
+   Its complete invocation grammar is exactly
+   `./workflow set-env <key><space><value>`. Invoke it once for each value.
+   It accepts exactly one positional name/value pair per call; do not pass a
+   map, list, multiple pairs, or `KEY=VALUE` tokens. The repository executable
+   is the checked workspace-local `./workflow set-env` command.
 
-   | Field | Required value |
+   | Field | Value |
    | --- | --- |
    | `GRAFANA_TARGET` | Grafana HTTP(S) base URL |
+   | `GRAFANA_HTTP_CLIENT` | supplied client, or `curl` |
+   | `GRAFANA_HTTP_CLIENT_ARGS_JSON` | supplied arguments, or `[]` |
    | `METRICS_TARGET` | metrics HTTP(S) URL or regular local file |
+   | `METRICS_HTTP_CLIENT` | supplied client, or `curl` for HTTP(S); empty value for a local file |
+   | `METRICS_HTTP_CLIENT_ARGS_JSON` | supplied arguments, or `[]` |
    | `WORKFLOW_DATASOURCE_ACCESS` | `true` or `false` |
    | `WORKFLOW_DASHBOARD_API_VALIDATION` | `true` or `false` |
    | `WORKFLOW_PUBLISH_REQUESTED` | `true` or `false` |
 
-   Set these optional overrides only when supplied:
+   For a local metrics file, call `./workflow set-env METRICS_HTTP_CLIENT ""`.
 
-   | Field | Default |
-   | --- | --- |
-   | `GRAFANA_HTTP_CLIENT` | `curl` |
-   | `GRAFANA_HTTP_CLIENT_ARGS_JSON` | `[]` |
-   | `METRICS_HTTP_CLIENT` | `curl` for an HTTP(S) target; empty for a local file |
-   | `METRICS_HTTP_CLIENT_ARGS_JSON` | `[]` |
-
-3. When `WORKFLOW_DATASOURCE_ACCESS=true`, run `set-datasource` with no
+3. When `WORKFLOW_DATASOURCE_ACCESS=true`, run `./workflow set-datasource` with no
    arguments. If it fails, create a bounded failure report and stop.
-4. Run `run-contract` with no arguments. It performs the fixed Grafana
+4. Run `./workflow run-contract` with no arguments. It performs the fixed Grafana
    eligibility gate and rejects an unsupported target.
 
    Record its canonical path as
@@ -169,25 +173,21 @@ inspect scripts or add configuration fields.
    with `dashboards/.../workspace/`: it is resolved from `workspace/` and would
    duplicate the prefix.
 
-## Coordinator tool boundary
+## Coordinator command boundary
 
-On Pi, use only `coordinator_control` for coordinator-owned process execution.
-General `bash` is intentionally absent from the Pi tool allowlist. The custom
-tool can invoke only these deterministic operations:
+Use `bash` only to run the repository's fixed deterministic control commands:
 
-- `mkworkspace`
-- `set-workflow-env`
-- `set-datasource`
-- `run-contract`
-- `dispatch`
-- `reset-stage`
-- `accept`
-- `promote`
-- `failure-report`
+- `scripts/mkworkspace <project-name> [--resume]` from the repository root
+- `./workflow set-env <key> <value>` from the workspace
+- `./workflow set-datasource` from the workspace
+- `./workflow run-contract` or `./workflow failure-report` from the workspace
+- `./workflow dispatch`, `reset-stage`, or `accept` from the workspace
+- `./workflow chain-check` or `./workflow promote` from the workspace
 
-Do not use another tool or indirect execution path to reproduce these
-operations. If `coordinator_control` is unavailable on Pi, stop with a bounded
-blocker rather than enabling or falling back to general shell access.
+Do not use shell discovery, arbitrary scripts, pipes, command substitution, or
+indirect execution to reproduce specialist work. This is prompt discipline;
+the deterministic scripts remain the enforcement point for their own inputs,
+paths, digests, and stage prerequisites.
 
 After a specialist is canceled, use `reset-stage` with its run contract and
 agent ID. It returns the existing ticket for a fresh instance of that same
@@ -199,14 +199,25 @@ evidence, or checkpoints. Do not call `dispatch` again for that stage.
 Use `dispatch` for each ticket and `accept` for each returned response. These
 operations own prerequisite/digest checks, immutable tickets, acceptance
 records, and coordinator pending state; do not recreate those mechanics
-manually. Give the specialist only its agent ID, absolute project workspace
-path, and ticket path.
+manually. **Dispatch before spawning** the specialist. Its `--agent` value is
+the literal workflow role (for example, `application-metrics`), never a host
+thread or spawned-agent ID. Dispatch returns `agent_run=<absolute path>` and a
+ticket path; give both to the fresh specialist and require it to use
+`agent_run` as its command working directory. The project `workspace/` is not
+the specialist's command directory.
 
-Invoke dispatch as `dispatch --run-contract <run-contract-path> --agent <agent-id>`.
+Invoke dispatch as `./workflow dispatch --run-contract <run-contract-path> --agent <agent-id>`.
 It does not accept a workspace or ticket argument: it creates and returns the
 ticket path. Use the workspace-relative run-contract path recorded during
 bootstrap (for example, `coordinator/run-001/outbox/run-contract.yaml`) or an
 absolute path.
+
+When creating a coordinator `failure-report`, every repeated `--evidence`
+argument must name an existing regular file. It is never prose, a ticket label,
+or a workspace-relative shorthand such as `application-metrics/...`. Use the
+absolute ticket path returned by `dispatch`, or a repository-root-relative path
+beginning `dashboards/<project>/workspace/...`; failure-report evidence paths
+are resolved from the repository root, unlike the run-contract path above.
 
 Dispatch is sequential and enforces every stage prerequisite, including the
 validated application namespace scope before the deterministic
@@ -230,7 +241,11 @@ application-metrics
 - Dispatch a fresh specialist instance at every author/reviewer boundary.
 - `kubernetes-metrics` is generated and accepted inside `dispatch`; it has no
   specialist instance or response to route.
-- Pass every returned stage response to `accept` before the next stage.
+- Pass **every** returned stage response to `./workflow accept`, including a
+  terminal `FAIL` or `BLOCKED`, before starting the next stage or reporting a
+  stopped workflow. Acceptance records the canonical coordinator outcome; a
+  failure response is not optional merely because no downstream dispatch will
+  occur.
 - Route a failure only to its designated owner; never repair it yourself.
 - Any changed upstream artifact invalidates its downstream approvals.
 - Only `promql-builder` may author dashboard PromQL. Only

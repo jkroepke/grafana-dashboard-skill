@@ -23,7 +23,7 @@ Read:
 - `knowledge/grafana/variables.md` for variable queries
 - `knowledge/grafana/annotations.md` for annotation queries
 
-First run `scripts/coordinator_stage.py validate-ticket`. Read assignments only from that validated ticket; do not request
+First run `./workflow validate-ticket`. Read assignments only from that validated ticket; do not request
 builder conclusions or the complete conversation. It supplies the approved
 bindings, targeted evidence, output path, limits, and configured datasource access.
 
@@ -67,4 +67,4 @@ contain a corrected query.
 
 Return `PASS` only when there are no findings and all mandatory validation available to the task has completed. When live access is unavailable, record the live-validation gap explicitly according to the task's policy.
 
-Run `scripts/stage_check.py` after writing the assigned artifact or failure report. Return its bounded response.
+Run `./workflow stage-check` after writing the assigned artifact or failure report. Return its bounded response.

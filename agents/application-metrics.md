@@ -11,43 +11,81 @@ tools: read, bash
 
 Inventory application metrics and categorize them as `BUSINESS` or `PROCESS`. Record facts that later stages can trust.
 
-Do not write PromQL, Grafana variable or annotation queries, panel plans, Jsonnet, or dashboard files. Discovery is not query design.
+Do not author dashboard PromQL, Grafana variable or annotation queries, panel
+plans, Jsonnet, or dashboard files. Bounded read-only Prometheus discovery is
+required below; it is evidence collection, not query design.
 
 ## Required workflow
 
-Read:
+## First action — no preflight analysis
 
-- `knowledge/workflow/workspace.md`
-- `knowledge/workflow/artifacts.md`
-
-First, from the assigned agent/run workspace, run exactly:
+Set the command working directory to the assigned **agent/run workspace**
+(the `agent_run=` path returned by dispatch, not the project `workspace/`).
+From there, the first and only permitted command is:
 
 ```text
 ./metrics-sync
 ```
 
-This validates the immutable ticket and is the only acquisition/snapshot
-command. Read assignments only from that validated ticket; do not request or
-copy the complete conversation. It uses the configured metrics target, creates
-`records/pending/` atomically on a new run, or reconciles the existing queue on
-a resume. Do not locate or invoke `coordinator_stage.py`, `metrics_reader.py`,
-`snapshot_metrics.py`, or `metric_queue.py reconcile` yourself.
+Do not read workflow documentation, inspect `state.yaml`, `records/`, `.env`,
+any endpoint, or repository runner source before this command. A new workspace deliberately has no
+`records/pending/`; do not create it. `./metrics-sync` validates the immutable
+ticket, reads the private configuration, acquires the metrics, atomically
+creates that queue on a new run, or reconciles it on a resume.
 
-Then run `./metric-facts`. It copies observed snapshot facts into a
-bounded inventory and marks every family `NEEDS_AI`; it never classifies
-operational meaning from a name. Use that inventory to focus judgment on
-supported semantics rather than re-transcribing parser output.
+Do not inspect `.env` (including its readability), test the metrics target,
+discover HTTP-client settings, invoke `coordinator_stage.py`, `metrics_reader.py`,
+`snapshot_metrics.py`, or run `metric_queue.py reconcile`. Do not make a plan
+for those mechanics. If `./metrics-sync` fails, do not retry it through another
+command or manually repair its queue; write the assigned failure report.
+
+Only after it prints `PASS`, run exactly:
+
+```text
+./metric-facts
+./metrics-discovery
+```
+
+It copies observed snapshot facts into bounded evidence. Families are
+`NEEDS_AI` except for the pinned identity/build families documented below; it
+never classifies other operational meaning from a name. Do not invoke the
+snapshot parser yourself. `metrics-discovery` submits one exact-family `series`
+request per snapshot through the configured datasource, retaining each raw
+request and response under `evidence/metric-discovery/`. Its bounded summary
+indexes result, series count, namespace candidates, and namespace-label keys;
+response files retain all returned labels. It recognizes both `namespace` and
+`kubernetes_namespace` as namespace-label candidates. Do not repeat that
+discovery manually. On a resumed stage, the wrapper verifies and reuses the
+complete ticket-consistent discovery evidence; it never overwrites or repeats
+the stored-series requests.
+
+On a resumed stage, `./metric-facts` likewise verifies and reuses its complete
+inventory when it matches the current snapshot manifest. Never delete either
+evidence directory merely to make a helper run again.
+
+Only now read the relevant parts of `knowledge/workflow/artifacts.md` and
+`knowledge/metrics/classification.md` to assemble the assigned artifact. Do
+not read runner implementation sources.
 
 Treat `records/pending/` as the metric-family work queue and `records/done/` as
-its completed queue. `metrics-sync` owns new-run setup, resume reconciliation,
-and safe recovery. Process one metric family at a time: create its bounded
-`records/metrics/*.yaml` checkpoint with `yq`, then complete its work item with
-`scripts/metric_queue.py complete`.
+its completed queue. Only after both commands pass, process one metric family at
+a time. Do not author a record with an ad-hoc `yq` expression. Use the fixed
+initializer, then complete its work item:
+
+```text
+./metric-record <pending-item.yaml> M001 [BUSINESS|PROCESS]
+./metric-queue complete <pending-item.yaml> records/metrics/M001.yaml
+```
+
+The category argument is required only for an unclassified family. Pinned
+families such as `fastapi_app_info` and `<prefix>_build_info` infer `PROCESS`.
+The initializer copies the declared type, unit (including YAML `null`), help,
+members, labels, and bounded warnings. It does not use a `yq if` expression.
 Never hold the complete inventory in context or emit it through one large
 write-tool call.
 
-After `metrics-sync` passes, enumerate its family files and inspect them one at
-a time; complete each with `scripts/metric_queue.py complete`. Leave
+After the two commands pass, enumerate its family files and inspect them one at
+a time; complete each with `./metric-queue complete`. Leave
 `manifest.yaml` in place as queue metadata.
 For discovery work without an exposition snapshot, create one bounded pending
 work-item YAML before inspection and complete it by the same protocol.
@@ -74,13 +112,22 @@ text, and names alone do not prove counter semantics.
 Before completing the inventory, discover the exact affected Kubernetes
 namespace set from verified application stored-series labels. This discovery is
 mandatory even when raw exporter exposition does not expose those stored labels:
-use the configured opaque datasource access or other verified stored-series
-evidence. Never infer namespaces from a workload name, pod-name pattern, or a
-cluster-wide Kubernetes metric. Preserve the exact non-empty set only in one
-local, absolute-path namespace-scope evidence file; do not put namespace values
-in the visible response or the shortlist. The file may contain more than one
-namespace and is the sole authority for downstream Kubernetes/Istio preset
-validation and queries.
+use `./metrics-discovery`. It makes a bounded `series` discovery request for
+every exact snapshot family (up to 512), including usage-dependent metrics
+that can reveal deployments missed by an idle scrape. If the snapshot exceeds
+that deterministic limit, write the assigned failure report; do not manually
+split or rerun discovery.
+
+Use only the target application's identifying labels and/or a target-specific
+metric family to associate a returned series with this application. A common
+framework metric name alone does not prove application identity. Union the
+namespaces from every response that passes that identity check; do not infer
+them from a workload name, pod-name pattern, or a cluster-wide Kubernetes
+metric. Preserve the exact non-empty set only in one local, absolute-path
+namespace-scope evidence file; do not put namespace values in the visible
+response or the shortlist. The file may contain more than one namespace and is
+the sole authority for downstream Kubernetes/Istio preset validation and
+queries.
 
 Publish its path, digest, and count as `namespace_scope` in the application
 artifact. The scope evidence is immutable after this stage. If no namespace can
@@ -88,12 +135,21 @@ be verified, return a bounded failure report; the fixed preset stage requires
 the scope binding.
 
 When stored-series evidence is needed for namespace discovery, use only the
-ticketed opaque capability and retain its local evidence. Do not invoke metric
-acquisition, snapshot, or queue scripts directly; `metrics-sync` owns them.
+ticketed opaque capability. Read `knowledge/promql/reader-requests.md` for the
+evidence format. Retain every discovery request/response pair, including
+no-series results: they distinguish an idle metric from an absent one. Do not
+inspect `.env` or invoke metric acquisition, snapshot, or queue scripts;
+`metrics-sync` owns them.
 
 Keep exposition labels separate from verified stored scrape labels. Stored labels supplied in the run contract may be valid even when absent from a raw exposition dump.
 
-Classify domain/application metric families as `BUSINESS` and runtime/process/GC/runtime-library families as `PROCESS` from observed semantics only. Do not rank panels, formulate operational questions, or invent HTTP or database semantics.
+Apply the exact pinned classifications in `knowledge/metrics/classification.md`
+without reconsidering them: `fastapi_app_info` and every
+`<prefix>_build_info` family are `PROCESS`, not `BUSINESS`. For all other
+families, classify domain/application metrics as `BUSINESS` and
+runtime/process/GC/runtime-library metrics as `PROCESS` from observed semantics
+only. Do not rank panels, formulate operational questions, or invent HTTP or
+database semantics.
 
 Always surface a verified process/application start-timestamp metric as a capability when present, with its actual type, unit, identity labels, and lifecycle semantics. Do not infer Grafana annotation behavior.
 
@@ -108,7 +164,8 @@ shortlist top level. Its payload fields are exactly `catalog_ref`, `metrics`,
 `omission_counts`, and `namespace_scope`.
 
 Before moving `tmp/application-metrics.yaml` to `outbox/`, run
-`scripts/stage_check.py --draft`; do not manually invoke
+`./stage-check --draft`; do not manually invoke
 the underlying workspace or artifact validators.
 
-Run `scripts/stage_check.py` after writing the assigned artifact or failure report. Return its bounded response.
+Run `./stage-check` after writing the assigned artifact or failure report.
+Return its bounded response.

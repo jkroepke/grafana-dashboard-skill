@@ -1,6 +1,6 @@
 # Kubernetes and Istio workload presets
 
-`scripts/kubernetes_presets.py` is the fixed, offline inventory catalogue for
+The coordinator's checked dispatch helper is the fixed, offline inventory catalogue for
 workload-scoped Kubernetes and Istio candidates. It does not read Prometheus,
 inspect a cluster, or receive namespace values. `application-metrics` remains
 the sole owner of the exact target namespace set; the Kubernetes stage copies

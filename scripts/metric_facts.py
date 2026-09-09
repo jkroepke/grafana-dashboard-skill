@@ -15,9 +15,23 @@ class FactsError(ValueError):
     pass
 
 
+KNOWN_PROCESS_FAMILIES = {
+    "fastapi_app_info": "FastAPI application identity metadata",
+}
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise FactsError(message)
+
+
+def process_classification(family: str) -> str | None:
+    """Return only pinned framework/build metadata classifications."""
+    if family in KNOWN_PROCESS_FAMILIES:
+        return KNOWN_PROCESS_FAMILIES[family]
+    if family.endswith("_build_info") and len(family) > len("_build_info"):
+        return "build identity metadata"
+    return None
 
 
 def yaml_object(path: Path) -> dict[str, Any]:
@@ -38,8 +52,9 @@ def fact(record: dict[str, Any]) -> dict[str, Any]:
     }
     require(required <= set(record), "snapshot record is incomplete")
     require(record.get("kind") == "metric-family-snapshot", "record is not a metric snapshot")
-    # Do not classify operational meaning from naming patterns.  The only result
-    # here is observation copied from the parser, plus an explicit AI handoff.
+    # Exact, pinned framework families are safe to classify. Everything else is
+    # deliberately left to evidence-backed judgment rather than name heuristics.
+    known = process_classification(record["family"])
     return {
         "id": record["id"],
         "family": record["family"],
@@ -53,8 +68,27 @@ def fact(record: dict[str, Any]) -> dict[str, Any]:
         "has_exemplars": record["has_exemplars"],
         "source_ref": record["source_ref"],
         "warnings": record["warnings"],
-        "classification": "NEEDS_AI",
+        "classification": "PROCESS" if known else "NEEDS_AI",
+        "classification_reason": known,
     }
+
+
+def completed_facts(output: Path, manifest: dict[str, Any], records: list[dict[str, Any]]) -> None:
+    require(output.is_file() and not output.is_symlink(), "fact inventory is not a regular file")
+    try:
+        payload = json.loads(output.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise FactsError("fact inventory is invalid") from error
+    require(isinstance(payload, dict) and payload.get("schema_version") == 1 and payload.get("kind") == "metric-facts", "fact inventory is invalid")
+    require(payload.get("source") == manifest, "fact inventory does not match current snapshots")
+    observed = payload.get("families")
+    require(isinstance(observed, list), "fact inventory is invalid")
+    expected_ids = [(record["id"], record["family"]) for record in records]
+    actual_ids = [
+        (record.get("id"), record.get("family")) if isinstance(record, dict) else (None, None)
+        for record in observed
+    ]
+    require(actual_ids == expected_ids, "fact inventory does not match current snapshots")
 
 
 def emit(snapshot_dir: Path, output: Path) -> None:
@@ -63,7 +97,9 @@ def emit(snapshot_dir: Path, output: Path) -> None:
     require(manifest.get("kind") == "metric-snapshot-manifest", "snapshot manifest is invalid")
     records = [fact(yaml_object(path)) for path in sorted(snapshot_dir.glob("*.yaml")) if path.name != "manifest.yaml"]
     require(records and len(records) == manifest.get("family_count"), "snapshot family count disagrees with manifest")
-    require(not output.exists(), "output already exists")
+    if output.exists() or output.is_symlink():
+        completed_facts(output, manifest, records)
+        return
     payload = {"schema_version": 1, "kind": "metric-facts", "source": manifest, "families": records}
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     require(len(encoded.encode()) <= 256 * 1024, "fact inventory exceeds 256 KiB")

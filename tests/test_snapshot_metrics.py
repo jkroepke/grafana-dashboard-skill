@@ -95,12 +95,36 @@ class SnapshotMetricsTest(unittest.TestCase):
             pending = workspace / "records" / "pending"
             self.assertFalse(pending.exists())
             self.assertEqual(
+                str(root / "scripts" / "workflow"),
+                (workspace / "workflow").readlink().as_posix(),
+            )
+            self.assertEqual(
                 str(root / "scripts" / "metrics_sync.py"),
                 (workspace / "metrics-sync").readlink().as_posix(),
             )
             self.assertEqual(
                 str(root / "scripts" / "metric_facts.py"),
                 (workspace / "metric-facts").readlink().as_posix(),
+            )
+            self.assertEqual(
+                str(root / "scripts" / "metrics_discovery.py"),
+                (workspace / "metrics-discovery").readlink().as_posix(),
+            )
+            self.assertEqual(
+                str(root / "scripts" / "metric_record.py"),
+                (workspace / "metric-record").readlink().as_posix(),
+            )
+            self.assertEqual(
+                str(root / "scripts" / "metric_queue.py"),
+                (workspace / "metric-queue").readlink().as_posix(),
+            )
+            self.assertEqual(
+                str(root / "scripts" / "prometheus_reader.py"),
+                (workspace / "prometheus-reader").readlink().as_posix(),
+            )
+            self.assertEqual(
+                str(root / "scripts" / "stage_check.py"),
+                (workspace / "stage-check").readlink().as_posix(),
             )
 
             result = subprocess.run(
@@ -112,6 +136,58 @@ class SnapshotMetricsTest(unittest.TestCase):
             )
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             self.assertTrue((pending / "manifest.yaml").is_file())
+
+    def test_metrics_reviewer_workspace_provides_the_deterministic_probe_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialized = subprocess.run(
+                [str(INIT_WORKSPACE), str(root), "demo", "run-001", "metrics-reviewer"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, initialized.returncode, initialized.stdout + initialized.stderr)
+            workspace = Path(initialized.stdout.strip())
+            self.assertEqual(
+                str(root / "scripts" / "metrics_review_probes.py"),
+                (workspace / "metrics-review-probes").readlink().as_posix(),
+            )
+            self.assertEqual(
+                str(root / "scripts" / "metric_disposition.py"),
+                (workspace / "metric-disposition").readlink().as_posix(),
+            )
+
+    def test_dashboard_architect_workspace_provides_capability_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialized = subprocess.run(
+                [str(INIT_WORKSPACE), str(root), "demo", "run-001", "dashboard-architect"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, initialized.returncode, initialized.stdout + initialized.stderr)
+            workspace = Path(initialized.stdout.strip())
+            self.assertEqual(
+                str(root / "scripts" / "dashboard_capabilities.py"),
+                (workspace / "dashboard-capabilities").readlink().as_posix(),
+            )
+
+    def test_promql_builder_workspace_provides_work_partition_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialized = subprocess.run(
+                [str(INIT_WORKSPACE), str(root), "demo", "run-001", "promql-builder"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, initialized.returncode, initialized.stdout + initialized.stderr)
+            workspace = Path(initialized.stdout.strip())
+            self.assertEqual(
+                str(root / "scripts" / "query_work_partition.py"),
+                (workspace / "query-work-partition").readlink().as_posix(),
+            )
 
     def test_streams_stdin_into_small_family_snapshots(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

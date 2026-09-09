@@ -593,6 +593,12 @@ def approved_metric_map(inputs: dict[str, dict[str, Any]]) -> dict[str, dict[str
     return {item["id"]: item for item in inputs["metrics-contract"]["approved"]}
 
 
+def change_limit(limits: dict[str, int], kind: str, new_dashboard: bool) -> int:
+    """Apply change budgets to updates; a new dashboard is bounded by total capacity."""
+    totals = {"questions": "total_panels", "panels": "total_panels", "queries": "total_queries"}
+    return limits[totals[kind] if new_dashboard else f"changed_{kind}"]
+
+
 def validate_plan(data: dict[str, Any], inputs: dict[str, dict[str, Any]], limits: dict[str, int]) -> None:
     metrics = approved_metric_map(inputs)
     new_dashboard = inputs["run-contract"]["source"]["baseline_state"] == "ABSENT"
@@ -642,7 +648,7 @@ def validate_plan(data: dict[str, Any], inputs: dict[str, dict[str, Any]], limit
         string_array(item["retained_labels"], f"{where}.retained_labels", 12, item_max=128)
         text(item["no_data_requirement"], f"{where}.no_data_requirement", 256)
         question_metrics[question_id] = metric_ids
-    require(changed_questions <= limits["changed_questions"], "changed question limit exceeded")
+    require(changed_questions <= change_limit(limits, "questions", new_dashboard), "changed question limit exceeded")
 
     panels = array(data["panels"], "panels", limits["total_panels"], minimum=1)
     panel_ids: set[str] = set()
@@ -671,7 +677,7 @@ def validate_plan(data: dict[str, Any], inputs: dict[str, dict[str, Any]], limit
         if panel_change != "PRESERVED":
             changed_panels += 1
         panel_questions[panel_id] = question_refs
-    require(changed_panels <= limits["changed_panels"], "changed panel limit exceeded")
+    require(changed_panels <= change_limit(limits, "panels", new_dashboard), "changed panel limit exceeded")
     require(assigned_questions == question_ids, "every planned question must be assigned to a panel")
 
     consumers = array(data["required_consumers"], "required_consumers", 16, minimum=2)
@@ -694,6 +700,8 @@ def validate_plan(data: dict[str, Any], inputs: dict[str, dict[str, Any]], limit
         require(metric_ids <= set(metrics), f"{where} references unapproved metrics")
     require({("VARIABLE", "namespace"), ("VARIABLE", "pod")} <= rendered_consumers,
             "required consumers must include namespace and pod variables")
+    require(("VARIABLE", "datasource") not in rendered_consumers,
+            "datasource is a queryless DatasourceVariable, not a required consumer")
 
     omission_fields = {"id", "reason"}
     for index, record in enumerate(array(data["omissions"], "omissions", 24)):
@@ -829,7 +837,10 @@ def validate_query_pack(data: dict[str, Any], inputs: dict[str, dict[str, Any]],
         expected_live = "PASS" if run["capabilities"]["datasource_access"] else "UNVERIFIED"
         require(live_status == expected_live, f"{where}.validation.live disagrees with run capability")
         string_array(validation["evidence_refs"], f"{where}.validation.evidence_refs", 4, item_max=512)
-    require(changed_queries <= limits["changed_queries"], "changed query limit exceeded")
+    require(
+        changed_queries <= change_limit(limits, "queries", run["source"]["baseline_state"] == "ABSENT"),
+        "changed query limit exceeded",
+    )
     require(covered_panels == set(panels), "every planned panel must have a query")
     require(covered_questions == set(questions), "every planned question must have a query")
     require(covered_consumers == set(consumers), "every required variable/annotation consumer must have a query")

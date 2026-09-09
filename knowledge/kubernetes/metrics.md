@@ -4,7 +4,7 @@ Use only metric families available locally or documented by pinned/local sources
 
 ## Fixed workload presets
 
-`scripts/kubernetes_presets.py` emits the offline Kubernetes and Istio
+The coordinator's checked dispatch helper emits the offline Kubernetes and Istio
 candidate catalogue. The application stage establishes the exact namespace
 scope; the Kubernetes stage carries that scope unchanged and emits catalogue
 records for review. Preset metrics and labels remain documentation claims until

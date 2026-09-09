@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -11,12 +13,29 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY / "scripts"))
 
 import metric_facts  # noqa: E402
+import metric_disposition  # noqa: E402
+import dashboard_capabilities  # noqa: E402
+import metrics_discovery  # noqa: E402
+import metrics_review_probes  # noqa: E402
+import metric_record  # noqa: E402
 import prometheus_probe_matrix  # noqa: E402
 import promql_templates  # noqa: E402
+import query_work_partition  # noqa: E402
+import validate_workflow_artifact  # noqa: E402
 from grafana_dry_run import replacement  # noqa: E402
 
 
 class DeterministicStagesTest(unittest.TestCase):
+    def test_new_dashboards_use_total_capacity_not_update_change_budget(self) -> None:
+        limits = {
+            "changed_questions": 12, "changed_panels": 12, "changed_queries": 24,
+            "total_panels": 48, "total_queries": 64,
+        }
+        self.assertEqual(48, validate_workflow_artifact.change_limit(limits, "questions", True))
+        self.assertEqual(48, validate_workflow_artifact.change_limit(limits, "panels", True))
+        self.assertEqual(64, validate_workflow_artifact.change_limit(limits, "queries", True))
+        self.assertEqual(12, validate_workflow_artifact.change_limit(limits, "questions", False))
+
     def test_counter_template_requires_declared_counter_and_compiles_stably(self) -> None:
         result = promql_templates.compile_template({
             "template": "counter_rate_by_pod",
@@ -33,6 +52,25 @@ class DeterministicStagesTest(unittest.TestCase):
             promql_templates.compile_template({
                 "template": "counter_rate_by_pod", "metric": "looks_total", "metric_type": "gauge", "window": "5m",
             })
+
+    def test_query_work_partition_routes_only_typed_one_metric_rates_to_the_compiler(self) -> None:
+        result = query_work_partition.partition(
+            {"questions": [
+                {"id": "Q001", "metric_ids": ["AM001"], "change": "NEW", "calculation": "rate",
+                 "result_shape": "TIME_SERIES", "retained_labels": ["pod"]},
+                {"id": "Q002", "metric_ids": ["AM001", "AM002"], "change": "NEW", "calculation": "ratio",
+                 "result_shape": "TIME_SERIES", "retained_labels": ["pod"]},
+                {"id": "Q003", "metric_ids": ["AM001"], "change": "PRESERVED", "calculation": "rate",
+                 "result_shape": "TIME_SERIES", "retained_labels": ["pod"]},
+            ]},
+            {"approved": [
+                {"id": "AM001", "family": "app_events_total", "type": "counter"},
+                {"id": "AM002", "family": "app_errors_total", "type": "counter"},
+            ]},
+        )
+        self.assertEqual("counter_rate_by_pod", result["standard"][0]["template"])
+        self.assertEqual("MULTI_METRIC", result["custom"][0]["reason_code"])
+        self.assertEqual("Q003", result["preserved"][0]["question_id"])
 
     def test_metric_facts_copies_observation_without_classification(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -52,6 +90,138 @@ class DeterministicStagesTest(unittest.TestCase):
             family = json.loads(output.read_text(encoding="utf-8"))["families"][0]
             self.assertEqual("NEEDS_AI", family["classification"])
             self.assertEqual("counter", family["declared_type"])
+            metric_facts.emit(snapshots, output)
+
+    def test_metric_facts_classifies_only_the_pinned_fastapi_identity_family(self) -> None:
+        record = {
+            "kind": "metric-family-snapshot", "id": "F00001", "family": "fastapi_app_info",
+            "declared_type": "gauge", "unit": None, "help": "application identity", "members": ["fastapi_app_info"],
+            "observed_labels": ["version"], "sample_count": 1, "has_timestamps": False,
+            "has_exemplars": False, "source_ref": "metrics", "warnings": [],
+        }
+        fact = metric_facts.fact(record)
+        self.assertEqual("PROCESS", fact["classification"])
+        self.assertIn("identity", fact["classification_reason"])
+
+        record["family"] = "grafana_build_info"
+        record["members"] = ["grafana_build_info"]
+        fact = metric_facts.fact(record)
+        self.assertEqual("PROCESS", fact["classification"])
+        self.assertEqual("build identity metadata", fact["classification_reason"])
+
+    def test_metric_record_preserves_a_null_unit_without_yq_conditionals(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "records" / "pending").mkdir(parents=True)
+            (root / "records" / "done").mkdir(parents=True)
+            (root / "state.yaml").write_text("pending: []\ncompleted: []\n", encoding="utf-8")
+            (root / "records" / "pending" / "F00001.yaml").write_text(
+                "kind: metric-family-snapshot\nfamily: demo\ndeclared_type: gauge\nunit: null\nhelp: demo\nmembers: [demo]\nobserved_labels: []\nwarnings: []\n",
+                encoding="utf-8",
+            )
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                output = metric_record.create("F00001.yaml", "M001", "BUSINESS")
+            finally:
+                os.chdir(previous)
+            record = json.loads(subprocess.run(["yq", "eval", "-o=json", ".", str(output)], capture_output=True, text=True, check=True).stdout)
+            self.assertIsNone(record["unit"])
+            self.assertEqual("APPLICATION", record["source"])
+
+    def test_metrics_discovery_probes_every_snapshot_and_summarizes_candidates(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            snapshots = root / "pending"
+            snapshots.mkdir()
+            for identifier, family in (("F00001", "idle_metric"), ("F00002", "active_metric")):
+                (snapshots / f"{identifier}.yaml").write_text(
+                    f"kind: metric-family-snapshot\nid: {identifier}\nfamily: {family}\n",
+                    encoding="utf-8",
+                )
+            requests: list[dict[str, object]] = []
+
+            def fetch(request: dict[str, object]) -> bytes:
+                requests.append(request)
+                if request["params"]["match[]"] == "active_metric":
+                    return b'{"status":"success","data":[{"kubernetes_namespace":"team-a","app":"demo"}]}'
+                return b'{"status":"success","data":[]}'
+
+            summary = metrics_discovery.discover(snapshots, root / "discovery", fetch)
+            self.assertEqual(["idle_metric", "active_metric"], [item["params"]["match[]"] for item in requests])
+            self.assertEqual("EMPTY", summary["families"][0]["result"])
+            self.assertEqual(["team-a"], summary["families"][1]["namespace_candidates"])
+            self.assertEqual(["kubernetes_namespace"], summary["families"][1]["namespace_label_keys"])
+            self.assertEqual(["team-a"], summary["namespace_candidates"])
+            self.assertTrue((root / "discovery" / "responses" / "F00002.json").is_file())
+
+            resumed = metrics_discovery.discover(
+                snapshots, root / "discovery", lambda _: self.fail("completed discovery was re-run"),
+            )
+            self.assertEqual(summary, resumed)
+
+    def test_metrics_review_probes_uses_the_bound_namespace_and_stable_evidence_path(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            requests: list[dict[str, object]] = []
+
+            def fetch(request: dict[str, object]) -> bytes:
+                requests.append(request)
+                return b'{"status":"success","data":[{"namespace":"team-a","pod":"demo"}]}'
+
+            summary = metrics_review_probes.probe(
+                [{"id": "K002", "source": "KUBELET", "family": "container_memory_working_set_bytes"}],
+                ["team-a"], root / "probes", fetch,
+            )
+            self.assertEqual(
+                'container_memory_working_set_bytes{namespace=~"^(?:team\\-a)$"}',
+                requests[0]["params"]["match[]"],
+            )
+            self.assertEqual("SERIES", summary["probes"][0]["result"])
+            self.assertTrue((root / "probes" / "responses" / "K002.json").is_file())
+            self.assertEqual(
+                summary,
+                metrics_review_probes.probe(
+                    [{"id": "K002", "source": "KUBELET", "family": "container_memory_working_set_bytes"}],
+                    ["team-a"], root / "probes", lambda _: self.fail("completed probe evidence was re-run"),
+                ),
+            )
+
+    def test_metric_disposition_rejects_unknown_ids_and_writes_stable_records(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            available = {("kubernetes-metrics", "I002"), ("kubernetes-metrics", "I003")}
+            records = metric_disposition.write_records(
+                root, available, "rejected", "kubernetes-metrics", ["I002", "I003"],
+                "NO_TARGET_SERIES", "No series were observed.",
+            )
+            self.assertEqual(2, len(records))
+            self.assertTrue((root / "records" / "rejected" / "kubernetes-metrics-I002.yaml").is_file())
+            with self.assertRaisesRegex(metric_disposition.DispositionError, "ticketed shortlist"):
+                metric_disposition.write_records(
+                    root, available, "rejected", "kubernetes-metrics", ["I004"],
+                    "NO_TARGET_SERIES", "No series were observed.",
+                )
+
+    def test_dashboard_capabilities_projects_only_planning_fields(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            contract = root / "metrics-contract.yaml"
+            contract.write_text(
+                "approved:\n"
+                "  - id: AM001\n    source_artifact: application-metrics\n    source_metric_id: M001\n"
+                "    source: APPLICATION\n    category: BUSINESS\n    family: app_events_total\n"
+                "    type: counter\n    unit: null\n    semantics: events\n    lifecycle: process\n"
+                "    identity_labels: [pod]\n    bounded_dimensions: [result]\n"
+                "    availability: VERIFIED\n    allowed_use: PLAN\n    risks: []\n",
+                encoding="utf-8",
+            )
+            output = root / "approved-capabilities.json"
+            summary = dashboard_capabilities.emit(contract, output)
+            self.assertEqual(1, summary["totals"]["plan"])
+            self.assertEqual("AM001", summary["capabilities"][0]["id"])
+            self.assertNotIn("evidence_refs", summary["capabilities"][0])
+            self.assertEqual(summary, dashboard_capabilities.emit(contract, output))
 
     def test_probe_inspection_rejects_duplicate_declared_identity(self) -> None:
         payload = json.dumps({"status": "success", "data": {"result": [

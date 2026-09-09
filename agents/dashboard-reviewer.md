@@ -26,7 +26,7 @@ Read:
 - `knowledge/grafana/v2-validation-errors.md` and `knowledge/grafana/diagnostic-execution.md` when target dry-run validation fails
 - `knowledge/grafana/annotations.md` when annotations are present
 
-First run `scripts/coordinator_stage.py validate-ticket`. Read assignments only from that validated ticket; do not request
+First run `./workflow validate-ticket`. Read assignments only from that validated ticket; do not request
 upstream conclusions, raw metric dumps, or the complete conversation. It
 supplies the approved bindings, candidate/rendered evidence, pinned versions,
 output path, limits, and configured target access.
@@ -50,7 +50,7 @@ Treat the approved query pack as immutable. Exhaustively extract every Prometheu
 - every preserved legacy expression in an updated dashboard is represented in the approved pack
 - the query-review digest approves the exact current query-pack digest
 
-Independently run `scripts/dashboard_integrity.py` before returning `PASS`. It derives every fixed input from the ticket and verifies rendering, V2 structure, approved query parity, and preservation of non-Prometheus consumers. If the pinned representation uses another field for Prometheus text, require the integrity check to cover it before review can pass.
+Independently run `./workflow dashboard-integrity` before returning `PASS`. It derives every fixed input from the ticket and verifies rendering, V2 structure, approved query parity, and preservation of non-Prometheus consumers. If the pinned representation uses another field for Prometheus text, require the integrity check to cover it before review can pass.
 
 Do not repeat semantic PromQL review and do not propose replacement query text. A semantic/query-text correction is classified `QUERY_PACK_CHANGE_REQUIRED` and must return through the coordinator to `promql-builder`, followed by a new PromQL review and rebuild.
 
@@ -79,8 +79,8 @@ For the documented Grafonnet v13 query-variable and annotation nested-query defe
 Perform server-side V2 validation when Dashboard resource API access is
 configured for the exact create or update operation.
 
-When the configured capability is `scripts/grafana_dry_run.py`, invoke it only
-as `grafana_dry_run.py <resource-file> <response-file> --operation
+When the configured capability is the checked workflow dry-run, invoke it only
+as `./workflow grafana-dry-run <resource-file> <response-file> --operation
 CREATE|UPDATE`. It owns the target, authentication, namespace, GET required by
 an update, metadata-preserving update envelope, and dry-run request path; keep
 the returned resource in the local response file and do not construct target
@@ -125,4 +125,4 @@ Classify each finding by owner:
 
 Never provide replacement source or PromQL in findings. Set `PASS` only with no findings and all applicable validation complete.
 
-Run `scripts/stage_check.py` after writing the assigned artifact or failure report. Return its bounded response.
+Run `./workflow stage-check` after writing the assigned artifact or failure report. Return its bounded response.

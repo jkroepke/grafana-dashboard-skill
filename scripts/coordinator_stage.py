@@ -492,7 +492,10 @@ def dispatch(args: argparse.Namespace) -> str:
                 generated.stderr.strip() or "could not generate Kubernetes preset artifact")
         response = generated.stdout.strip().splitlines()[-1]
         return accept(argparse.Namespace(ticket=ticket_path, response=response, response_file=None))
-    return f"{agent} workspace={workspace} ticket={ticket_path.relative_to(root)}"
+    return (
+        f"{agent} workspace={workspace} agent_run={agent_root} "
+        f"ticket={ticket_path.relative_to(root)}"
+    )
 
 
 def accept(args: argparse.Namespace) -> str:
@@ -624,7 +627,10 @@ def reset_stage(args: argparse.Namespace) -> str:
     require(read_yaml(agent_root / "state.yaml")["status"] == "IN_PROGRESS", "stage is not in progress")
     coordinator_artifact.validate_workspace(agent_root)
     coordinator_artifact.validate_workspace(coordinator_root)
-    return f"RESET {agent} workspace={workspace} ticket={ticket_path.relative_to(root)}"
+    return (
+        f"RESET {agent} workspace={workspace} agent_run={agent_root} "
+        f"ticket={ticket_path.relative_to(root)}"
+    )
 
 
 def parser() -> argparse.ArgumentParser:

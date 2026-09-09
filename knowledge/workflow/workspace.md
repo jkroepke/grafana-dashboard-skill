@@ -24,15 +24,27 @@ wrappers load it automatically from this workspace or a descendant role
 directory.
 
 The coordinator's dispatch operation initializes this directory. Specialists
-receive its path in their ticket and do not initialize it themselves.
+receive the returned `agent_run` path and ticket path after dispatch and do not
+initialize it themselves. Every specialist command runs from that `agent_run`
+directory—not from the shared project `workspace/` directory. This is what
+makes local helpers such as `./metrics-sync` and `./workflow` resolve to the
+role-specific checked wrappers.
 
-`scripts/stage_check.py` validates the checkpoint area and assigned artifact
+Bootstrap from the skill repository root with `scripts/mkworkspace`; it installs
+the checked `./workflow` wrapper in the project workspace. Agent workspaces get
+the same wrapper during dispatch. Use `./workflow <command>` for control-plane
+commands such as `validate-ticket`, `stage-check`, and
+`dashboard-integrity`; it resolves its own pinned repository script, so shell
+state and a guessed repository path are never required. The other `./name`
+commands are role-specific wrappers intentionally installed in that workspace.
+
+`./workflow stage-check` validates the checkpoint area and assigned artifact
 before a specialist returns its response.
 
-`scripts/validate_agent_workspace.sh` rejects missing layout/state, inbox/record symlinks, non-YAML
+The workspace validator rejects missing layout/state, inbox/record symlinks, non-YAML
 structured files, invalid/non-mapping YAML, inbox/record files over 8 KiB, and
 state over 16 KiB. When an outbox contains a terminal stage artifact,
-`scripts/validate_agent_workspace.sh` also requires `state.status` to equal the artifact status and
+The workspace validator also requires `state.status` to equal the artifact status and
 `state.next_action` to be `complete`, `pending` to be empty, and `completed` to
 contain the terminal artifact path. A coordinator run contract alone is not a
 terminal artifact.
@@ -42,15 +54,30 @@ immutable, at-most-8-KiB `inbox/job.yaml`, validates
 all bindings, and updates coordinator state. The ticket contains the
 run/stage/revision, approved input paths and digests, assigned output paths,
 budgets, and opaque capability references—never artifact bodies or raw
-evidence. The dispatch prompt contains only the agent ID, absolute project workspace path,
-and ticket path. The specialist runs `scripts/coordinator_stage.py validate-ticket` before work;
+evidence. The dispatch handoff contains the literal workflow role, absolute
+project workspace path, returned `agent_run` path, and ticket path. The
+specialist runs `./workflow validate-ticket` before work;
 the coordinator uses `accept` on its bounded response.
 
 ## Coordinator control paths
 
 Coordinator control operations run from `dashboards/<project-name>/workspace/`.
-`set-workflow-env` accepts exactly one name/value pair per invocation:
-`set-workflow-env <name> <value>`. Do not pass multiple pairs in one call.
+At bootstrap, `scripts/mkworkspace <project-name>` always starts a fresh run
+with a new `WORKFLOW_RUN_ID` and no retained access configuration, even when
+the project workspace already exists. Use `--resume` only for an explicit
+user-requested continuation of the existing run; it preserves that ID and
+configuration. This prevents stale one-shot gates and coordinator state from
+being silently reused.
+
+`set-workflow-env` accepts exactly one positional pair per invocation:
+`set-workflow-env <key><space><value>`. Do not pass multiple pairs, maps,
+lists, or `KEY=VALUE` tokens in one call.
+
+Before `run-contract`, the coordinator explicitly sets every access key,
+including default client values and argument arrays. In particular,
+`METRICS_HTTP_CLIENT` is `curl` for an HTTP(S) metrics target and an explicit
+empty value for a local metrics file; no stage may depend on an implicit client
+fallback.
 
 After `run-contract`, invoke a specialist with:
 
@@ -61,8 +88,8 @@ dispatch --run-contract coordinator/<run-id>/outbox/run-contract.yaml --agent <a
 The run-contract path is relative to this `workspace/` directory (or absolute).
 Do not pass `dashboards/<project-name>/workspace/...` as a relative path: the
 controller resolves it from `workspace/`, which duplicates that prefix.
-`dispatch` creates the ticket and returns its path; workspace and ticket paths
-are inputs to the specialist handoff, not to `dispatch`.
+`dispatch` creates the ticket and returns its path plus `agent_run`; all three
+paths are inputs to the specialist handoff, not to `dispatch`.
 
 A job ticket uses this bounded shape; unused maps/lists stay empty rather than
 growing the dispatch prompt:
@@ -101,15 +128,15 @@ Use deterministic tools for routine mechanics; do not spend model context
 recreating their output.
 
 - `metrics-sync` fetches/snapshots application exposition and resumes its
-  queue. `scripts/metric_facts.py` copies bounded observed facts and marks every
+  queue. `metric-facts` copies bounded observed facts and marks every
   family `NEEDS_AI`; it never guesses operational semantics.
-- `scripts/promql_templates.py <request.json> <result.json>` compiles only an
+- `promql-templates <request.json> <result.json>` compiles only an
   allowlisted typed template. Unknown templates and joins are `CUSTOM` work.
-- `scripts/prometheus_probe_matrix.py` defaults to `inbox/job.yaml`, runs a
+- `prometheus-probe-matrix` defaults to `inbox/job.yaml`, runs a
   declared matrix, stores raw responses in `evidence/`, and checks response
   status, warnings, cardinality, labels, and duplicate identities.
-- `scripts/grafana_dry_run.py ... --operation UPDATE` performs the required
-  GET and metadata-preserving dry-run PUT. `scripts/grafana_publish.py`
+- `./workflow grafana-dry-run ... --operation UPDATE` performs the required
+  GET and metadata-preserving dry-run PUT. `grafana-publish`
   defaults to `inbox/job.yaml` and performs the equivalent real transaction
   only after ticket/integrity/review preflight passes.
 
@@ -135,14 +162,23 @@ and digest. This permits multiple namespaces without allowing a cluster-wide
 fallback. Namespace values remain in the local scope evidence file, never in a
 ticket body or visible response.
 
+The application snapshot is not sufficient scope evidence. After snapshotting,
+the analyst uses the ticketed opaque Prometheus reader to run narrow
+stored-series discovery for observed application families. It starts with
+identity/foundation metrics and also tries usage-dependent families when they
+can reveal additional deployments. Request/response pairs are retained as local
+evidence, including no-series results. Only series tied to the target by a
+target-specific family or verified identity labels may contribute namespaces;
+shared framework names, workload/pod naming, and cluster-wide metrics cannot.
+
 ## Checkpoint protocol
 
 Use Mike Farah `yq` v4 for YAML creation and mutation. If it is unavailable or
 not v4, return a `MISSING_YQ` failure report instead of falling back to a large
 write-tool call.
 
-Run executable repository scripts directly; their shebang selects Python. For
-example, use `scripts/stage_check.py`, not `python3 scripts/stage_check.py`.
+Run checked workspace commands directly; their shebang selects Python. For
+example, use `./workflow stage-check`, not `python3` with a guessed script path.
 
 This is an agent-write rule, not a restriction on implementation language:
 
@@ -169,9 +205,10 @@ This is an agent-write rule, not a restriction on implementation language:
   A promoted record is immutable. Corrections create a new revision; they do
   not edit a file already consumed downstream.
 - Metric analysts use `records/pending/` as the queue of unprocessed
-  metric-family work items and `records/done/` for processed items. Run
-  `scripts/metric_queue.py reconcile` before processing. After a metric record
-  is durable, run `scripts/metric_queue.py complete <pending-item> <record>`.
+  metric-family work items and `records/done/` for processed items. The
+  application analyst must use `./metrics-sync` to initialize or resume that
+  queue; it must not run `metric_queue.py reconcile` directly. After a metric
+  record is durable, run `./metric-queue complete <pending-item> <record>`.
   A pending item without a completed state entry remains eligible for processing.
   For discovery that has no exposition snapshot, create a bounded pending YAML
   work item before inspection. Leave a snapshot `manifest.yaml` in `pending/`;
@@ -215,6 +252,17 @@ mv "$draft" "$final"
 unset RECORD_ID RECORD_TYPE
 ```
 
+For an application metric snapshot, do not reproduce this generic example or
+write an optional-unit conditional such as `if strenv(UNIT) ...`. Use the
+workspace-local deterministic initializer instead:
+
+```text
+./metric-record <pending-item.yaml> M001 [BUSINESS|PROCESS]
+```
+
+It preserves a missing unit as YAML `null`; an unclassified family requires the
+single category argument. The command writes `records/metrics/M001.yaml`.
+
 Update the progress snapshot after the record is durable:
 
 ```bash
@@ -253,13 +301,13 @@ unset ITEMS_FILE
 ```
 
 Add the remaining required envelope and artifact fields using `yq`, then run
-`scripts/stage_check.py --draft`. It validates the assigned
+`./workflow stage-check --draft`. It validates the assigned
 `tmp/<artifact>.yaml` using the ticketed inputs, support artifacts, evidence
 base path, and repository working directory. Do not call
 `validate_agent_workspace.sh` or `validate_workflow_artifact.py` directly and
 do not reconstruct their arguments. After a `PASS` draft result, atomically
 rename it to `outbox/<artifact>.yaml`, finish `state.yaml`, and run
-`scripts/stage_check.py` for the terminal response. The
+`./workflow stage-check` for the terminal response. The
 artifact remains the digest-bound stage gate; the record files are its
 human-reviewable construction log and recovery snapshots.
 
@@ -290,13 +338,13 @@ On a new application-metrics run, `records/pending/` must not exist before this
 command: the snapshot tool creates it atomically. Do not run
 `metric_queue.py reconcile` or create that directory first. On a resumed run,
 when `records/pending/manifest.yaml` already exists, do not fetch or snapshot
-again; run `scripts/metric_queue.py reconcile` before processing its remaining
-items. An empty `records/pending/` without a manifest is an interrupted initial
-setup: recover with `rmdir records/pending`, then take the snapshot. Any
-non-empty directory without a manifest is an unknown state and must fail rather
-than be deleted.
+again; run `./metrics-sync` to resume before processing its remaining items.
+An empty `records/pending/` without a manifest is an interrupted initial setup:
+return a failure report rather than modifying it manually. Any non-empty
+directory without a manifest is an unknown state and must fail rather than be
+deleted.
 
 These are discovery snapshots, not approved metric records. Analysts still
 verify semantics, lifecycle, stored labels, availability, category, and risks.
-In particular, `scripts/snapshot_metrics.py` preserves declared type literally and never infers a
+In particular, the checked `metrics-sync` snapshot helper preserves declared type literally and never infers a
 counter from `_total` or another name suffix.

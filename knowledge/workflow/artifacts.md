@@ -13,9 +13,9 @@ protocol throughout every stage.
 - An approval applies only to the exact SHA-256 digests it records.
 - Any upstream change invalidates all downstream approvals.
 - Only `promql-builder` may author or change query text that can enter the dashboard.
-- Use `scripts/stage_check.py` to validate the assigned artifact and produce the stage response.
-- Dashboard build, review, and publication stages use `scripts/dashboard_integrity.py` before their terminal action. It derives fixed paths and runs the required mechanical checks from the ticket.
-- Run `scripts/workflow_chain.py` before promotion.
+- Use `./workflow stage-check` to validate the assigned artifact and produce the stage response.
+- Dashboard build, review, and publication stages use `./workflow dashboard-integrity` before their terminal action. It derives fixed paths and runs the required mechanical checks from the ticket.
+- The coordinator runs `./workflow chain-check` before `./workflow promote`.
 - The run contract must record Dashboard Schema V2 and a Grafana version of v13 or later. This workflow rejects classic dashboard sources and does not perform migrations.
 
 This workflow version stages exactly one dashboard source file. If a task requires a shared-helper edit, return `BLOCKED` rather than editing or promoting multiple files without an atomic candidate-set contract.
@@ -54,7 +54,7 @@ show types without ambiguity:
 }
 ```
 
-Schemas are closed: unknown fields fail validation. Input names and digests are stage-specific. `scripts/validate_workflow_artifact.py` recomputes every supplied input digest and rejects missing, extra, or mismatched inputs. Direct dependencies use `--input`; transitive dependencies use `--support`. It recursively validates the entire supplied upstream graph and rejects missing or extra support artifacts. A role receives support paths only for validation and MUST NOT read their bodies unless they are also direct role inputs.
+Schemas are closed: unknown fields fail validation. Input names and digests are stage-specific. The workflow validator recomputes every supplied input digest and rejects missing, extra, or mismatched inputs. Direct dependencies use `--input`; transitive dependencies use `--support`. It recursively validates the entire supplied upstream graph and rejects missing or extra support artifacts. A role receives support paths only for validation and MUST NOT read their bodies unless they are also direct role inputs.
 
 Every `evidence_ref` and `evidence_refs` entry is a local file reference, with
 an optional `:line` or `#fragment` locator. Relative references resolve from the
@@ -80,7 +80,7 @@ BLOCKED <stage> report=<neutral-path>.yaml sha256=sha256:<64-lowercase-hex>
 
 The referenced workflow file MUST have the exact `.yaml` suffix. Do not include
 metrics, queries, findings, source, rendered JSON, API responses, or rejected
-alternatives in the response. `scripts/stage_check.py` produces the response;
+alternatives in the response. `./workflow stage-check` produces the response;
 the coordinator accepts it through its fixed control operation.
 
 ## Run contract
@@ -118,7 +118,7 @@ namespace_scope:
 The namespace values themselves are never included in an artifact. The
 `kubernetes-metrics` artifact requires `application-metrics` as a direct input
 and repeats the exact `namespace_scope_ref` and `namespace_scope_sha256`; the
-`scripts/validate_workflow_artifact.py` requires both to match the application artifact. The Kubernetes agent
+The workflow validator requires both to match the application artifact. The Kubernetes agent
 uses that set, including every member when it contains multiple namespaces, for
 every discovery request. During discovery analysts write one YAML file per
 metric family under `records/metrics/`, update `state.yaml`, and assemble the
@@ -180,6 +180,11 @@ its approved, rejected, and not-considered entries from separate YAML records:
 - `selector_contract`: approved application/Kubernetes labels, populations, and fixed-selector references
 - `unresolved`: a list of concise evidence-gap strings; use `[]` when none
 
+`dashboard-architect` runs `./dashboard-capabilities` after ticket validation.
+It emits `evidence/approved-capabilities.json`, the bounded planning projection
+of the ticketed approved metrics contract. Do not build an equivalent `yq`
+projection in an agent command.
+
 The payload has this fixed top-level shape:
 
 ```yaml
@@ -222,6 +227,18 @@ Each approved record has exactly:
 
 `selector_contract` has exactly `application_namespace_label`, `application_pod_label`, `kubernetes_namespace_label`, `kubernetes_pod_label`, `istio_source_namespace_label`, `istio_destination_namespace_label`, `cluster_label`, `fixed_selector_refs`, `population_notes`, and `scrape_interval_ref`. Nullable labels remain null when unavailable; references point to neutral evidence rather than embedding target-specific selector values in prompts.
 
+`population_notes` is always an array of at most eight strings, including when
+there is one note: `population_notes: ["regular application containers"]`.
+When datasource access is enabled, routine Kubernetes evidence references are
+created only by `./metrics-review-probes`; use its stable response path
+`evidence/metrics-review-probes/responses/<metric-id>.json`, never a manually
+chosen `evidence/probes/...` path.
+
+For `rejected` and `not_considered`, use `./metric-disposition` from the
+metrics-reviewer workspace. It checks each source/metric ID against the exact
+ticketed shortlist and creates one immutable checkpoint per ID; do not derive
+IDs with shell arithmetic or `printf`.
+
 `source`, `category`, `family`, and `type` are copied unchanged from the
 shortlist record. The reviewer cannot correct a source record: when its facts
 or classification conflict with evidence, reject it with an evidence-backed
@@ -247,7 +264,23 @@ YAML records:
 - `omissions`: `{id, reason}`
 - `budgets`: an exact copy of the run limits used
 
+`required_consumers` contains only actual Prometheus `QueryVariable` and
+annotation queries. The mandatory `datasource` `DatasourceVariable` is a
+queryless builder-owned control, so it must not appear in this array or in the
+query pack.
+
+Question `priority` is exactly `MUST` or `SHOULD`; `category` is exactly
+`BUSINESS`, `PROCESS`, or `KUBERNETES`; and `result_shape` is exactly
+`SCALAR`, `TIME_SERIES`, `LABEL_SET`, or `DISTRIBUTION`. These are closed
+enums, not free-form severity labels.
+
 `change` is `NEW`, `MODIFIED`, or `PRESERVED`. New/modified and total records obey separate run limits. The plan contains no query text, selector expression, plugin payload, Jsonnet, or rendered JSON.
+
+For an update, `changed_questions`, `changed_panels`, and `changed_queries`
+limit the new/modified work. For a new dashboard, every record is `NEW`, so
+the corresponding total capacities (`total_panels` and `total_queries`) apply
+instead. This prevents an update-safety budget from suppressing valid
+greenfield operational questions.
 
 Every question must be assigned to at least one panel. Orphaned questions are invalid.
 
@@ -299,7 +332,7 @@ Every Prometheus query that will exist in the final dashboard—including preser
 }
 ```
 
-`scripts/validate_workflow_artifact.py` rejects `rate()`, `irate()`, `increase()`, or `resets()`
+The workflow validator rejects `rate()`, `irate()`, `increase()`, or `resets()`
 when the referenced approved metric is a gauge, info, stateset, or unknown type.
 This is checked from approved metadata and expression structure; a `_total`
 suffix never upgrades a gauge to a counter.
@@ -378,7 +411,7 @@ validation results are checkpointed separately before manifest assembly:
 }
 ```
 
-`PASS` requires every query-pack ID exactly once, no omissions, all mandatory checks `PASS`, and candidate/rendered/baseline values equal to the current ticketed files. Run `scripts/dashboard_integrity.py` before writing it.
+`PASS` requires every query-pack ID exactly once, no omissions, all mandatory checks `PASS`, and candidate/rendered/baseline values equal to the current ticketed files. Run `./workflow dashboard-integrity` before writing it.
 
 Required inputs: `run-contract`, `metrics-contract`, `dashboard-plan`, `query-pack`, `query-review`.
 
@@ -416,7 +449,7 @@ Required inputs: `run-contract`, `dashboard-plan`, `query-pack`, `query-review`,
 
 When a normal artifact cannot be produced, first write one or more
 evidence files below the relevant agent workspace, then create
-`failure-report.yaml` in the assigned outbox. `scripts/stage_check.py`
+`failure-report.yaml` in the assigned outbox. `./workflow stage-check`
 validates the specialist report. The coordinator uses its fixed
 `failure-report` action only for a coordinator-owned blocker.
 
@@ -441,7 +474,7 @@ Limit query build/review and dashboard build/review correction loops to three re
 Before promotion, run the read-only full-chain check:
 
 ```bash
-scripts/workflow_chain.py
+./workflow chain-check
 ```
 
 The gate derives the canonical artifacts for the active workspace run, recomputes every digest, checks the DAG/status invariants, checks query parity, and verifies the final source baseline and exact reviewed candidate.
@@ -471,6 +504,6 @@ from its checkpointed request/readback results:
 }
 ```
 
-Required inputs: `run-contract`, `dashboard-build`, `dashboard-review`. `scripts/validate_workflow_artifact.py` requires explicit publication intent, the exact reviewed source at the final repository path, and successful target readback. Publication failures use `failure-report`; the coordinator never constructs or repairs API payloads.
+Required inputs: `run-contract`, `dashboard-build`, `dashboard-review`. The workflow validator requires explicit publication intent, the exact reviewed source at the final repository path, and successful target readback. Publication failures use `failure-report`; the coordinator never constructs or repairs API payloads.
 
-Before the target write, the publisher runs `scripts/dashboard_integrity.py` to verify the promoted final source.
+Before the target write, the publisher runs the checked dashboard-integrity helper to verify the promoted final source.

@@ -16,7 +16,7 @@ the local `inbox/job.yaml` for specialist-local commands. Control commands
 remain explicit because they intentionally target another run or agent.
 
 Acceptance: a new application stage runs `./metrics-sync`, then
-`scripts/metric_facts.py`, without an agent deciding how to invoke readers or
+`./metric-facts`, without an agent deciding how to invoke readers or
 create the queue.
 
 ## Phase 2 — routine queries and probes (implemented)
@@ -30,6 +30,14 @@ expression bytes are durable and reviewable.
 probes. It writes raw target responses locally and derives status, warnings,
 series count, returned labels, and duplicate declared identities. A reviewer
 only interprets failures and `CUSTOM` query semantics.
+
+`query_work_partition.py` splits a closed dashboard plan before query work.
+An exact, one-metric `rate` question with an approved counter, time-series
+shape, and valid retained labels becomes a `counter_rate_by_pod` compiler row.
+Preserved questions remain preservation work. Every other question is a small
+`custom` exception with a deterministic reason code. A runtime orchestrator
+may fan out only those exception rows to nested model workers; ordinary
+questions never get their own model context.
 
 Acceptance: standard packs use compiler output plus a PASS matrix report;
 `CUSTOM` records retain the existing independent semantic review.

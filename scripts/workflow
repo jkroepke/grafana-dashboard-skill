@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""Run a closed workflow control command from a workspace-local symlink."""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+
+COMMANDS = {
+    "set-env": "set_workflow_env",
+    "set-datasource": "set_datasource",
+    "run-contract": "create_coordinator_artifact.py",
+    "failure-report": "create_coordinator_artifact.py",
+    "dispatch": "coordinator_stage.py",
+    "reset-stage": "coordinator_stage.py",
+    "accept": "coordinator_stage.py",
+    "validate-ticket": "coordinator_stage.py",
+    "stage-check": "stage_check.py",
+    "dashboard-integrity": "dashboard_integrity.py",
+    "chain-check": "workflow_chain.py",
+    "promote": "workflow_chain.py",
+    "grafana-dry-run": "grafana_dry_run.py",
+}
+
+
+def main() -> int:
+    if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:
+        choices = "|".join(COMMANDS)
+        print(f"usage: workflow <{choices}> [arguments ...]", file=sys.stderr)
+        return 2
+    command = sys.argv[1]
+    target = Path(__file__).resolve().parent / COMMANDS[command]
+    arguments = list(sys.argv[2:])
+    if command in {"run-contract", "failure-report", "dispatch", "reset-stage", "accept", "validate-ticket"}:
+        arguments.insert(0, command)
+    elif command == "promote":
+        arguments.insert(0, "--promote")
+    os.execv(target, [str(target), *arguments])
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

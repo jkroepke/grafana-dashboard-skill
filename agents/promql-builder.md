@@ -28,18 +28,30 @@ Read:
 - `knowledge/grafana/variables.md` for variable queries
 - `knowledge/grafana/annotations.md` when annotations are planned
 
-First run `scripts/coordinator_stage.py validate-ticket`. Read assignments only from that validated ticket; do not request
+First run `./workflow validate-ticket`. Read assignments only from that validated ticket; do not request
 raw dumps or the complete conversation. It supplies the approved bindings,
 existing source/render evidence, output path, limits, and configured datasource
 access. Use only the selector contract in `metrics-contract`; run-contract
 proposals are not authoritative.
+
+Immediately run `./query-work-partition`. Its ticket-bound
+`evidence/query-work-partition.json` is the routing input: compile each
+`standard` row with the named closed template after supplying the required
+selector and window; retain `preserved` work exactly; and treat each `custom`
+row as a separate bounded semantic exception. Do not fan out ordinary
+questions. A host scheduler may assign one nested model worker per `custom`
+row, but never one per routine question; each worker receives only that row,
+the referenced approved capabilities, and its selector contract.
+
+On a resumed stage, `./query-work-partition` verifies and reuses its exact
+ticket-bound partition. Do not delete or recreate that evidence manually.
 
 The supplied project workspace is the shared workflow root; use your initialized
 agent/run workspace beneath it. Compile routine records one at a time and
 checkpoint their compiler result. Use model-authored YAML checkpoints only for
 `CUSTOM` records; never retype a compiler-produced expression.
 
-For every planned query:
+For every planned query (including a `custom` exception):
 
 1. identify the approved metric IDs and actual type/lifecycle
 2. apply the exact stored-label, Kubernetes, or Istio selector contract
@@ -66,6 +78,11 @@ reference. For annotations and unsupported variable forms, author only the
 smallest semantically-supported `CUSTOM` query. Every Prometheus datasource
 query consumes the declared budget.
 
+`datasource` is a builder-owned `DatasourceVariable` control, not a
+Prometheus query variable: it must not occur in `required_consumers` or the
+query pack, and has no `PROMETHEUS_VARIABLE` record. Use `${datasource}` only
+as the required datasource reference of actual Prometheus queries.
+
 For Istio candidates, scope each query with the approved source and/or
 destination workload namespace label that matches its direction. Do not reuse
 the Kubernetes `pod` selector for mesh traffic, collapse source and destination
@@ -85,4 +102,4 @@ For updates, include every Prometheus datasource query that will remain in the f
 
 Write a `PASS` query pack only when every required query is semantically usable. Otherwise write a bounded `failure-report.yaml`; use blocker code `NEEDS_EVIDENCE` when required evidence is absent. Use `UNVERIFIED` per query when live access is unavailable, without presenting it as live validation.
 
-Run `scripts/stage_check.py` after writing the assigned artifact or failure report. Return its bounded response.
+Run `./workflow stage-check` after writing the assigned artifact or failure report. Your final response is exactly its single-line output. Do not append an acceptance report, JSON, Markdown, explanation, or any second deliverable; coordinator acceptance is coordinator-owned.

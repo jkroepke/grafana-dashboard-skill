@@ -690,6 +690,28 @@ class WorkflowScriptsTest(unittest.TestCase):
         )
         self.assertIn("every planned question must be assigned", result.stderr)
 
+    def test_plan_rejects_queryless_datasource_as_a_prometheus_consumer(self) -> None:
+        plan = load_artifact(self.paths["dashboard-plan"])
+        plan["required_consumers"].append({
+            "id": "V_DATASOURCE",
+            "role": "VARIABLE",
+            "rendered_name": "datasource",
+            "purpose": "Select the Prometheus datasource.",
+            "metric_ids": ["AM001"],
+        })
+        self.write("datasource-consumer-plan", plan)
+        result = self.run_tool(
+            VALIDATOR,
+            self.paths["datasource-consumer-plan"],
+            "--input",
+            f"run-contract={self.paths['run-contract']}",
+            "--input",
+            f"metrics-contract={self.paths['metrics-contract']}",
+            *self.support_arguments({"run-contract", "metrics-contract"}),
+            expected=1,
+        )
+        self.assertIn("queryless DatasourceVariable", result.stderr)
+
     def test_query_pack_rejects_literal_datasource(self) -> None:
         pack = load_artifact(self.paths["query-pack"])
         pack["queries"][0]["datasource_ref"] = "literal-datasource-uid"
@@ -1011,6 +1033,7 @@ class WorkflowScriptsTest(unittest.TestCase):
         )
         self.assertEqual(0, reset.returncode, reset.stdout + reset.stderr)
         self.assertTrue(reset.stdout.startswith("RESET application-metrics workspace="))
+        self.assertIn(" agent_run=", reset.stdout)
         self.assertEqual(before, {path: path.read_bytes() for path in (ticket, state)})
 
     def test_run_contract_requires_project_workspace_layout(self) -> None:
@@ -1369,11 +1392,16 @@ class WorkflowScriptsTest(unittest.TestCase):
             encoding="utf-8",
         )
         version_tool.chmod(0o755)
+        metrics_file = helper_root / "metrics.txt"
+        metrics_file.write_text("metric 1\n", encoding="utf-8")
         environment_file = workspace / ".env"
         environment_file.write_text(
             "GRAFANA_TARGET=https://grafana.example.test\n"
             f"GRAFANA_HTTP_CLIENT={version_tool}\n"
             "GRAFANA_HTTP_CLIENT_ARGS_JSON=[\"--netrc\"]\n"
+            f"METRICS_TARGET={metrics_file}\n"
+            "METRICS_HTTP_CLIENT=\n"
+            "METRICS_HTTP_CLIENT_ARGS_JSON=[]\n"
             "GRAFANA_PROMETHEUS_DATASOURCE_UID=prometheus-main\n"
             "WORKFLOW_RUN_ID=run-1\n"
             "WORKFLOW_DATASOURCE_ACCESS=true\n"
