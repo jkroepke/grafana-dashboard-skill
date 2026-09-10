@@ -195,5 +195,11 @@ the artifact, finalizes state, and returns the terminal line. Do not assemble
 arrays, copy digests, or use `yq load(...)` for the final artifact. Inventory
 entries MUST contain no query text.
 
+`./stage-finish` automatically normalizes the bounded `stored_labels`
+projection from retained discovery evidence before validation. This preserves
+namespace/pod/cluster selector labels before other label keys, including for a
+cluster-wide generic runtime family. Do not run a repair command or edit
+`stored_labels` yourself.
+
 Its one-line output is terminal: return it unchanged immediately. Do not list
 the outbox, query YAML, inspect namespace evidence, or run any other command.

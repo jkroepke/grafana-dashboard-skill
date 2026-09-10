@@ -259,6 +259,25 @@ class DeterministicStagesTest(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+    def test_metric_record_bounds_and_repairs_stored_labels_from_discovery_evidence(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            records = root / "records" / "metrics"
+            responses = root / "evidence" / "metric-discovery" / "responses"
+            records.mkdir(parents=True)
+            responses.mkdir(parents=True)
+            labels = {f"label_{index:02d}": "value" for index in range(40)}
+            labels.update({"kubernetes_namespace": "team-a", "kubernetes_pod_name": "demo"})
+            (responses / "F00001.json").write_text(json.dumps({"status": "success", "data": [labels]}), encoding="utf-8")
+            (records / "M00001.yaml").write_text("id: M00001\nstored_labels: [obsolete]\n", encoding="utf-8")
+            self.assertEqual(1, metric_record.repair(root))
+            repaired = json.loads(subprocess.run(
+                ["yq", "eval", "-o=json", ".", str(records / "M00001.yaml")], capture_output=True, text=True, check=True,
+            ).stdout)
+            self.assertEqual(32, len(repaired["stored_labels"]))
+            self.assertEqual(["kubernetes_namespace", "kubernetes_pod_name"], repaired["stored_labels"][:2])
+            self.assertEqual(0, metric_record.repair(root))
+
     def test_metrics_discovery_probes_every_snapshot_and_summarizes_candidates(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

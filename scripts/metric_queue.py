@@ -12,6 +12,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from metric_record import RecordError, discovery_labels
+
 
 class QueueError(ValueError):
     pass
@@ -76,14 +78,11 @@ def validate_metric_checkpoint(root: Path, item: Path, record_path: Path) -> Non
     require(response_path.is_file() and not response_path.is_symlink(),
             "stored-series discovery response is unavailable")
     try:
-        response = json.loads(response_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise QueueError("stored-series discovery response is invalid") from error
-    series = response.get("data") if isinstance(response, dict) and response.get("status") == "success" else None
-    require(isinstance(series, list), "stored-series discovery response is invalid")
-    stored_labels = sorted({key for value in series if isinstance(value, dict) for key in value if isinstance(key, str)})
+        stored_labels, _ = discovery_labels(root, snapshot_id)
+    except RecordError as error:
+        raise QueueError(str(error)) from error
     require(record.get("stored_labels") == stored_labels,
-            "checkpoint stored_labels do not match the discovery response")
+            "checkpoint stored_labels do not match the bounded discovery-label projection")
     require(record.get("availability") == "OBSERVED",
             "checkpoint availability must remain OBSERVED")
     require(record.get("evidence_refs") == ["evidence/metric-facts.json", response_ref],

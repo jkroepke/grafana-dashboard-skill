@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import coordinator_stage as stage
+import metric_record
 import stage_assemble
 import stage_check
 
@@ -28,6 +29,11 @@ def finish(ticket_path: Path) -> str:
     normal_draft = root / "tmp" / normal.name
     failure_draft = root / "tmp" / failure.name
     stage.require(not (normal_draft.exists() and failure_draft.exists()), "write at most one stage draft")
+    # Discovery responses may be cluster-wide even for a target application.
+    # Normalize their bounded record projection immediately before the final
+    # validator, including records completed by an older helper version.
+    if ticket["agent"] == "application-metrics" and not failure_draft.exists():
+        metric_record.repair(root)
     if not failure_draft.exists() and not normal_draft.exists():
         stage_assemble.write_draft(normal_draft, stage_assemble.assemble(root, ticket, run, inputs))
     draft = stage_check.validate_draft(ticket, inputs, supports, root)
@@ -42,7 +48,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         print(finish(args.ticket))
-    except (OSError, stage.StageError, stage_assemble.AssembleError, KeyError, TypeError) as error:
+    except (OSError, metric_record.RecordError, stage.StageError, stage_assemble.AssembleError, KeyError, TypeError) as error:
         print(f"FAIL stage-finish: {error}", file=sys.stderr)
         return 1
     return 0
