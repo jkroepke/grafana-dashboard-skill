@@ -593,6 +593,19 @@ def approved_metric_map(inputs: dict[str, dict[str, Any]]) -> dict[str, dict[str
     return {item["id"]: item for item in inputs["metrics-contract"]["approved"]}
 
 
+def planned_row_identity(question: dict[str, Any], metric_ids: set[str], metrics: dict[str, dict[str, Any]], where: str) -> list[str]:
+    """Validate the planner-owned row identity for a label-set question."""
+    labels = string_array(question["row_identity_labels"], f"{where}.row_identity_labels", 12, item_max=128)
+    if question["result_shape"] != "LABEL_SET":
+        require(not labels, f"{where}.row_identity_labels must be empty outside LABEL_SET")
+        return labels
+    require(labels, f"{where}.row_identity_labels is required for LABEL_SET")
+    available = set().union(*(set(metrics[metric_id]["identity_labels"]) | set(metrics[metric_id]["bounded_dimensions"])
+                               for metric_id in metric_ids))
+    require(set(labels) <= available, f"{where}.row_identity_labels is absent from approved metric labels")
+    return labels
+
+
 def change_limit(limits: dict[str, int], kind: str, new_dashboard: bool) -> int:
     """Apply change budgets to updates; a new dashboard is bounded by total capacity."""
     totals = {"questions": "total_panels", "panels": "total_panels", "queries": "total_queries"}
@@ -621,7 +634,7 @@ def validate_plan(data: dict[str, Any], inputs: dict[str, dict[str, Any]], limit
     question_metrics: dict[str, set[str]] = {}
     question_fields = {
         "id", "text", "priority", "category", "metric_ids", "calculation", "result_shape",
-        "retained_labels", "no_data_requirement", "change",
+        "retained_labels", "row_identity_labels", "no_data_requirement", "change",
     }
     changed_questions = 0
     for index, record in enumerate(questions):
@@ -646,6 +659,7 @@ def validate_plan(data: dict[str, Any], inputs: dict[str, dict[str, Any]], limit
         enum(item["result_shape"], {"SCALAR", "TIME_SERIES", "LABEL_SET", "DISTRIBUTION"},
              f"{where}.result_shape")
         string_array(item["retained_labels"], f"{where}.retained_labels", 12, item_max=128)
+        planned_row_identity(item, metric_ids, metrics, where)
         text(item["no_data_requirement"], f"{where}.no_data_requirement", 256)
         question_metrics[question_id] = metric_ids
     require(changed_questions <= change_limit(limits, "questions", new_dashboard), "changed question limit exceeded")
@@ -826,7 +840,10 @@ def validate_query_pack(data: dict[str, Any], inputs: dict[str, dict[str, Any]],
         require(item["datasource_ref"] == "${datasource}",
                 f"{where}.datasource_ref must be ${{datasource}}")
         text(item["unit"], f"{where}.unit", 64, nullable=True)
-        string_array(item["result_identity"], f"{where}.result_identity", 16, item_max=128)
+        result_identity = string_array(item["result_identity"], f"{where}.result_identity", 16, item_max=128)
+        if role == "PANEL" and questions[question_id]["result_shape"] == "LABEL_SET":
+            require(result_identity == questions[question_id]["row_identity_labels"],
+                    f"{where}.result_identity must exactly match the planned LABEL_SET row identity")
         text(item["no_data_semantics"], f"{where}.no_data_semantics", 256)
         text(item["expected_cardinality"], f"{where}.expected_cardinality", 256)
         string_array(item["assumptions"], f"{where}.assumptions", 4, item_max=256)

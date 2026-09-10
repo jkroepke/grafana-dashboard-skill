@@ -167,13 +167,6 @@ def complete_stage(ticket_path: Path, records: list[dict[str, object]]) -> str:
         raise ValueError(draft_check.stderr.strip() or "preset artifact draft validation failed")
     final = agent_root / ticket["outputs"]["artifact"]
     os.replace(draft, final)
-    stage.run_yq_update(
-        agent_root / "state.yaml",
-        '.status = "DONE" | .completed = ((.completed // []) + [strenv(ARTIFACT_REF)] | unique) | '
-        '.pending = [] | .next_action = "complete"',
-        {"ARTIFACT_REF": str(final.relative_to(agent_root))},
-    )
-    stage.coordinator_artifact.validate_workspace(agent_root)
     terminal = subprocess.run(
         [sys.executable, str(Path(__file__).with_name("stage_check.py")), "--ticket", str(ticket_path)],
         capture_output=True, text=True, check=False,

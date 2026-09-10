@@ -64,8 +64,9 @@ inventory when it matches the current snapshot manifest. Never delete either
 evidence directory merely to make a helper run again.
 
 Only now read the relevant parts of `knowledge/workflow/artifacts.md` and
-`knowledge/metrics/classification.md` to assemble the assigned artifact. Do
-not read runner implementation sources.
+`knowledge/metrics/classification.md` to complete the assigned metric records.
+The deterministic assembler owns the final artifact. Do not read runner
+implementation sources.
 
 Treat `records/pending/` as the metric-family work queue and `records/done/` as
 its completed queue. Only after both commands pass, process one metric family at
@@ -160,8 +161,9 @@ response or the shortlist. The file may contain more than one namespace and is
 the sole authority for downstream Kubernetes/Istio preset validation and
 queries.
 
-Publish its path, digest, and count as `namespace_scope` in the application
-artifact. The scope evidence is immutable after this stage. If no namespace can
+Write that verified namespace array once to `evidence/namespace-scope.json`.
+`./stage-finish` publishes its absolute path, digest, and count
+as `namespace_scope`; the scope evidence is immutable after this stage. If no namespace can
 be verified, return a bounded failure report; the fixed preset stage requires
 the scope binding.
 
@@ -187,17 +189,11 @@ Always surface a verified process/application start-timestamp metric as a capabi
 
 ## Artifact and response
 
-Assemble the assigned `application-metrics.yaml` shortlist from the small metric
-records with `yq` using the contract in `knowledge/workflow/artifacts.md`.
-Inventory entries MUST contain no query text. Avoid duplicate family/member
-entries and keep large evidence in referenced evidence files. Include
-`catalog_ref` (or `null`) and `omission_counts` (`{}` when none) in the
-shortlist top level. Its payload fields are exactly `catalog_ref`, `metrics`,
-`omission_counts`, and `namespace_scope`.
+Run `./stage-finish`. It reads only the fixed metric records and namespace-scope
+evidence, derives the ticket envelope and digest binding, validates and promotes
+the artifact, finalizes state, and returns the terminal line. Do not assemble
+arrays, copy digests, or use `yq load(...)` for the final artifact. Inventory
+entries MUST contain no query text.
 
-Before moving `tmp/application-metrics.yaml` to `outbox/`, run
-`./stage-check --draft`; do not manually invoke
-the underlying workspace or artifact validators.
-
-Run `./stage-check` after writing the assigned artifact or failure report.
-Return its bounded response.
+Its one-line output is terminal: return it unchanged immediately. Do not list
+the outbox, query YAML, inspect namespace evidence, or run any other command.

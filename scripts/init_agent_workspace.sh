@@ -85,6 +85,7 @@ tool_link() {
 
 tool_link "$agent_root/workflow" "$repository_root/scripts/workflow"
 tool_link "$agent_root/stage-check" "$repository_root/scripts/stage_check.py"
+tool_link "$agent_root/stage-finish" "$repository_root/scripts/stage_finish.py"
 
 case "$agent_id" in
   application-metrics)
@@ -94,20 +95,32 @@ case "$agent_id" in
     tool_link "$agent_root/metric-record" "$repository_root/scripts/metric_record.py"
     tool_link "$agent_root/metric-queue" "$repository_root/scripts/metric_queue.py"
     tool_link "$agent_root/prometheus-reader" "$repository_root/scripts/prometheus_reader.py"
+    tool_link "$agent_root/stage-failure-report" "$repository_root/scripts/stage_failure_report.py"
     ;;
   promql-builder)
     tool_link "$agent_root/promql-templates" "$repository_root/scripts/promql_templates.py"
     tool_link "$agent_root/query-work-partition" "$repository_root/scripts/query_work_partition.py"
+    tool_link "$agent_root/stage-failure-report" "$repository_root/scripts/stage_failure_report.py"
     ;;
   dashboard-architect)
     tool_link "$agent_root/dashboard-capabilities" "$repository_root/scripts/dashboard_capabilities.py"
+    tool_link "$agent_root/stage-failure-report" "$repository_root/scripts/stage_failure_report.py"
     ;;
   metrics-reviewer)
     tool_link "$agent_root/metrics-review-probes" "$repository_root/scripts/metrics_review_probes.py"
     tool_link "$agent_root/metric-disposition" "$repository_root/scripts/metric_disposition.py"
+    tool_link "$agent_root/metrics-contract-assemble" "$repository_root/scripts/metrics_contract_assemble.py"
+    tool_link "$agent_root/stage-failure-report" "$repository_root/scripts/stage_failure_report.py"
     ;;
   promql-reviewer)
     tool_link "$agent_root/prometheus-probe-matrix" "$repository_root/scripts/prometheus_probe_matrix.py"
+    tool_link "$agent_root/stage-failure-report" "$repository_root/scripts/stage_failure_report.py"
+    ;;
+  dashboard-builder)
+    tool_link "$agent_root/stage-failure-report" "$repository_root/scripts/stage_failure_report.py"
+    ;;
+  dashboard-reviewer)
+    tool_link "$agent_root/stage-failure-report" "$repository_root/scripts/stage_failure_report.py"
     ;;
   dashboard-publisher)
     tool_link "$agent_root/grafana-publish" "$repository_root/scripts/grafana_publish.py"

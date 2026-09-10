@@ -156,6 +156,10 @@ class SnapshotMetricsTest(unittest.TestCase):
                 str(root / "scripts" / "metric_disposition.py"),
                 (workspace / "metric-disposition").readlink().as_posix(),
             )
+            self.assertEqual(
+                str(root / "scripts" / "metrics_contract_assemble.py"),
+                (workspace / "metrics-contract-assemble").readlink().as_posix(),
+            )
 
     def test_dashboard_architect_workspace_provides_capability_wrapper(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -171,6 +175,10 @@ class SnapshotMetricsTest(unittest.TestCase):
             self.assertEqual(
                 str(root / "scripts" / "dashboard_capabilities.py"),
                 (workspace / "dashboard-capabilities").readlink().as_posix(),
+            )
+            self.assertEqual(
+                str(root / "scripts" / "stage_finish.py"),
+                (workspace / "stage-finish").readlink().as_posix(),
             )
 
     def test_promql_builder_workspace_provides_work_partition_wrapper(self) -> None:
@@ -188,6 +196,24 @@ class SnapshotMetricsTest(unittest.TestCase):
                 str(root / "scripts" / "query_work_partition.py"),
                 (workspace / "query-work-partition").readlink().as_posix(),
             )
+            self.assertEqual(
+                str(root / "scripts" / "stage_finish.py"),
+                (workspace / "stage-finish").readlink().as_posix(),
+            )
+
+    def test_dashboard_review_workspace_provides_assembly_and_failure_wrappers(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialized = subprocess.run(
+                [str(INIT_WORKSPACE), str(root), "demo", "run-001", "dashboard-reviewer"],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(0, initialized.returncode, initialized.stdout + initialized.stderr)
+            workspace = Path(initialized.stdout.strip())
+            self.assertEqual(str(root / "scripts" / "stage_finish.py"),
+                             (workspace / "stage-finish").readlink().as_posix())
+            self.assertEqual(str(root / "scripts" / "stage_failure_report.py"),
+                             (workspace / "stage-failure-report").readlink().as_posix())
 
     def test_streams_stdin_into_small_family_snapshots(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

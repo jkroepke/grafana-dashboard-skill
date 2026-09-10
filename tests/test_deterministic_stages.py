@@ -15,17 +15,108 @@ sys.path.insert(0, str(REPOSITORY / "scripts"))
 import metric_facts  # noqa: E402
 import metric_disposition  # noqa: E402
 import dashboard_capabilities  # noqa: E402
+import dashboard_integrity  # noqa: E402
 import metrics_discovery  # noqa: E402
 import metrics_review_probes  # noqa: E402
+import metrics_contract_assemble  # noqa: E402
 import metric_record  # noqa: E402
 import prometheus_probe_matrix  # noqa: E402
 import promql_templates  # noqa: E402
 import query_work_partition  # noqa: E402
+import stage_check  # noqa: E402
+import stage_assemble  # noqa: E402
+import stage_failure_report  # noqa: E402
 import validate_workflow_artifact  # noqa: E402
 from grafana_dry_run import replacement  # noqa: E402
 
 
 class DeterministicStagesTest(unittest.TestCase):
+    def test_application_assembler_derives_scope_digest_and_fixed_records(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "records" / "metrics").mkdir(parents=True)
+            (root / "records" / "metrics" / "M00001.yaml").write_text("id: M00001\n", encoding="utf-8")
+            (root / "evidence").mkdir()
+            (root / "evidence" / "namespace-scope.json").write_text('["team-a", "team-b"]\n', encoding="utf-8")
+            ticket = {"run_id": "run-test", "revision": 1, "agent": "application-metrics",
+                      "inputs": {"run-contract": {"sha256": "sha256:" + "0" * 64}}}
+            payload = stage_assemble.application(root, ticket)
+            self.assertEqual("DONE", payload["status"])
+            self.assertEqual([{"id": "M00001"}], payload["metrics"])
+            self.assertEqual(2, payload["namespace_scope"]["namespace_count"])
+            self.assertEqual({}, payload["omission_counts"])
+
+    def test_dashboard_plan_assembler_uses_fixed_directories_and_ticket_limits(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, value in (("panel-groups", "G001"), ("questions", "Q001"), ("panels", "P001"), ("consumers", "C001")):
+                directory = root / "records" / name
+                directory.mkdir(parents=True)
+                (directory / f"{value}.yaml").write_text(f"id: {value}\n", encoding="utf-8")
+            ticket = {"run_id": "run-test", "revision": 1, "agent": "dashboard-architect",
+                      "inputs": {"run-contract": {"sha256": "sha256:" + "0" * 64}}}
+            payload = stage_assemble.dashboard_plan(root, ticket, {"limits": {"total_panels": 8}})
+            self.assertEqual([{"id": "Q001"}], payload["questions"])
+            self.assertEqual([], payload["omissions"])
+            self.assertEqual({"total_panels": 8}, payload["budgets"])
+
+    def test_stage_assembler_draft_is_idempotent_and_refuses_changed_checkpoints(self) -> None:
+        with TemporaryDirectory() as temporary:
+            draft = Path(temporary) / "tmp" / "artifact.yaml"
+            payload = {"schema_version": 1, "artifact_type": "example"}
+            stage_assemble.write_draft(draft, payload)
+            stage_assemble.write_draft(draft, payload)
+            with self.assertRaisesRegex(stage_assemble.AssembleError, "does not match"):
+                stage_assemble.write_draft(draft, {**payload, "status": "PASS"})
+
+    def test_failure_report_writer_rejects_non_regular_evidence(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with self.assertRaisesRegex(stage_failure_report.FailureError, "evidence"):
+                stage_failure_report.require((root / "missing.json").is_file(), "evidence is not a regular file")
+
+    def test_dashboard_integrity_report_is_idempotent(self) -> None:
+        with TemporaryDirectory() as temporary:
+            output = Path(temporary) / "evidence" / "integrity.json"
+            report = {"schema_version": "1", "kind": "dashboard-integrity-report", "status": "PASS"}
+            dashboard_integrity.write_report(output, report)
+            dashboard_integrity.write_report(output, report)
+            with self.assertRaisesRegex(dashboard_integrity.IntegrityError, "does not match"):
+                dashboard_integrity.write_report(output, {**report, "status": "FAIL"})
+
+    def test_label_set_requires_planner_declared_row_identity(self) -> None:
+        question = {"result_shape": "LABEL_SET", "row_identity_labels": ["kubernetes_namespace", "kubernetes_pod_name"]}
+        metrics = {"AM001": {"identity_labels": ["kubernetes_namespace", "kubernetes_pod_name"], "bounded_dimensions": []}}
+        self.assertEqual(
+            ["kubernetes_namespace", "kubernetes_pod_name"],
+            validate_workflow_artifact.planned_row_identity(question, {"AM001"}, metrics, "questions[0]"),
+        )
+        with self.assertRaisesRegex(validate_workflow_artifact.ArtifactError, "must be empty"):
+            validate_workflow_artifact.planned_row_identity(
+                {"result_shape": "TIME_SERIES", "row_identity_labels": ["kubernetes_pod_name"]}, {"AM001"}, metrics, "questions[0]",
+            )
+
+    def test_stage_check_finalizes_terminal_state(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "outbox").mkdir()
+            artifact = root / "outbox" / "application-metrics.yaml"
+            artifact.write_text("artifact_type: application-metrics\nstatus: DONE\n", encoding="utf-8")
+            (root / "state.yaml").write_text(
+                "schema_version: 1\nagent: application-metrics\nrun_id: run-test\nstatus: IN_PROGRESS\n"
+                "completed: [records/done/F00001.yaml]\npending: [inbox/job.yaml]\nnext_action: process-ticket\n",
+                encoding="utf-8",
+            )
+            stage_check.finalize_state(root, artifact, "DONE")
+            state = json.loads(subprocess.run(
+                ["yq", "eval", "-o=json", ".", str(root / "state.yaml")],
+                capture_output=True, text=True, check=True,
+            ).stdout)
+            self.assertEqual("DONE", state["status"])
+            self.assertEqual([], state["pending"])
+            self.assertEqual("complete", state["next_action"])
+            self.assertIn("outbox/application-metrics.yaml", state["completed"])
+
     def test_new_dashboards_use_total_capacity_not_update_change_budget(self) -> None:
         limits = {
             "changed_questions": 12, "changed_panels": 12, "changed_queries": 24,
@@ -241,6 +332,30 @@ class DeterministicStagesTest(unittest.TestCase):
                     root, available, "rejected", "kubernetes-metrics", ["I004"],
                     "NO_TARGET_SERIES", "No series were observed.",
                 )
+
+    def test_metrics_contract_assembler_reads_fixed_checkpoint_paths(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            approved = root / "records" / "approved"
+            approved.mkdir(parents=True)
+            (approved / "AM001.yaml").write_text("id: AM001\n", encoding="utf-8")
+            (root / "records" / "selector-contract.yaml").write_text(
+                "application_namespace_label: null\napplication_pod_label: null\nkubernetes_namespace_label: null\n"
+                "kubernetes_pod_label: null\nistio_source_namespace_label: null\nistio_destination_namespace_label: null\n"
+                "cluster_label: null\nfixed_selector_refs: []\npopulation_notes: []\nscrape_interval_ref: null\n",
+                encoding="utf-8",
+            )
+            ticket = {
+                "run_id": "run-test", "revision": 1,
+                "inputs": {"run-contract": {"sha256": "sha256:" + "0" * 64}},
+            }
+            payload = metrics_contract_assemble.assemble(root, ticket, ["Kubernetes evidence is unavailable."])
+            self.assertEqual([{"id": "AM001"}], payload["approved"])
+            self.assertEqual([], payload["rejected"])
+            self.assertEqual(["Kubernetes evidence is unavailable."], payload["unresolved"])
+            draft = root / "tmp" / "metrics-contract.yaml"
+            metrics_contract_assemble.write_draft(draft, payload)
+            metrics_contract_assemble.write_draft(draft, payload)
 
     def test_dashboard_capabilities_projects_only_planning_fields(self) -> None:
         with TemporaryDirectory() as temporary:

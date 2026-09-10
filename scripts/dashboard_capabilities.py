@@ -45,7 +45,7 @@ def emit(contract_path: Path, output: Path) -> dict[str, Any]:
         "metrics_contract_sha256": "sha256:" + hashlib.sha256(contract_path.read_bytes()).hexdigest(),
         "totals": {"approved": len(capabilities), "plan": totals["PLAN"], "preserve_only": totals["PRESERVE_ONLY"]},
         "question_contract": {
-            "required_fields": ["id", "text", "priority", "category", "metric_ids", "calculation", "result_shape", "retained_labels", "no_data_requirement", "change"],
+            "required_fields": ["id", "text", "priority", "category", "metric_ids", "calculation", "result_shape", "retained_labels", "row_identity_labels", "no_data_requirement", "change"],
             "priority": ["MUST", "SHOULD"],
             "category": ["BUSINESS", "PROCESS", "KUBERNETES"],
             "result_shape": ["SCALAR", "TIME_SERIES", "LABEL_SET", "DISTRIBUTION"],

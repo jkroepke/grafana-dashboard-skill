@@ -31,8 +31,8 @@ approved bindings, existing source, output/candidate/render paths, pinned
 versions, repository build commands, limits, and configured capabilities.
 
 The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Checkpoint each construction unit
-and validation result as a small YAML record with `yq`, updating `state.yaml`
-before moving on. Keep rendered JSON and command outputs in `evidence/`. Resume
+and validation result as a small YAML record. Do not update `state.yaml` before
+moving on. Keep rendered JSON and command outputs in `evidence/`. Resume
 from the filesystem; never retain the whole construction history in context.
 
 Build only from the ticketed metrics contract, plan, query pack, and query review.
@@ -70,6 +70,10 @@ preservation checks. Verify:
 
 Only after that integrity check passes may you write a `PASS` build artifact. A failure is a build `FAIL`, never permission to edit an approved expression.
 
-Write a `PASS` `dashboard-build.yaml` using `knowledge/workflow/artifacts.md` only after those commands pass. Write `failure-report.yaml` for a failed or blocked build.
+After those commands pass, write one `records/local-schema/*.yaml` checkpoint
+containing only `status: PASS|UNVERIFIED`, then run
+`./stage-finish`. It derives file/input digests, query IDs, and
+the mechanical manifest. For a failed or blocked build, write evidence and run
+`./stage-failure-report --finish`.
 
-Run `./workflow stage-check` after writing the assigned artifact or failure report. Return its bounded response.
+Its one-line output is terminal: return it unchanged immediately and run no further command.

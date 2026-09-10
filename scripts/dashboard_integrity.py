@@ -78,7 +78,7 @@ def read_json_bytes(raw: bytes, label: str) -> dict[str, Any]:
     return value
 
 
-def check(ticket_path: Path) -> None:
+def check(ticket_path: Path) -> dict[str, str]:
     ticket, run, _, _, inputs, supports = stage.validate_ticket(ticket_path)
     bindings = {**inputs, **supports}
     agent = ticket["agent"]
@@ -96,14 +96,34 @@ def check(ticket_path: Path) -> None:
     require(expected == query_parity.v2_consumers(rendered), "approved/rendered query parity failed")
     if agent != "dashboard-publisher":
         non_prometheus.verify(rendered, baseline(run))
+    return {
+        "schema_version": "1",
+        "kind": "dashboard-integrity-report",
+        "status": "PASS",
+        "rendered_sha256": stage.sha256(rendered),
+        "query_pack_sha256": ticket["inputs"]["query-pack"]["sha256"],
+    }
+
+
+def write_report(path: Path, report: dict[str, str]) -> None:
+    encoded = json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n"
+    if path.exists() or path.is_symlink():
+        require(path.is_file() and not path.is_symlink() and path.read_text(encoding="utf-8") == encoded,
+                "dashboard integrity report does not match current inputs")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(encoded, encoding="utf-8")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ticket", type=Path, default=Path("inbox/job.yaml"))
+    parser.add_argument("--report", type=Path, help="write an idempotent bounded JSON integrity report")
     args = parser.parse_args()
     try:
-        check(args.ticket)
+        report = check(args.ticket)
+        if args.report is not None:
+            write_report(args.report, report)
     except (
         stage.StageError,
         artifact.ArtifactError,

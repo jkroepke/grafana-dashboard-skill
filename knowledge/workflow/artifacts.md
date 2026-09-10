@@ -14,6 +14,7 @@ protocol throughout every stage.
 - Any upstream change invalidates all downstream approvals.
 - Only `promql-builder` may author or change query text that can enter the dashboard.
 - Use `./workflow stage-check` to validate the assigned artifact and produce the stage response.
+- A `stage-check` response is terminal: immediately return that exact line and run no further command, inspection, or explanation.
 - Dashboard build, review, and publication stages use `./workflow dashboard-integrity` before their terminal action. It derives fixed paths and runs the required mechanical checks from the ticket.
 - The coordinator runs `./workflow chain-check` before `./workflow promote`.
 - The run contract must record Dashboard Schema V2 and a Grafana version of v13 or later. This workflow rejects classic dashboard sources and does not perform migrations.
@@ -28,10 +29,12 @@ The coordinator creates `dashboards/<project-name>/workspace`. Each role uses
 names below the project workspace MUST NOT contain customer, cluster,
 environment, endpoint, dashboard-resource identity, or credentials.
 
-New structured files are YAML created or updated with Mike Farah `yq` v4.
-Agents checkpoint small records during work and use `yq` to assemble the stage
-artifact in `outbox/`; they do not emit a large artifact body through one write
-tool call. Workflow artifacts with `.json` or `.yml` filenames are invalid.
+Agents may use Mike Farah `yq` v4 for one small decision checkpoint during
+work. Role-local deterministic assemblers own every normal stage artifact:
+they collect fixed records, derive envelopes/digests/status fields, and write
+the draft. Agents must not use `yq` to assemble arrays, project objects, load
+multiple files, or construct a final artifact. Workflow artifacts with `.json`
+or `.yml` filenames are invalid.
 Rendered dashboards remain JSON.
 
 Place the candidate Jsonnet beside the intended final source with a neutral hidden suffix such as `.candidate.jsonnet`, so relative imports behave identically. The builder MUST NOT write the final path.
@@ -81,7 +84,9 @@ BLOCKED <stage> report=<neutral-path>.yaml sha256=sha256:<64-lowercase-hex>
 The referenced workflow file MUST have the exact `.yaml` suffix. Do not include
 metrics, queries, findings, source, rendered JSON, API responses, or rejected
 alternatives in the response. `./workflow stage-check` produces the response;
-the coordinator accepts it through its fixed control operation.
+the coordinator accepts it through its fixed control operation. Its output is
+terminal: do not list files, query YAML, inspect evidence, or otherwise verify
+the artifact after it prints the line.
 
 ## Run contract
 
@@ -121,8 +126,8 @@ and repeats the exact `namespace_scope_ref` and `namespace_scope_sha256`; the
 The workflow validator requires both to match the application artifact. The Kubernetes agent
 uses that set, including every member when it contains multiple namespaces, for
 every discovery request. During discovery analysts write one YAML file per
-metric family under `records/metrics/`, update `state.yaml`, and assemble the
-bounded shortlist with `yq`. `catalog_ref` may reference an index for
+metric family under `records/metrics/`; `stage-finish` creates
+the bounded shortlist. `catalog_ref` may reference an index for
 additional small YAML records. Retrieve records selectively; do not load the
 full catalog into an agent context.
 
@@ -253,12 +258,11 @@ Required inputs: `run-contract` and at least one metric shortlist.
 
 ## Dashboard plan
 
-`dashboard-architect` writes `dashboard-plan.yaml`, at most 64 KiB, containing
-exact arrays assembled from separate question, panel, consumer, and omission
-YAML records:
+`stage-finish` writes `dashboard-plan.yaml`, at most 64 KiB, from
+fixed question, panel, consumer, and omission checkpoint directories:
 
 - `panel_groups`: `{id, title, placement, order}`
-- `questions`: `{id, text, priority, category, metric_ids, calculation, result_shape, retained_labels, no_data_requirement, change}`
+- `questions`: `{id, text, priority, category, metric_ids, calculation, result_shape, retained_labels, row_identity_labels, no_data_requirement, change}`
 - `panels`: `{id, question_ids, group_id, visualization, placement, size, change}`
 - `required_consumers`: variable/annotation items `{id, role, rendered_name, purpose, metric_ids}`
 - `omissions`: `{id, reason}`
@@ -273,6 +277,11 @@ Question `priority` is exactly `MUST` or `SHOULD`; `category` is exactly
 `BUSINESS`, `PROCESS`, or `KUBERNETES`; and `result_shape` is exactly
 `SCALAR`, `TIME_SERIES`, `LABEL_SET`, or `DISTRIBUTION`. These are closed
 enums, not free-form severity labels.
+
+`LABEL_SET` questions require a non-empty `row_identity_labels` tuple, formed
+only from approved metric labels. Other result shapes set it to `[]`. Panel
+query `result_identity` must exactly equal the planned tuple; live probes test
+that the returned tuple is unique.
 
 `change` is `NEW`, `MODIFIED`, or `PRESERVED`. New/modified and total records obey separate run limits. The plan contains no query text, selector expression, plugin payload, Jsonnet, or rendered JSON.
 
@@ -292,9 +301,9 @@ Required inputs: `run-contract`, `metrics-contract`.
 
 ## Query pack
 
-`promql-builder` writes `query-pack.yaml`, at most 128 KiB. It writes one YAML
-record per query immediately after authoring and validation, then assembles the
-pack with `yq`. It is the only artifact that may contain final Prometheus query
+`promql-builder` writes one YAML record per query immediately after authoring
+and validation; `stage-finish` creates `query-pack.yaml`, at most 128
+KiB. It is the only artifact that may contain final Prometheus query
 text. `queries` contains at most the run's total-query limit; new/modified
 queries obey `changed_queries`.
 
@@ -383,9 +392,10 @@ Required inputs: `run-contract`, `metrics-contract`, `dashboard-plan`, `query-pa
 
 ## Dashboard build
 
-`dashboard-builder` writes the candidate, rendered JSON, and a
-`dashboard-build.yaml` artifact at most 32 KiB. Construction decisions and
-validation results are checkpointed separately before manifest assembly:
+`dashboard-builder` writes the candidate and rendered JSON;
+`stage-finish` creates its `dashboard-build.yaml` artifact at most
+32 KiB from current files and exactly one
+`records/local-schema/*.yaml` checkpoint containing `{status: PASS|UNVERIFIED}`:
 
 ```yaml
 {
@@ -417,8 +427,8 @@ Required inputs: `run-contract`, `metrics-contract`, `dashboard-plan`, `query-pa
 
 ## Dashboard review
 
-`dashboard-reviewer` writes `dashboard-review.yaml`, at most 32 KiB, assembling
-separately checkpointed checks/findings with `yq`:
+`stage-finish` writes `dashboard-review.yaml`, at most 32 KiB,
+from fixed checkpointed checks/findings:
 
 ```yaml
 {
@@ -448,9 +458,10 @@ Required inputs: `run-contract`, `dashboard-plan`, `query-pack`, `query-review`,
 ## Failure report
 
 When a normal artifact cannot be produced, first write one or more
-evidence files below the relevant agent workspace, then create
-`failure-report.yaml` in the assigned outbox. `./workflow stage-check`
-validates the specialist report. The coordinator uses its fixed
+evidence files below the relevant agent workspace, then run local
+`./stage-failure-report --finish`. It validates and promotes the ticket-bound
+draft, finalizes state, and emits the terminal line.
+The coordinator uses its fixed
 `failure-report` action only for a coordinator-owned blocker.
 
 A failure report is at most 16 KiB and contains only:

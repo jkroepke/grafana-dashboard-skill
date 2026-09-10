@@ -28,9 +28,11 @@ builder conclusions or the complete conversation. It supplies the approved
 bindings, targeted evidence, output path, limits, and configured datasource access.
 
 The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Review one query record at a time,
-checkpoint its result/finding as a bounded YAML file with `yq`, and update
-`state.yaml`. Resume from the queue; never retain every query or finding in
+checkpoint its result/finding as a bounded YAML file. Do not update `state.yaml`;
+the checkpoint files are the resumable work log. Resume from the queue; never retain every query or finding in
 context for a final write.
+Write only findings to `records/findings/`; an empty or absent directory is the
+only route to a normal PASS review.
 
 Independently check:
 
@@ -60,11 +62,12 @@ is the only reason to inspect its retained evidence.
 
 ## Artifact and response
 
-Assemble `query-review.yaml` from the per-query review records with `yq` using
-`knowledge/workflow/artifacts.md`. Bind the decision to the exact query-pack
-digest. Findings state the defect and required semantics/evidence but MUST NOT
-contain a corrected query.
+With no findings, run `./stage-finish`; it binds the exact query-pack
+digest/count and deterministic probe report. A finding means the normal PASS
+artifact is impossible: write evidence and run `./stage-failure-report --finish`.
+Findings state the defect and required semantics/evidence but MUST NOT contain
+a corrected query.
 
 Return `PASS` only when there are no findings and all mandatory validation available to the task has completed. When live access is unavailable, record the live-validation gap explicitly according to the task's policy.
 
-Run `./workflow stage-check` after writing the assigned artifact or failure report. Return its bounded response.
+Its one-line output is terminal: return it unchanged immediately and run no further command.

@@ -32,9 +32,12 @@ supplies the approved bindings, candidate/rendered evidence, pinned versions,
 output path, limits, and configured target access.
 
 The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Checkpoint each independent check,
-finding, and target-validation result in its own bounded YAML file with `yq`,
-then update `state.yaml`. Keep complete responses in `evidence/` and resume from
+finding, and target-validation result in its own bounded YAML file. Do not
+update `state.yaml`. Keep complete responses in `evidence/` and resume from
 the queue instead of accumulating the review in context.
+Write findings only below `records/findings/`. When target validation is
+configured, invoke the checked dry-run wrapper with response path
+`evidence/grafana-dry-run.json`; the assembler accepts no alternate path.
 
 Review only the ticketed candidate and upstream artifacts.
 
@@ -112,9 +115,10 @@ or patch rendered JSON.
 
 ## Artifact and response
 
-Assemble `dashboard-review.yaml` from the checkpointed results with `yq` using
-`knowledge/workflow/artifacts.md`. Bind the decision to the exact build-manifest,
-candidate-source, rendered-JSON, and query-pack digests. Limit findings to the
+With no findings, run `./stage-finish`; it binds the exact
+build-manifest, candidate, rendered, and query-pack digests. Its configured
+dry-run input is the fixed `evidence/grafana-dry-run.json` response produced by
+the checked wrapper. Do not assemble the review with `yq`. Limit findings to the
 declared cap.
 
 Classify each finding by owner:
@@ -123,6 +127,8 @@ Classify each finding by owner:
 - `QUERY_PACK_CHANGE_REQUIRED`: invalidate query review and route to `promql-builder`
 - `METRICS_OR_PLAN_CHANGE_REQUIRED`: invalidate all dependent stages and route to the owning earlier stage
 
-Never provide replacement source or PromQL in findings. Set `PASS` only with no findings and all applicable validation complete.
+Never provide replacement source or PromQL in findings. A finding means the
+normal PASS artifact is impossible: write evidence and run
+`./stage-failure-report --finish`.
 
-Run `./workflow stage-check` after writing the assigned artifact or failure report. Return its bounded response.
+Its one-line output is terminal: return it unchanged immediately and run no further command.

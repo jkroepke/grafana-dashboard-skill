@@ -42,9 +42,13 @@ On a resumed stage, `./dashboard-capabilities` verifies and reuses the same
 ticket-bound capability summary. Do not delete it or reconstruct it with `yq`.
 
 The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Checkpoint each question, panel,
-consumer, and omission as its own bounded YAML record with `yq`, updating
-`state.yaml` after each decision. Resume from these files and never retain the
+consumer, and omission as its own bounded YAML record. Do not update
+`state.yaml`; checkpoint files are the resumable work log. Resume from these files and never retain the
 complete plan in context for one final write.
+
+Use only these fixed directories: `records/panel-groups/`,
+`records/questions/`, `records/panels/`, `records/consumers/`, and
+`records/omissions/`. The assembler reads no other checkpoint paths.
 
 Select operational questions in this order:
 
@@ -58,8 +62,13 @@ Each question must reference approved metric IDs and state the desired result sh
 Write each question record with exactly: `id`, `text`, `priority`
 (`MUST|SHOULD`), `category` (`BUSINESS|PROCESS|KUBERNETES`), `metric_ids`,
 `calculation`, `result_shape` (`SCALAR|TIME_SERIES|LABEL_SET|DISTRIBUTION`),
-`retained_labels`, `no_data_requirement`, and `change`
+`retained_labels`, `row_identity_labels`, `no_data_requirement`, and `change`
 (`NEW|MODIFIED|PRESERVED`).
+
+For `LABEL_SET`, `row_identity_labels` is a non-empty ordered tuple of
+approved labels that uniquely identifies each displayed row. For every per-pod
+view, use `kubernetes_namespace`, `kubernetes_pod_name`; use `[]` for every
+other result shape. The query builder must copy this exact tuple.
 
 Respect the declared question, panel, and query budgets. Prefer one panel that answers a coherent question over metric-per-panel coverage. Preserve existing unrelated panels on updates, and list intentional omissions with reasons.
 
@@ -82,9 +91,10 @@ query-pack record for it.
 
 ## Artifact and response
 
-Assemble a `PASS` `dashboard-plan.yaml` from the small records with `yq` using
-`knowledge/workflow/artifacts.md`. When a required question cannot be supported
+Run `./stage-finish` to collect the fixed checkpoint directories and derive the
+PASS envelope, input digests, and budgets. Do not assemble the plan with `yq`.
+When a required question cannot be supported
 or the plan cannot fit the declared budgets without losing the user's objective,
-write `failure-report.yaml` instead.
+write its evidence first, then run `./stage-failure-report --finish` instead.
 
-Run `./workflow stage-check` after writing the assigned artifact or failure report. Return its bounded response.
+Its one-line output is terminal: return it unchanged immediately and run no further command.

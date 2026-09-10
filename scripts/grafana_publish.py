@@ -89,11 +89,6 @@ def write_artifact(
     require(check.returncode == 0, check.stderr.strip() or "publish report draft validation failed")
     final = agent_root / ticket["outputs"]["artifact"]
     os.replace(draft, final)
-    stage.run_yq_update(
-        agent_root / "state.yaml",
-        '.status = "PASS" | .completed = ((.completed // []) + [strenv(ARTIFACT_REF)] | unique) | .pending = [] | .next_action = "complete"',
-        {"ARTIFACT_REF": str(final.relative_to(agent_root))},
-    )
     terminal = subprocess.run([sys.executable, str(Path(__file__).with_name("stage_check.py"))], cwd=agent_root, capture_output=True, text=True, check=False)
     require(terminal.returncode == 0, terminal.stderr.strip() or "publish report validation failed")
     return terminal.stdout.strip()
@@ -126,11 +121,6 @@ def write_failure(ticket_path: Path) -> str:
     require(check.returncode == 0, check.stderr.strip() or "publish failure report draft validation failed")
     final = agent_root / ticket["outputs"]["failure_report"]
     os.replace(draft, final)
-    stage.run_yq_update(
-        agent_root / "state.yaml",
-        '.status = "FAIL" | .completed = ((.completed // []) + [strenv(ARTIFACT_REF)] | unique) | .pending = [] | .next_action = "complete"',
-        {"ARTIFACT_REF": str(final.relative_to(agent_root))},
-    )
     terminal = subprocess.run([sys.executable, str(Path(__file__).with_name("stage_check.py"))], cwd=agent_root, capture_output=True, text=True, check=False)
     require(terminal.returncode == 0, terminal.stderr.strip() or "publish failure report validation failed")
     return terminal.stdout.strip()

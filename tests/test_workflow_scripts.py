@@ -292,6 +292,7 @@ class WorkflowScriptsTest(unittest.TestCase):
                 "calculation": "rate",
                 "result_shape": "TIME_SERIES",
                 "retained_labels": ["outcome"],
+                "row_identity_labels": [],
                 "no_data_requirement": "Show missing data as unknown.",
                 "change": "NEW",
             }],

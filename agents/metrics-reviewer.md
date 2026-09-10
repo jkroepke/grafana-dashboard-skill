@@ -50,9 +50,10 @@ never construct IDs with a shell loop or `printf`:
 ```
 
 The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Review one shortlist record at a
-time and immediately checkpoint its approved, rejected, not-considered, or
-unresolved disposition in a small YAML file with `yq`. Update `state.yaml` after
-each decision and resume from it; never accumulate all review decisions in
+time and immediately checkpoint each approved decision in
+`records/approved/<approved-id>.yaml`. Rejection/not-considered checkpoints are
+created by `./metric-disposition`; store the one selector contract in
+`records/selector-contract.yaml`. Never accumulate all review decisions in
 context for a final write.
 
 Shortlist records are immutable evidence. Inspect their evidence, limitations,
@@ -99,16 +100,25 @@ For an update, account for metric families used by every Prometheus query that w
 
 ## Artifact and response
 
-Assemble `metrics-contract.yaml` from the checkpoint records with `yq` using
-`knowledge/workflow/artifacts.md`. It is a `PASS` artifact only when every
+Assemble the draft with the deterministic wrapper, never a multi-file `yq`
+`load(...)` expression:
+
+```text
+./metrics-contract-assemble \
+  --unresolved "Kubernetes/Istio series API evidence is unavailable for the verified namespace scope." \
+  --unresolved "Dashboard viability is limited to approved application capabilities."
+```
+
+It reads the fixed checkpoint paths, copies ticket digests, and writes only
+`tmp/metrics-contract.yaml`. Omit `--unresolved` when there are no gaps. It is
+a `PASS` artifact only when every
 `PLAN` capability has sufficient evidence, every `PRESERVE_ONLY` uncertainty is
 explicit, and all blocking selector/population contradictions are resolved.
-Write `failure-report.yaml` otherwise. `PASS` does not approve any query.
+Otherwise write evidence and run `./stage-failure-report --finish`; `PASS` does not
+approve any query.
 
-Before moving `tmp/metrics-contract.yaml` to `outbox/`, run
-`./workflow stage-check --draft`. It performs every schema,
-array-shape, size, length, digest, evidence-reference, and input-binding check.
-Do not compute a workspace path, resolve input paths, calculate evidence
-digests, or manually check static limits.
-
-Run `./workflow stage-check` after writing the assigned artifact or failure report. Return its bounded response.
+Run `./stage-finish`; it performs every schema, array-shape, size, length,
+digest, evidence-reference, and input-binding check, then promotes and
+finalizes the artifact. Do not compute a workspace path, resolve input paths,
+calculate evidence digests, or manually check static limits. Its one-line
+output is terminal: return it unchanged immediately and run no further command.

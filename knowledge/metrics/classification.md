@@ -24,6 +24,9 @@ Record it as `PROCESS` with its observed type and labels. It may support
 inventory/deployment identity, but does not by itself prove traffic, errors,
 readiness, health, or a business outcome. Do not promote it to `BUSINESS`, a
 health signal, or a dashboard panel without separate target-specific evidence.
+When it is deliberately displayed as a per-pod `LABEL_SET`, row identity is
+`kubernetes_namespace` plus `kubernetes_pod_name`; `app_name` is descriptive
+metadata and is not unique across replicas or namespaces.
 
 This is a deliberately narrow allowlist. A family merely ending in `_info`,
 containing `app`, or having version-like labels is not automatically

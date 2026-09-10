@@ -39,7 +39,8 @@ state and a guessed repository path are never required. The other `./name`
 commands are role-specific wrappers intentionally installed in that workspace.
 
 `./workflow stage-check` validates the checkpoint area and assigned artifact
-before a specialist returns its response.
+before a specialist returns its response. Its one-line output is terminal:
+return it unchanged immediately and run no follow-up inspection command.
 
 The workspace validator rejects missing layout/state, inbox/record symlinks, non-YAML
 structured files, invalid/non-mapping YAML, inbox/record files over 8 KiB, and
@@ -213,10 +214,12 @@ This is an agent-write rule, not a restriction on implementation language:
   For discovery that has no exposition snapshot, create a bounded pending YAML
   work item before inspection. Leave a snapshot `manifest.yaml` in `pending/`;
   it is queue metadata, not a work item.
-- Update only the agent-owned `state.yaml`. It records pending/completed IDs,
-  record paths, digests, and the next action—not prose history or raw evidence.
-- Before returning a completed artifact, set `state.status` to its `DONE`,
-  `PASS`, `FAIL`, or `BLOCKED` status, clear `pending`, and set `next_action` to
+- Only queue-owning helpers update `state.yaml` during work. Other specialists
+  resume from their immutable checkpoint files; they never mutate progress
+  state by hand.
+- Do not perform the terminal `state.yaml` transition manually. After the
+  artifact is in `outbox/`, `./workflow stage-check` sets its status, clears
+  pending work, adds the artifact to completed, and sets `next_action` to
   `complete`.
 - On resume, inspect `state.yaml` and filenames with `yq`/`find`. Load only the
   next required record. Do not read every record into context at once.
@@ -289,34 +292,13 @@ the assigned failure report.
 
 ## Stage assembly
 
-The stage artifact is YAML in `outbox/`. Assemble its bounded arrays from the
-small immutable records with `yq`; never reproduce all records in a write-tool
-argument. For example:
-
-```bash
-agent_run_dir="${DASHBOARD_AGENT_RUN_DIR:?set agent run directory}"
-yq eval-all \
-  '. as $item ireduce ([]; . + [$item])' \
-  "$agent_run_dir"/records/metrics/*.yaml \
-  > "$agent_run_dir/tmp/metrics.yaml"
-
-export ITEMS_FILE="$agent_run_dir/tmp/metrics.yaml"
-yq -n \
-  '.schema_version = 1 |
-   .artifact_type = "application-metrics" |
-   .metrics = load(strenv(ITEMS_FILE))' \
-  > "$agent_run_dir/tmp/application-metrics.yaml"
-unset ITEMS_FILE
-```
-
-Add the remaining required envelope and artifact fields using `yq`, then run
-`./workflow stage-check --draft`. It validates the assigned
-`tmp/<artifact>.yaml` using the ticketed inputs, support artifacts, evidence
-base path, and repository working directory. Do not call
-`validate_agent_workspace.sh` or `validate_workflow_artifact.py` directly and
-do not reconstruct their arguments. After a `PASS` draft result, atomically
-rename it to `outbox/<artifact>.yaml`, finish `state.yaml`, and run
-`./workflow stage-check` for the terminal response. The
+Use local `./stage-finish` for every normal terminal artifact. It reads only
+fixed checkpoint locations, derives the ticket envelope, input digests, sorted
+arrays, and mechanical status fields; draft-validates and atomically promotes
+the assigned artifact; finalizes state; and emits the terminal response. Do not
+use `yq eval-all`, `load(...)`, shell loops, manual digest copying, or separate
+draft/promotion/stage-check commands. `yq` remains appropriate only for a
+single small decision checkpoint where no dedicated helper exists. The
 artifact remains the digest-bound stage gate; the record files are its
 human-reviewable construction log and recovery snapshots.
 

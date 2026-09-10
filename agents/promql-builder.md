@@ -50,6 +50,8 @@ The supplied project workspace is the shared workflow root; use your initialized
 agent/run workspace beneath it. Compile routine records one at a time and
 checkpoint their compiler result. Use model-authored YAML checkpoints only for
 `CUSTOM` records; never retype a compiler-produced expression.
+Write every final per-query record to `records/queries/`; the assembler reads no
+other query checkpoint path.
 
 For every planned query (including a `custom` exception):
 
@@ -62,6 +64,12 @@ For every planned query (including a `custom` exception):
 6. state empty/missing/stale behavior without silently converting it to zero
 7. record assumptions and edge cases
 8. live-validate with explicit variable values when access exists
+
+For every `LABEL_SET` panel, copy the question's exact
+`row_identity_labels` into query `result_identity` and preserve those labels in
+the expression. For per-pod rows this is `kubernetes_namespace`,
+`kubernetes_pod_name`; `app_name` and version labels are display metadata, not
+row identity. Do not collapse multiple selected pods merely to avoid duplicates.
 
 Handle counters, sparse series, resets, histograms, joins, ownership, missing series, cardinality, and query cost directly using the relevant local knowledge. Do not guess when required evidence is absent.
 
@@ -94,12 +102,16 @@ or a `CUSTOM` review.
 
 ## Artifact and response
 
-Assemble `query-pack.yaml` from the per-query records with `yq` using
-`knowledge/workflow/artifacts.md`. Exactly one record owns each stable query ID.
-Do not return query text in your response.
+Run `./stage-finish` to collect fixed per-query records and derive the envelope
+and live-validation field. Exactly one record owns each stable query ID. Do not
+assemble the pack with `yq` or return query text in your response.
 
 For updates, include every Prometheus datasource query that will remain in the final dashboard, even when its text is preserved unchanged. Explicitly non-Prometheus consumers remain outside the pack and are immutable in this workflow. Do not allow legacy Prometheus panel, variable, or annotation expressions to bypass query review.
 
-Write a `PASS` query pack only when every required query is semantically usable. Otherwise write a bounded `failure-report.yaml`; use blocker code `NEEDS_EVIDENCE` when required evidence is absent. Use `UNVERIFIED` per query when live access is unavailable, without presenting it as live validation.
+Write a `PASS` query pack only when every required query is semantically usable.
+Otherwise write evidence and run `./stage-failure-report --finish`; use blocker code
+`NEEDS_EVIDENCE` when required evidence is absent. Use `UNVERIFIED` per query
+when live access is unavailable, without presenting it as live validation.
 
-Run `./workflow stage-check` after writing the assigned artifact or failure report. Your final response is exactly its single-line output. Do not append an acceptance report, JSON, Markdown, explanation, or any second deliverable; coordinator acceptance is coordinator-owned.
+Its final response is exactly that single-line output. Do not append an acceptance report, JSON,
+Markdown, explanation, or any second deliverable; coordinator acceptance is coordinator-owned.
