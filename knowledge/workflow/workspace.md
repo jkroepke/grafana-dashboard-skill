@@ -280,10 +280,11 @@ Snapshot files use their exact IDs: `F00002.yaml` maps directly to
 `M00002.yaml`; never manufacture or abbreviate a numeric filename.
 The initializer owns mechanical facts: it maps the exact snapshot ID to
 `evidence/metric-discovery/responses/<snapshot-id>.json`, records its returned
-stored-label projection (at most 32 keys, prioritizing namespace/pod/cluster
-selector keys), and keeps `availability: OBSERVED` for an exposition family
-with samples. The full, potentially cluster-wide label inventory remains in the
-response evidence. Do not abbreviate snapshot IDs or rewrite those facts in the
+stored-label keys (at most 128), and keeps `availability: OBSERVED` for an
+exposition family with samples. A generic process family may legitimately have
+a cluster-wide label inventory; use evidence-backed semantic `match_keys` to
+identify the labels meaningful for this application. Do not abbreviate snapshot
+IDs or rewrite those facts in the
 metric record; `metric-queue complete` independently verifies and rejects
 changed mechanics before completion. Only add evidence-backed semantic
 judgments before completion.

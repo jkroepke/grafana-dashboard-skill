@@ -401,7 +401,7 @@ def validate_metric_record(record: Any, where: str, artifact_type: str) -> None:
     text(item["unit"], f"{where}.unit", 64, nullable=True)
     text(item["help"], f"{where}.help", 512, nullable=True)
     string_array(item["observed_labels"], f"{where}.observed_labels", 32, item_max=128)
-    string_array(item["stored_labels"], f"{where}.stored_labels", 32, item_max=128)
+    string_array(item["stored_labels"], f"{where}.stored_labels", 128, item_max=128)
     string_array(item.get("documented_labels", []), f"{where}.documented_labels", 32, item_max=128)
     string_array(item["match_keys"], f"{where}.match_keys", 16, item_max=128)
     text(item["population"], f"{where}.population", 256)

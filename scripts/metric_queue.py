@@ -82,7 +82,7 @@ def validate_metric_checkpoint(root: Path, item: Path, record_path: Path) -> Non
     except RecordError as error:
         raise QueueError(str(error)) from error
     require(record.get("stored_labels") == stored_labels,
-            "checkpoint stored_labels do not match the bounded discovery-label projection")
+            "checkpoint stored_labels do not match the discovery response")
     require(record.get("availability") == "OBSERVED",
             "checkpoint availability must remain OBSERVED")
     require(record.get("evidence_refs") == ["evidence/metric-facts.json", response_ref],

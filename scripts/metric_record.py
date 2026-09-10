@@ -21,11 +21,6 @@ class RecordError(ValueError):
 
 
 SNAPSHOT_ID = re.compile(r"^F[0-9]{5}$")
-RECORD_ID = re.compile(r"^M([0-9]{5})$")
-STORED_LABEL_LIMIT = 32
-PREFERRED_STORED_LABELS = (
-    "kubernetes_namespace", "namespace", "kubernetes_pod_name", "pod", "cluster", "job", "instance",
-)
 
 
 def require(condition: bool, message: str) -> None:
@@ -52,12 +47,7 @@ def discovery_labels(root: Path, snapshot_id: str) -> tuple[list[str], str]:
         raise RecordError("stored-series discovery response is invalid") from error
     values = payload.get("data") if isinstance(payload, dict) and payload.get("status") == "success" else []
     require(isinstance(values, list), "stored-series discovery response is invalid")
-    labels = {key for value in values if isinstance(value, dict) for key in value if isinstance(key, str)}
-    if len(labels) <= STORED_LABEL_LIMIT:
-        return sorted(labels), reference
-    preferred = [label for label in PREFERRED_STORED_LABELS if label in labels]
-    remaining = sorted(labels - set(preferred))
-    return [*preferred, *remaining[:STORED_LABEL_LIMIT - len(preferred)]], reference
+    return sorted({key for value in values if isinstance(value, dict) for key in value if isinstance(key, str)}), reference
 
 
 def record_id_for(snapshot_id: str) -> str:
@@ -115,44 +105,7 @@ def create(item: str, category: str | None) -> Path:
     return output
 
 
-def repair(root: Path) -> int:
-    """Repair only the bounded mechanical stored-label projection in existing records."""
-    records = root / "records" / "metrics"
-    require(records.is_dir() and not records.is_symlink(), "metrics record directory is unavailable")
-    changed = 0
-    for path in sorted(records.glob("M*.yaml")):
-        require(path.is_file() and not path.is_symlink(), f"metric record is invalid: {path.name}")
-        result = subprocess.run(["yq", "eval", "-o=json", ".", str(path)], capture_output=True, text=True, check=False)
-        require(result.returncode == 0, f"cannot read metric record {path.name}")
-        record = json.loads(result.stdout)
-        require(isinstance(record, dict) and isinstance(record.get("id"), str), f"metric record is invalid: {path.name}")
-        match = RECORD_ID.fullmatch(record["id"])
-        require(match is not None and path.name == f"{record['id']}.yaml", f"metric record ID is invalid: {path.name}")
-        labels, _ = discovery_labels(root, f"F{match.group(1)}")
-        if record.get("stored_labels") == labels:
-            continue
-        record["stored_labels"] = labels
-        encoded = subprocess.run(
-            ["yq", "eval", "-p=json", "-o=yaml", "."], input=json.dumps(record), capture_output=True, text=True, check=False,
-        )
-        require(encoded.returncode == 0, f"cannot encode metric record {path.name}")
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=f".{path.stem}.", delete=False) as draft:
-            draft_path = Path(draft.name)
-            draft.write(encoded.stdout)
-        os.replace(draft_path, path)
-        changed += 1
-    return changed
-
-
 def main() -> int:
-    if len(sys.argv) == 2 and sys.argv[1] == "repair":
-        try:
-            changed = repair(Path.cwd().resolve())
-        except (OSError, json.JSONDecodeError, RecordError) as error:
-            print(f"FAIL metric-record: {error}", file=sys.stderr)
-            return 1
-        print(f"PASS metric-record repair changed={changed}")
-        return 0
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("item", help="one filename from records/pending")
     parser.add_argument("category", nargs="?", choices=("BUSINESS", "PROCESS"), help="required unless the family has a pinned classification")
