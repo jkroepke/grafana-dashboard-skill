@@ -162,7 +162,9 @@ inspect scripts or add configuration fields.
    For a local metrics file, call `./workflow set-env METRICS_HTTP_CLIENT ""`.
 
 3. When `WORKFLOW_DATASOURCE_ACCESS=true`, run `./workflow set-datasource` with no
-   arguments. If it fails, create a bounded failure report and stop.
+   arguments. It refuses to run until that exact explicit flag is stored; it
+   never infers or sets the capability itself. If it fails, create a bounded
+   failure report and stop.
 4. Run `./workflow run-contract` with no arguments. It performs the fixed Grafana
    eligibility gate and rejects an unsupported target.
 

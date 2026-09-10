@@ -283,5 +283,17 @@ class GrafanaAccessTest(unittest.TestCase):
                 check=False,
                 cwd=workspace,
             )
+            self.assertEqual(2, result.returncode)
+            self.assertIn("WORKFLOW_DATASOURCE_ACCESS=true", result.stderr)
+            values = grafana_env(config)
+            values["WORKFLOW_DATASOURCE_ACCESS"] = "true"
+            write_workflow_env(config, values)
+            result = subprocess.run(
+                [sys.executable, str(repository / "scripts" / "set_datasource")],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=workspace,
+            )
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             self.assertIn("GRAFANA_PROMETHEUS_DATASOURCE_UID=default", config.read_text(encoding="utf-8"))

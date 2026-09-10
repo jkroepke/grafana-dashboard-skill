@@ -21,9 +21,11 @@ def main() -> int:
         path = workflow_env_path()
         if path is None:
             raise AccessError("set_datasource must run from a dashboard workspace")
+        values = grafana_env(path)
+        if values.get("WORKFLOW_DATASOURCE_ACCESS") != "true":
+            raise AccessError("set-datasource requires WORKFLOW_DATASOURCE_ACCESS=true configured first")
         access = grafana_access_from_environment()
         discovery_access = GrafanaAccess(access.target, access.client, access.client_args, None)
-        values = grafana_env(path)
         values["GRAFANA_PROMETHEUS_DATASOURCE_UID"] = prometheus_datasource_uid(discovery_access)
         write_workflow_env(path, values)
     except AccessError as error:
