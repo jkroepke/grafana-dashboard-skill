@@ -26,6 +26,14 @@ Read:
 First run `./workflow validate-ticket`. Read assignments only from that validated ticket; do not request
 builder conclusions or the complete conversation. It supplies the approved
 bindings, targeted evidence, output path, limits, and configured datasource access.
+The ticket's datasource-access capability is authoritative. Empty
+`capability_refs` or `evidence_refs` do not negate it, and the query pack's
+per-record `validation.live` is builder evidence—not reviewer configuration.
+Do not inspect `.env`, environment variables, `set-datasource`, workflow
+implementation, or probe-matrix source to rediscover access. When the ticket
+has datasource access, run the fixed matrix; when it does not, record the
+required `UNVERIFIED` outcome. If the matrix cannot run, preserve its evidence
+and use the failure report rather than attempting configuration repair.
 
 The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Review one query record at a time,
 checkpoint its result/finding as a bounded YAML file. Do not update `state.yaml`;
@@ -55,6 +63,20 @@ concrete values/cardinality/identity labels in `evidence/probe-matrix.json` and
 run `./prometheus-probe-matrix`. It stores raw responses and checks
 status, warnings, labels, duplicate identities, and bounds deterministically.
 Review only failed probes and `CUSTOM` queries for semantic fitness.
+
+When the matrix reports a cardinality failure, the error names the failed probe
+and its saved response. Inspect that exact response only; a successful response
+for another probe does not satisfy it. A zero result is a contract failure when
+the probe declares `min_series > 0`. Do not lower that minimum to make the
+matrix pass unless the planned operational question explicitly permits no
+result. Otherwise write a finding that states the missing population/selector
+requirement and finish with the failure report; do not repair the query or the
+probe matrix yourself.
+
+The only routine matrix locations are already fixed: write the declared matrix
+to `evidence/probe-matrix.json`, run `./prometheus-probe-matrix`, and read its
+saved response under `evidence/prometheus-probes/` only after a failure. Do not
+read the tool source or discover alternate paths.
 
 Do not invoke `prometheus_reader.py` directly for routine validation. The probe
 matrix owns request execution and raw response storage; a failed/custom probe

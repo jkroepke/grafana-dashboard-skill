@@ -474,6 +474,13 @@ class DeterministicStagesTest(unittest.TestCase):
         with self.assertRaisesRegex(prometheus_probe_matrix.ProbeError, "duplicate"):
             prometheus_probe_matrix.inspect({"id": "one", "identity_labels": ["pod"]}, payload)
 
+    def test_probe_inspection_names_a_cardinality_failure(self) -> None:
+        with self.assertRaisesRegex(prometheus_probe_matrix.ProbeError, r"probe empty: observed series count 0.*\[1, 1\]"):
+            prometheus_probe_matrix.inspect(
+                {"id": "empty", "min_series": 1, "max_series": 1},
+                b'{"status":"success","data":{"result":[]}}',
+            )
+
     def test_update_envelope_preserves_live_metadata_and_replaces_only_spec(self) -> None:
         with TemporaryDirectory() as temporary:
             request = Path(temporary) / "request.json"

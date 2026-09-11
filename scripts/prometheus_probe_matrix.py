@@ -58,7 +58,8 @@ def inspect(probe: dict[str, Any], body: bytes) -> dict[str, Any]:
     maximum = probe.get("max_series", 10000)
     require(isinstance(minimum, int) and isinstance(maximum, int) and 0 <= minimum <= maximum <= 10000,
             "probe series bounds are invalid")
-    require(minimum <= count <= maximum, f"observed series count {count} is outside declared bounds")
+    require(minimum <= count <= maximum,
+            f"probe {probe['id']}: observed series count {count} is outside declared bounds [{minimum}, {maximum}]")
     labels = probe.get("identity_labels", [])
     require(isinstance(labels, list) and len(labels) <= 8 and all(isinstance(item, str) and item for item in labels),
             "identity_labels is invalid")
@@ -95,8 +96,12 @@ def run(matrix_path: Path, output: Path, response_dir: Path) -> None:
         seen.add(identifier)
         request = {"operation": probe.get("operation"), "params": probe.get("params")}
         body = http_request(access, "GET", prometheus_request_url(access, request))
-        (response_dir / f"{identifier}.json").write_bytes(body)
-        results.append(inspect(probe, body))
+        response = response_dir / f"{identifier}.json"
+        response.write_bytes(body)
+        try:
+            results.append(inspect(probe, body))
+        except ProbeError as error:
+            raise ProbeError(f"response={response}: {error}") from error
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps({"schema_version": 1, "kind": "prometheus-probe-report", "status": "PASS", "probes": results}, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
 
