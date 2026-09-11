@@ -21,6 +21,7 @@ import metrics_discovery  # noqa: E402
 import metrics_review_probes  # noqa: E402
 import metrics_contract_assemble  # noqa: E402
 import metric_record  # noqa: E402
+import namespace_scope  # noqa: E402
 import prometheus_probe_matrix  # noqa: E402
 import promql_templates  # noqa: E402
 import query_work_partition  # noqa: E402
@@ -342,6 +343,16 @@ class DeterministicStagesTest(unittest.TestCase):
                 ["team-a", "team-b"],
                 metrics_review_probes.namespaces({"namespace_scope": {"evidence_ref": str(scope)}}),
             )
+
+    def test_namespace_scope_writes_an_immutable_canonical_array(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assertTrue(namespace_scope.write(root, ["team-b", "team-a", "team-a"]))
+            scope = root / "evidence" / "namespace-scope.json"
+            self.assertEqual('["team-a","team-b"]\n', scope.read_text(encoding="utf-8"))
+            self.assertFalse(namespace_scope.write(root, ["team-a", "team-b"]))
+            with self.assertRaisesRegex(stage.StageError, "immutable"):
+                namespace_scope.write(root, ["team-c"])
 
     def test_metric_disposition_rejects_unknown_ids_and_writes_stable_records(self) -> None:
         with TemporaryDirectory() as temporary:

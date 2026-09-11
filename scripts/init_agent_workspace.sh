@@ -92,6 +92,7 @@ case "$agent_id" in
     tool_link "$agent_root/metrics-sync" "$repository_root/scripts/metrics_sync.py"
     tool_link "$agent_root/metric-facts" "$repository_root/scripts/metric_facts.py"
     tool_link "$agent_root/metrics-discovery" "$repository_root/scripts/metrics_discovery.py"
+    tool_link "$agent_root/namespace-scope" "$repository_root/scripts/namespace_scope.py"
     tool_link "$agent_root/metric-record" "$repository_root/scripts/metric_record.py"
     tool_link "$agent_root/metric-queue" "$repository_root/scripts/metric_queue.py"
     tool_link "$agent_root/prometheus-reader" "$repository_root/scripts/prometheus_reader.py"

@@ -161,8 +161,15 @@ response or the shortlist. The file may contain more than one namespace and is
 the sole authority for downstream Kubernetes/Istio preset validation and
 queries.
 
-Write that verified namespace array once as a **bare JSON array** to
-`evidence/namespace-scope.json` (for example, `["team-a", "team-b"]`).
+Write the verified namespaces with the deterministic helper; it creates the
+canonical, immutable bare JSON array for you:
+
+```text
+./namespace-scope team-a team-b
+```
+
+Pass each verified namespace exactly once; do not create or edit
+`evidence/namespace-scope.json` with a shell or `yq` command.
 `./stage-finish` publishes its absolute path, digest, and count
 as `namespace_scope`; the scope evidence is immutable after this stage. If no namespace can
 be verified, return a bounded failure report; the fixed preset stage requires

@@ -121,6 +121,10 @@ namespace_scope:
 namespace_count: <positive integer>
 ```
 
+The application workspace's `./namespace-scope <namespace>...` helper writes
+this immutable, sorted array atomically. Re-running it is allowed only with the
+same set of values.
+
 `stage-finish` and `metrics-review-probes` use the same parser for this file.
 `stage-finish` runs that check directly, even when it is promoting an existing
 draft, so an application-metrics terminal PASS proves that the reviewer can

@@ -111,6 +111,10 @@ class SnapshotMetricsTest(unittest.TestCase):
                 (workspace / "metrics-discovery").readlink().as_posix(),
             )
             self.assertEqual(
+                str(root / "scripts" / "namespace_scope.py"),
+                (workspace / "namespace-scope").readlink().as_posix(),
+            )
+            self.assertEqual(
                 str(root / "scripts" / "metric_record.py"),
                 (workspace / "metric-record").readlink().as_posix(),
             )
