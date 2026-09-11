@@ -61,6 +61,15 @@ checks, or dashboard-builder implementation to rediscover it. Choose a stable
 sortable query ID (for example `T001`) and write exactly one record for every
 unique consumer locator.
 
+After this point, do not open `stage_finish.py`, `stage_assemble.py`,
+`verify_query_parity.py`, or dashboard-builder code. The only checkpoint path
+is already known: `records/queries/<sortable-query-id>.yaml`. Direct `yq` is
+permitted only to atomically create one such small YAML checkpoint in `tmp/`,
+validate it, and move it into `records/queries/`. Do not use `yq` to inspect
+upstream artifacts, infer the record schema, merge records, assemble the pack,
+or mutate an already-promoted record; `./stage-finish` performs assembly and
+validation.
+
 Every record has exactly these fields:
 
 ```text
