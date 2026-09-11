@@ -35,6 +35,15 @@ has datasource access, run the fixed matrix; when it does not, record the
 required `UNVERIFIED` outcome. If the matrix cannot run, preserve its evidence
 and use the failure report rather than attempting configuration repair.
 
+Immediately run `./query-review-capabilities --list`. Review each returned ID
+with `./query-review-capabilities <query-id>`; it returns that exact query,
+its planned question or consumer, and only its approved metric capabilities
+(`family`, `type`, `identity_labels`, `bounded_dimensions`, `semantics`,
+`allowed_use`, `label_layer`, and `availability`). Do not use `yq` to project
+the query pack, metrics contract, or dashboard plan, and do not load any of
+those artifacts wholesale. The helper validates the ticket and performs no
+semantic inference.
+
 The supplied project workspace is the shared workflow root; use your initialized agent/run workspace beneath it. Review one query record at a time,
 checkpoint its result/finding as a bounded YAML file. Do not update `state.yaml`;
 the checkpoint files are the resumable work log. Resume from the queue; never retain every query or finding in

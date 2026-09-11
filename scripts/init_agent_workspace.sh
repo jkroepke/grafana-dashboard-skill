@@ -116,6 +116,7 @@ case "$agent_id" in
     ;;
   promql-reviewer)
     tool_link "$agent_root/prometheus-probe-matrix" "$repository_root/scripts/prometheus_probe_matrix.py"
+    tool_link "$agent_root/query-review-capabilities" "$repository_root/scripts/query_review_capabilities.py"
     tool_link "$agent_root/stage-failure-report" "$repository_root/scripts/stage_failure_report.py"
     ;;
   dashboard-builder)

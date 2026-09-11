@@ -24,6 +24,7 @@ import metric_record  # noqa: E402
 import namespace_scope  # noqa: E402
 import prometheus_probe_matrix  # noqa: E402
 import query_record  # noqa: E402
+import query_review_capabilities  # noqa: E402
 import promql_templates  # noqa: E402
 import query_work_partition  # noqa: E402
 import stage_check  # noqa: E402
@@ -34,6 +35,22 @@ from grafana_dry_run import replacement  # noqa: E402
 
 
 class DeterministicStagesTest(unittest.TestCase):
+    def test_query_review_capabilities_projects_one_query_and_its_metric(self) -> None:
+        metric = {
+            "id": "AM001", "family": "work_total", "type": "counter", "unit": "ops",
+            "semantics": "Completed work.", "lifecycle": "Active.", "label_layer": "APPLICATION_STORED",
+            "identity_labels": ["pod"], "bounded_dimensions": ["status"], "availability": "VERIFIED",
+            "allowed_use": "PLAN", "risks": [],
+        }
+        query = {"id": "T001", "role": "PANEL", "question_id": "Q001", "metric_ids": ["AM001"]}
+        result = query_review_capabilities.projection(
+            {"queries": [query]}, {"approved": [metric]},
+            {"questions": [{"id": "Q001", "text": "Work?"}], "required_consumers": []}, "T001",
+        )
+        self.assertEqual(query, result["query"])
+        self.assertEqual("work_total", result["metrics"][0]["family"])
+        self.assertIsNone(result["consumer"])
+
     def test_query_record_promotes_only_complete_immutable_requests(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

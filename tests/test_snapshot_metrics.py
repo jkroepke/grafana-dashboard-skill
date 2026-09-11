@@ -209,6 +209,22 @@ class SnapshotMetricsTest(unittest.TestCase):
                 (workspace / "stage-finish").readlink().as_posix(),
             )
 
+    def test_promql_reviewer_workspace_provides_capability_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialized = subprocess.run(
+                [str(INIT_WORKSPACE), str(root), "demo", "run-001", "promql-reviewer"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, initialized.returncode, initialized.stdout + initialized.stderr)
+            workspace = Path(initialized.stdout.strip())
+            self.assertEqual(
+                str(root / "scripts" / "query_review_capabilities.py"),
+                (workspace / "query-review-capabilities").readlink().as_posix(),
+            )
+
     def test_dashboard_review_workspace_provides_assembly_and_failure_wrappers(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
