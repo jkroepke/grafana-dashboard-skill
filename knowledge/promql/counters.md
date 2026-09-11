@@ -37,6 +37,21 @@ sum by (code) (
 
 Do not aggregate raw counters first and then apply `rate()` unless the input is a recording rule with established counter-reset semantics.
 
+## `rate` versus `irate`
+
+Use `rate()` as the default for dashboard trends and alert-like state. It uses
+all samples in the lookback window and is less sensitive to scrape jitter and
+single-sample spikes.
+
+Use `irate()` only when the planned question explicitly needs a very responsive
+view of a volatile counter. It is based on the last two samples in the range and
+can be noisy.
+
+Do not use `irate()` for selected-period totals. Do not prefer it merely because
+it appears more "real time". If aggregation is required, apply `irate()` to the
+individual counter series before aggregation for the same reset-detection reason
+as `rate()`.
+
 ## Rate versus selected-period total
 
 Use rate for a trend/current throughput:
@@ -55,9 +70,13 @@ For selected-period totals, normally use an instant query evaluated at the dashb
 
 ## Sample requirement and extrapolation
 
-`rate()` and `increase()` need at least two samples in the selected range to calculate a change. A newly observed series with only one sample produces no result for the increase calculation.
+`rate()`, `irate()`, and `increase()` need at least two samples in the selected
+range to calculate a change. A newly observed series with only one sample
+produces no result for the change calculation.
 
-Both functions infer counter change from samples and extrapolate to range boundaries. They do not observe events directly and can return non-integer increases for integer counters.
+`rate()` and `increase()` infer counter change from samples and extrapolate to
+range boundaries. They do not observe events directly and can return
+non-integer increases for integer counters.
 
 Do not claim exact event counts when scrape gaps, sparse samples, or series lifecycle make that unknowable.
 
@@ -75,6 +94,8 @@ For the environment-specific late-created-counter pattern, read `sparse-series.m
 
 ## Ratios
 
-Build numerator and denominator over the same population and grouping.
+Build numerator and denominator over the same population and grouping. Aggregate
+the components first and divide the aggregated components; read
+`aggregation.md` and `slis.md`.
 
 Do not clamp a missing/zero denominator to an arbitrary positive value. Preserve no-data when the ratio is undefined.

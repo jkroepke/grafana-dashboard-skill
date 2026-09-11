@@ -12,6 +12,27 @@ Treat these states separately:
 
 PromQL set operators operate on label-set presence.
 
+## Comparisons and `bool`
+
+A comparison without `bool` filters the input vector: matching samples that do
+not satisfy the comparison are removed.
+
+A comparison with `bool` returns `0` or `1` for label sets that participate in
+the comparison. It does not create a result for a missing series or unmatched
+vector element.
+
+Therefore:
+
+```promql
+metric > bool 0
+```
+
+does not mean "missing metric equals zero". Missing remains missing.
+
+Vector-to-vector arithmetic also requires matching label sets; unmatched input
+series do not automatically become zero. Read `joins.md` when explicit vector
+matching is required.
+
 ## `or`
 
 Use `or` to union label sets or provide a semantically valid fallback with compatible labels.
@@ -21,6 +42,11 @@ Do not use `or vector(0)` as a generic no-data fix. A label-less zero can hide m
 ## `unless`
 
 `A unless B` returns label sets from `A` that do not have a matching label set in `B`. Use it for presence logic only when matching identity is deliberate.
+
+## `and`
+
+`A and B` keeps label sets from `A` that have a matching label set in `B`. It is
+presence/set logic; values from `B` are not combined into `A`.
 
 ## `absent()` / `absent_over_time()`
 
