@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import coordinator_stage as stage
+import validate_workflow_artifact as workflow
 
 
 class AssembleError(ValueError):
@@ -66,19 +67,24 @@ def write_draft(path: Path, payload: dict[str, Any]) -> None:
     os.replace(draft_path, path)
 
 
+def preflight_evidence(payload: dict[str, Any], agent_root: Path, run: dict[str, Any]) -> None:
+    workflow.validate_evidence_references(payload, agent_root / "outbox" / "metrics-contract.yaml", run)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ticket", type=Path, default=Path("inbox/job.yaml"), help="ticket; defaults to inbox/job.yaml")
     parser.add_argument("--unresolved", action="append", default=[], help="one bounded evidence gap; repeat as needed")
     args = parser.parse_args()
     try:
-        ticket, _, _, _, _, _ = stage.validate_ticket(args.ticket)
+        ticket, run, _, _, _, _ = stage.validate_ticket(args.ticket)
         require(ticket["agent"] == "metrics-reviewer", "ticket is not for metrics-reviewer")
         agent_root = args.ticket.resolve().parent.parent
         payload = assemble(agent_root, ticket, args.unresolved)
+        preflight_evidence(payload, agent_root, run)
         output = agent_root / "tmp" / "metrics-contract.yaml"
         write_draft(output, payload)
-    except (OSError, AssembleError, stage.StageError, stage.coordinator_artifact.CreationError, KeyError, TypeError) as error:
+    except (OSError, AssembleError, workflow.ArtifactError, stage.StageError, stage.coordinator_artifact.CreationError, KeyError, TypeError) as error:
         print(f"FAIL metrics-contract-assemble: {error}", file=sys.stderr)
         return 1
     print(

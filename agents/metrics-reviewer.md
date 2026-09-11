@@ -98,6 +98,15 @@ Approved identity/dimension labels and every non-null selector-contract label mu
 
 Select only distinct capabilities with operational value. Equivalent metric families should not all pass simply because they exist. Preserve rejected IDs with evidence-backed reasons so later stages cannot rediscover them.
 
+Evidence references are scoped to the artifact that contains them. For evidence
+you create in this reviewer run, use a reviewer-relative path such as
+`evidence/metrics-review-probes/responses/K002.json`. For evidence inherited
+from an application- or Kubernetes-metrics shortlist, use the existing regular
+file's repository-absolute path under that source agent run. Do not copy
+upstream evidence and do not reuse its `evidence/...` relative spelling: that
+would resolve from this reviewer run and is invalid. `./metrics-contract-assemble`
+preflights every reference before it creates a draft.
+
 For an update, account for metric families used by every Prometheus query that will remain in the dashboard. If a legacy dependency cannot be verified, mark the evidence gap and allowed use explicitly; do not invent semantics merely to preserve it. A blocking conflict returns to the coordinator for user direction rather than silently dropping or rewriting an unrelated panel.
 
 ## Artifact and response

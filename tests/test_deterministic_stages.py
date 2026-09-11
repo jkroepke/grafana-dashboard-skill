@@ -394,6 +394,19 @@ class DeterministicStagesTest(unittest.TestCase):
             metrics_contract_assemble.write_draft(draft, payload)
             metrics_contract_assemble.write_draft(draft, payload)
 
+    def test_metrics_contract_assembler_preflights_reviewer_relative_evidence(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            evidence = root / "evidence" / "probe.json"
+            evidence.parent.mkdir()
+            evidence.write_text("{}\n", encoding="utf-8")
+            payload = {"approved": [{"evidence_refs": ["evidence/probe.json"]}]}
+            run = {"repository_root": str(root)}
+            metrics_contract_assemble.preflight_evidence(payload, root, run)
+            payload["approved"][0]["evidence_refs"] = ["evidence/upstream.json"]
+            with self.assertRaisesRegex(validate_workflow_artifact.ArtifactError, "regular file"):
+                metrics_contract_assemble.preflight_evidence(payload, root, run)
+
     def test_dashboard_capabilities_projects_only_planning_fields(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

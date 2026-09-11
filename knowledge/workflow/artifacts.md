@@ -66,6 +66,11 @@ artifact directory. The referenced file must exist as a regular, non-symlink
 file inside the repository; labels such as `runtime-capabilities` without a
 corresponding file are invalid.
 
+When a downstream artifact cites evidence from an upstream agent run, it uses
+that source file's repository-absolute path. Upstream relative references are
+relative to the upstream artifact and cannot be copied verbatim into a later
+agent's output. Do not duplicate the evidence merely to change its path.
+
 `revision` is limited to `1..3`. A fourth correction artifact is invalid and must become a `BLOCKED` failure report for user direction.
 
 For a successful metric shortlist use `DONE`. Every later successful gate uses `PASS`. A reviewer `FAIL` includes findings. If a stage cannot produce its normal artifact, write a `failure-report` with status `FAIL` or `BLOCKED`.
