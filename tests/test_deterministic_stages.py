@@ -14,6 +14,7 @@ sys.path.insert(0, str(REPOSITORY / "scripts"))
 
 import metric_facts  # noqa: E402
 import metric_disposition  # noqa: E402
+import coordinator_stage as stage  # noqa: E402
 import dashboard_capabilities  # noqa: E402
 import dashboard_integrity  # noqa: E402
 import metrics_discovery  # noqa: E402
@@ -336,6 +337,7 @@ class DeterministicStagesTest(unittest.TestCase):
             root = Path(temporary)
             scope = root / "namespace-scope.json"
             scope.write_text('["team-b", "team-a", "team-a"]\n', encoding="utf-8")
+            self.assertEqual(["team-a", "team-b"], stage.read_namespace_scope(scope))
             self.assertEqual(
                 ["team-a", "team-b"],
                 metrics_review_probes.namespaces({"namespace_scope": {"evidence_ref": str(scope)}}),

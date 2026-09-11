@@ -29,13 +29,10 @@ def require(condition: bool, message: str) -> None:
 def namespaces(application: dict[str, Any]) -> list[str]:
     scope = application.get("namespace_scope")
     require(isinstance(scope, dict) and isinstance(scope.get("evidence_ref"), str), "application namespace scope is unavailable")
-    scope_file = Path(scope["evidence_ref"])
     try:
-        namespaces = json.loads(scope_file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        return stage.read_namespace_scope(Path(scope["evidence_ref"]))
+    except stage.StageError as error:
         raise ProbeError("namespace scope evidence is invalid") from error
-    require(isinstance(namespaces, list) and namespaces and all(isinstance(item, str) and item for item in namespaces), "namespace scope evidence is invalid")
-    return sorted(set(namespaces))
 
 
 def namespace_matcher(values: list[str]) -> str:

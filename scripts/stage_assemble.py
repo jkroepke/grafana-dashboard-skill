@@ -60,12 +60,7 @@ def regular_file(path: Path, message: str) -> Path:
 
 def application(root: Path, ticket: dict[str, Any]) -> dict[str, Any]:
     scope = regular_file(root / "evidence" / "namespace-scope.json", "write evidence/namespace-scope.json first")
-    try:
-        namespaces = json.loads(scope.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise AssembleError("namespace scope evidence must be a JSON array") from error
-    require(isinstance(namespaces, list) and namespaces and all(isinstance(item, str) and item for item in namespaces),
-            "namespace scope evidence must be a non-empty string array")
+    namespaces = stage.read_namespace_scope(scope)
     result = envelope(ticket, "application-metrics")
     result.update({
         "catalog_ref": None,
@@ -74,7 +69,7 @@ def application(root: Path, ticket: dict[str, Any]) -> dict[str, Any]:
         "namespace_scope": {
             "evidence_ref": str(scope),
             "sha256": stage.sha256(scope),
-            "namespace_count": len(set(namespaces)),
+            "namespace_count": len(namespaces),
         },
     })
     return result

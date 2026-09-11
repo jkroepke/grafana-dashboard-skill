@@ -74,6 +74,18 @@ def read_yaml(path: Path) -> dict[str, Any]:
     return value
 
 
+def read_namespace_scope(path: Path) -> list[str]:
+    """Read the canonical bare JSON namespace-scope evidence file."""
+    require(path.is_file() and not path.is_symlink(), "namespace scope evidence is unavailable")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise StageError("namespace scope evidence is invalid") from error
+    require(isinstance(value, list) and value and all(isinstance(item, str) and item for item in value),
+            "namespace scope evidence must be a non-empty string array")
+    return sorted(set(value))
+
+
 def yaml_bytes(value: dict[str, Any]) -> bytes:
     return coordinator_artifact.yaml_bytes(value)
 

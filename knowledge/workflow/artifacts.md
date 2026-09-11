@@ -118,8 +118,13 @@ bare JSON array of strings, not an object wrapper. Its artifact includes:
 namespace_scope:
   evidence_ref: <absolute local scope-evidence path>
   sha256: sha256:<digest of that exact file>
-  namespace_count: <positive integer>
+namespace_count: <positive integer>
 ```
+
+`stage-finish` and `metrics-review-probes` use the same parser for this file,
+so an application-metrics terminal PASS proves that the reviewer can consume
+the scope format. It does not run downstream live probes, which require the
+later Kubernetes ticket and datasource access.
 
 The namespace values themselves are never included in an artifact. The
 `kubernetes-metrics` artifact requires `application-metrics` as a direct input
