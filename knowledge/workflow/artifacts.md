@@ -496,7 +496,12 @@ Use status `FAIL` or `BLOCKED`. It requires the run-contract input.
 
 ## Chain and promotion gate
 
-Limit query build/review and dashboard build/review correction loops to three revisions. On a third failure, return `BLOCKED` rather than continuing.
+When a revision-aware control plane is available, limit query build/review and
+dashboard build/review correction loops to three revisions. On a third failure,
+return `BLOCKED` rather than continuing. The current coordinator control plane
+does not reactivate a run after accepting a failure; its accepted `FAIL` or
+`BLOCKED` result is terminal and requires a fresh run after correction-loop
+support is added.
 
 Before promotion, run the read-only full-chain check:
 

@@ -271,5 +271,21 @@ application-metrics
 - Do not publish unless the optional `dashboard-publisher` stage is requested
   and all prerequisite gates pass.
 
+## Accepted failure boundary
+
+`./workflow accept` is authoritative. In this workflow version, accepting a
+`FAIL` or `BLOCKED` response creates the canonical coordinator failure report
+and transitions the coordinator to terminal `FAIL`/`BLOCKED` with
+`next_action: complete`. `--resume` preserves that terminal state; it does not
+reactivate a run. Never edit coordinator state, rerun setup, search control
+scripts, or attempt a revision dispatch after an accepted failure.
+
+The artifact documentation's three-revision correction-loop limit is a limit
+for a control plane that implements revision-aware reactivation; it is not an
+authorization to bypass this version's terminal transition. If an accepted
+review failure names an upstream owner, report the accepted terminal result and
+the implementation gap. A fresh run is required after revision-aware correction
+support is added.
+
 Use files for substantial handoffs and return only the artifact-control-plane
 status required by the workflow.
