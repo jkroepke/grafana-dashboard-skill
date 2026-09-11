@@ -23,6 +23,7 @@ import metrics_contract_assemble  # noqa: E402
 import metric_record  # noqa: E402
 import namespace_scope  # noqa: E402
 import prometheus_probe_matrix  # noqa: E402
+import query_record  # noqa: E402
 import promql_templates  # noqa: E402
 import query_work_partition  # noqa: E402
 import stage_check  # noqa: E402
@@ -33,6 +34,21 @@ from grafana_dry_run import replacement  # noqa: E402
 
 
 class DeterministicStagesTest(unittest.TestCase):
+    def test_query_record_promotes_only_complete_immutable_requests(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request_dir = root / "tmp"
+            request_dir.mkdir()
+            record = {field: None for field in query_record.FIELDS}
+            record["id"] = "T001"
+            request = request_dir / "T001.json"
+            request.write_text(json.dumps(record), encoding="utf-8")
+            output = query_record.write_record(root, request)
+            self.assertEqual(root / "records" / "queries" / "T001.yaml", output)
+            self.assertTrue(output.is_file())
+            with self.assertRaisesRegex(stage.StageError, "duplicate"):
+                query_record.write_record(root, request)
+
     def test_application_assembler_derives_scope_digest_and_fixed_records(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

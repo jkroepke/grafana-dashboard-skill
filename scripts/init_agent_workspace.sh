@@ -101,6 +101,7 @@ case "$agent_id" in
   promql-builder)
     tool_link "$agent_root/promql-templates" "$repository_root/scripts/promql_templates.py"
     tool_link "$agent_root/query-work-partition" "$repository_root/scripts/query_work_partition.py"
+    tool_link "$agent_root/query-record" "$repository_root/scripts/query_record.py"
     tool_link "$agent_root/stage-failure-report" "$repository_root/scripts/stage_failure_report.py"
     ;;
   dashboard-architect)

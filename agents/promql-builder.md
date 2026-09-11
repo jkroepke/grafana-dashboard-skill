@@ -49,10 +49,16 @@ ticket-bound partition. Do not delete or recreate that evidence manually.
 
 The supplied project workspace is the shared workflow root; use your initialized
 agent/run workspace beneath it. Compile routine records one at a time and
-checkpoint their compiler result. Use model-authored YAML checkpoints only for
-`CUSTOM` records; never retype a compiler-produced expression.
+checkpoint their compiler result. Use model-authored semantic record content
+only for `CUSTOM` records; never retype a compiler-produced expression.
 Write every final per-query record to `records/queries/`; the assembler reads no
 other query checkpoint path.
+
+Create every final record with `./query-record tmp/<query-id>.json`. The JSON
+request is the complete model-authored record (copy a routine compiler
+expression verbatim); the helper enforces its exact field set, fixed
+`records/queries/<query-id>.yaml` destination, size limit, and immutable
+promotion. It performs no semantic inference and does not replace a record.
 
 ## Query-record contract
 
@@ -63,12 +69,11 @@ unique consumer locator.
 
 After this point, do not open `stage_finish.py`, `stage_assemble.py`,
 `verify_query_parity.py`, or dashboard-builder code. The only checkpoint path
-is already known: `records/queries/<sortable-query-id>.yaml`. Direct `yq` is
-permitted only to atomically create one such small YAML checkpoint in `tmp/`,
-validate it, and move it into `records/queries/`. Do not use `yq` to inspect
-upstream artifacts, infer the record schema, merge records, assemble the pack,
-or mutate an already-promoted record; `./stage-finish` performs assembly and
-validation.
+is already known: `records/queries/<sortable-query-id>.yaml`. Do not invoke
+`yq` directly for query records; `./query-record` owns their serialization and
+immutable promotion. Do not use `yq` to inspect upstream artifacts, infer the
+record schema, merge records, assemble the pack, or mutate an already-promoted
+record; `./stage-finish` performs assembly and validation.
 
 Every record has exactly these fields:
 

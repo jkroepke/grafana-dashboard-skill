@@ -201,6 +201,10 @@ class SnapshotMetricsTest(unittest.TestCase):
                 (workspace / "query-work-partition").readlink().as_posix(),
             )
             self.assertEqual(
+                str(root / "scripts" / "query_record.py"),
+                (workspace / "query-record").readlink().as_posix(),
+            )
+            self.assertEqual(
                 str(root / "scripts" / "stage_finish.py"),
                 (workspace / "stage-finish").readlink().as_posix(),
             )
