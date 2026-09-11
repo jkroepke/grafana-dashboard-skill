@@ -78,7 +78,7 @@ uses the default `pending` status.
   "operations": [
     {"action": "create", "subject": "Bootstrap workspace", "status": "in_progress"},
     {"action": "create", "subject": "Configure workflow access"},
-    {"action": "create", "subject": "Discover Prometheus datasource or record unavailable"},
+    {"action": "create", "subject": "Discover Prometheus datasource via set-datasource (or record unavailable)"},
     {"action": "create", "subject": "Create run contract"},
     {"action": "create", "subject": "Complete application metrics stage"},
     {"action": "create", "subject": "Complete Kubernetes metrics stage"},
@@ -161,10 +161,14 @@ inspect scripts or add configuration fields.
 
    For a local metrics file, call `./workflow set-env METRICS_HTTP_CLIENT ""`.
 
-3. When `WORKFLOW_DATASOURCE_ACCESS=true`, run `./workflow set-datasource` with no
-   arguments. It refuses to run until that exact explicit flag is stored; it
-   never infers or sets the capability itself. If it fails, create a bounded
-   failure report and stop.
+3. **Datasource discovery (todo item #3):** when
+   `WORKFLOW_DATASOURCE_ACCESS=true`, run `./workflow set-datasource` with no
+   arguments. This command is the complete datasource-discovery operation: a
+   `PASS datasource` response means item #3 is complete. It is not a specialist
+   stage and requires no dispatch, ticket, or additional discovery command. It
+   refuses to run until that exact explicit flag is stored; it never infers or
+   sets the capability itself. If it fails, create a bounded failure report and
+   stop.
 4. Run `./workflow run-contract` with no arguments. It performs the fixed Grafana
    eligibility gate and rejects an unsupported target.
 
