@@ -82,9 +82,10 @@ def run(matrix_path: Path, output: Path, response_dir: Path) -> None:
     require(isinstance(matrix, dict) and set(matrix) == {"probes"}, "probe matrix must contain only probes")
     probes = matrix["probes"]
     require(isinstance(probes, list) and 1 <= len(probes) <= 64, "probe matrix probes is invalid")
-    require(not output.exists() and not response_dir.exists(), "probe output already exists")
+    require(not output.exists() and (not response_dir.exists() or not any(response_dir.iterdir())),
+            "probe output already exists")
     access = grafana_access_from_environment()
-    response_dir.mkdir(parents=True)
+    response_dir.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, Any]] = []
     seen: set[str] = set()
     for probe in probes:

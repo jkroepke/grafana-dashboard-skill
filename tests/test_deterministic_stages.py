@@ -7,6 +7,7 @@ import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -499,6 +500,24 @@ class DeterministicStagesTest(unittest.TestCase):
                 {"id": "empty", "min_series": 1, "max_series": 1},
                 b'{"status":"success","data":{"result":[]}}',
             )
+
+    def test_probe_matrix_reuses_an_empty_response_directory(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            matrix = root / "probe-matrix.json"
+            output = root / "probe-report.json"
+            responses = root / "responses"
+            matrix.write_text(json.dumps({"probes": [{
+                "id": "up", "operation": "query", "params": {"query": "up"},
+            }]}), encoding="utf-8")
+            responses.mkdir()
+            with (
+                patch.object(prometheus_probe_matrix, "grafana_access_from_environment", return_value=object()),
+                patch.object(prometheus_probe_matrix, "prometheus_request_url", return_value="https://example.test"),
+                patch.object(prometheus_probe_matrix, "http_request", return_value=b'{"status":"success","data":{"result":[]}}'),
+            ):
+                prometheus_probe_matrix.run(matrix, output, responses)
+            self.assertTrue(output.is_file())
 
     def test_update_envelope_preserves_live_metadata_and_replaces_only_spec(self) -> None:
         with TemporaryDirectory() as temporary:
