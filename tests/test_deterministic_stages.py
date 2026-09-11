@@ -146,6 +146,18 @@ class DeterministicStagesTest(unittest.TestCase):
                 "template": "counter_rate_by_pod", "metric": "looks_total", "metric_type": "gauge", "window": "5m",
             })
 
+    def test_variable_template_requires_the_verified_output_label(self) -> None:
+        result = promql_templates.compile_template({
+            "template": "namespace_variable",
+            "metric": "app_info",
+            "selector": 'app_name="demo"',
+            "label": "kubernetes_namespace",
+        })
+        self.assertEqual('label_values(app_info{app_name="demo"}, kubernetes_namespace)', result["expression"])
+        self.assertEqual(["kubernetes_namespace"], result["result_identity"])
+        with self.assertRaisesRegex(promql_templates.TemplateError, "label"):
+            promql_templates.compile_template({"template": "pod_variable", "metric": "app_info"})
+
     def test_query_work_partition_routes_only_typed_one_metric_rates_to_the_compiler(self) -> None:
         result = query_work_partition.partition(
             {"questions": [
@@ -155,6 +167,9 @@ class DeterministicStagesTest(unittest.TestCase):
                  "result_shape": "TIME_SERIES", "retained_labels": ["pod"]},
                 {"id": "Q003", "metric_ids": ["AM001"], "change": "PRESERVED", "calculation": "rate",
                  "result_shape": "TIME_SERIES", "retained_labels": ["pod"]},
+            ], "required_consumers": [
+                {"id": "V_NAMESPACE", "role": "VARIABLE", "rendered_name": "namespace", "metric_ids": ["AM001"]},
+                {"id": "A_RESTART", "role": "ANNOTATION", "rendered_name": "restart", "metric_ids": ["AM001"]},
             ]},
             {"approved": [
                 {"id": "AM001", "family": "app_events_total", "type": "counter"},
@@ -162,7 +177,9 @@ class DeterministicStagesTest(unittest.TestCase):
             ]},
         )
         self.assertEqual("counter_rate_by_pod", result["standard"][0]["template"])
+        self.assertEqual("namespace_variable", result["standard"][1]["template"])
         self.assertEqual("MULTI_METRIC", result["custom"][0]["reason_code"])
+        self.assertEqual("ANNOTATION_SEMANTICS_REQUIRED", result["custom"][1]["reason_code"])
         self.assertEqual("Q003", result["preserved"][0]["question_id"])
 
     def test_metric_facts_copies_observation_without_classification(self) -> None:

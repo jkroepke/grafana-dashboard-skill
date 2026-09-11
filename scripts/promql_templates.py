@@ -54,6 +54,10 @@ def labels(value: Any) -> list[str]:
     return result
 
 
+def label(request: dict[str, Any]) -> str:
+    return string(request.get("label"), "label", LABEL)
+
+
 def selector(value: Any) -> str:
     if value is None:
         return ""
@@ -86,11 +90,13 @@ def rate_expression(request: dict[str, Any], metric_field: str = "metric") -> st
 def compile_template(request: dict[str, Any]) -> dict[str, Any]:
     template = string(request.get("template"), "template")
     if template == "namespace_variable":
-        expression = f"label_values({metric(request)}{selector(request.get('selector'))}, namespace)"
-        mode, identity = "VARIABLE", ["namespace"]
+        output_label = label(request)
+        expression = f"label_values({metric(request)}{selector(request.get('selector'))}, {output_label})"
+        mode, identity = "VARIABLE", [output_label]
     elif template == "pod_variable":
-        expression = f"label_values({metric(request)}{selector(request.get('selector'))}, pod)"
-        mode, identity = "VARIABLE", ["pod"]
+        output_label = label(request)
+        expression = f"label_values({metric(request)}{selector(request.get('selector'))}, {output_label})"
+        mode, identity = "VARIABLE", [output_label]
     elif template in {"counter_rate_by_pod", "restart_rate"}:
         group_by = labels(request.get("group_by", ["pod"]))
         expression = f"sum by ({', '.join(group_by)}) ({rate_expression(request)})"

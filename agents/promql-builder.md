@@ -36,12 +36,13 @@ proposals are not authoritative.
 
 Immediately run `./query-work-partition`. Its ticket-bound
 `evidence/query-work-partition.json` is the routing input: compile each
-`standard` row with the named closed template after supplying the required
-selector and window; retain `preserved` work exactly; and treat each `custom`
-row as a separate bounded semantic exception. Do not fan out ordinary
-questions. A host scheduler may assign one nested model worker per `custom`
-row, but never one per routine question; each worker receives only that row,
-the referenced approved capabilities, and its selector contract.
+`standard` row with the named closed template after supplying its listed
+inputs; retain `preserved` work exactly; and treat each `custom` row as a
+separate bounded semantic exception. The partition includes planned panel
+questions and every required variable/annotation consumer. Do not fan out
+ordinary questions. A host scheduler may assign one nested model worker per
+`custom` row, but never one per routine question; each worker receives only
+that row, the referenced approved capabilities, and its selector contract.
 
 On a resumed stage, `./query-work-partition` verifies and reuses its exact
 ticket-bound partition. Do not delete or recreate that evidence manually.
@@ -52,6 +53,44 @@ checkpoint their compiler result. Use model-authored YAML checkpoints only for
 `CUSTOM` records; never retype a compiler-produced expression.
 Write every final per-query record to `records/queries/`; the assembler reads no
 other query checkpoint path.
+
+## Query-record contract
+
+This is the complete record mapping. Do not inspect `stage_assemble`, parity
+checks, or dashboard-builder implementation to rediscover it. Choose a stable
+sortable query ID (for example `T001`) and write exactly one record for every
+unique consumer locator.
+
+Every record has exactly these fields:
+
+```text
+id, role, consumer_id, consumer_locator, plugin_query_model, question_id,
+metric_ids, language, expression, mode, datasource_ref, unit,
+result_identity, no_data_semantics, expected_cardinality, assumptions,
+edge_cases, change, validation
+```
+
+Use this closed role mapping:
+
+| role | `consumer_id` / locator | fixed fields |
+| --- | --- | --- |
+| `PANEL` | `consumer_id` is the planned panel ID; locator is `{kind: PANEL, name: <same panel ID>, ref_id: <non-empty stable refId>}`. Allocate `A`, `B`, … per panel. | `plugin_query_model: null`; `question_id` is a question assigned to that panel; `language: PROMQL`; mode is `INSTANT` or `RANGE`. |
+| `VARIABLE` | `consumer_id` is the planned required-consumer ID; locator `name` is that consumer's `rendered_name`. | `question_id: null`; `language: PROMETHEUS_VARIABLE`; `mode: VARIABLE`; `plugin_query_model` is `{qry_type: 1, editor_ref_id: <exact locator ref_id>}`. Use the pinned editor ref `PrometheusVariableQueryEditor-VariableQuery` unless the ticketed target evidence says otherwise. |
+| `ANNOTATION` | `consumer_id` is the planned required-consumer ID; locator `name` is that consumer's `rendered_name`; use `ref_id: null` unless the intended rendered annotation has a distinct refId. | `plugin_query_model: null`; `question_id: null`; `language: PROMQL`; `mode: RANGE`. |
+
+The dashboard builder must render the chosen locator byte-for-byte; the query
+pack is the source of truth. For every role, use `datasource_ref:
+${datasource}` exactly. `metric_ids` must be approved and within that planned
+question/consumer. Set `validation.static: PASS`; set `validation.live: PASS`
+only with datasource access, otherwise `UNVERIFIED`; keep `evidence_refs` as
+an array. `unit` and `question_id` use YAML `null` where the mapping says so.
+
+For a standard namespace/pod variable, the partition supplies the compiler
+template and requires `selector` and `label`; it also marks `editor_ref_id` as
+a required record field. Supply the verified stored label (for example
+`kubernetes_namespace`, not the variable name) to the template; copy its
+expression and `result_identity` verbatim. Variables/annotations not routed as
+standard are `CUSTOM`, not omitted.
 
 For every planned query (including a `custom` exception):
 
