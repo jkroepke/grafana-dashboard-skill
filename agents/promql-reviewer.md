@@ -67,6 +67,12 @@ Independently check:
 - annotation event sparsity and sample-time semantics
 - live behavior with one pod, multiple pods, and All where supported
 
+When datasource access exists, first run `./query-review-context`. It writes
+`evidence/query-review-selector-context.json` with verified namespace, one-pod,
+multiple-pod, and All-pod substitutions. Use only those values. Do not run
+exploratory, raw-metric, broadened, or partial probe matrices: the matrix is a
+single final execution and each probe must be the exact reviewed expression.
+
 HTTP success or PromQL syntax alone is not a pass. For routine queries, declare
 concrete selector/time substitutions, cardinality, and identity labels in
 `evidence/probe-matrix.json`, then run `./prometheus-probe-matrix`. Its exact

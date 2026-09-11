@@ -224,6 +224,10 @@ class SnapshotMetricsTest(unittest.TestCase):
                 str(root / "scripts" / "query_review_capabilities.py"),
                 (workspace / "query-review-capabilities").readlink().as_posix(),
             )
+            self.assertEqual(
+                str(root / "scripts" / "query_review_context.py"),
+                (workspace / "query-review-context").readlink().as_posix(),
+            )
 
     def test_dashboard_review_workspace_provides_assembly_and_failure_wrappers(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

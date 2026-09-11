@@ -25,6 +25,7 @@ import metric_record  # noqa: E402
 import namespace_scope  # noqa: E402
 import prometheus_probe_matrix  # noqa: E402
 import query_record  # noqa: E402
+import query_review_context  # noqa: E402
 import query_review_capabilities  # noqa: E402
 import promql_templates  # noqa: E402
 import query_work_partition  # noqa: E402
@@ -500,6 +501,25 @@ class DeterministicStagesTest(unittest.TestCase):
                 {"id": "empty", "min_series": 1, "max_series": 1},
                 b'{"status":"success","data":{"result":[]}}',
             )
+
+    def test_query_review_context_selects_scoped_pods(self) -> None:
+        requests: list[dict[str, object]] = []
+
+        def fetch(request: dict[str, object]) -> bytes:
+            requests.append(request)
+            return b'{"status":"success","data":["api-0","api-1"]}'
+
+        context = query_review_context.selector_context(
+            ["team-a"], "kubernetes_namespace", "kubernetes_pod_name", ["http_requests_total"], fetch,
+        )
+        self.assertEqual("team-a", context["namespace"])
+        self.assertEqual("api-0", context["one_pod"])
+        self.assertEqual("api\\-0|api\\-1", context["multiple_pod_regex"])
+        self.assertEqual(
+            [{"operation": "label_values", "params": {
+                "label": "kubernetes_pod_name", "match[]": 'http_requests_total{kubernetes_namespace="team-a"}',
+            }}], requests,
+        )
 
     def test_probe_matrix_reuses_an_empty_response_directory(self) -> None:
         with TemporaryDirectory() as temporary:
