@@ -28,6 +28,8 @@ def finish(ticket_path: Path) -> str:
     normal_draft = root / "tmp" / normal.name
     failure_draft = root / "tmp" / failure.name
     stage.require(not (normal_draft.exists() and failure_draft.exists()), "write at most one stage draft")
+    if ticket["agent"] == "application-metrics":
+        stage.read_namespace_scope(root / "evidence" / "namespace-scope.json")
     if not failure_draft.exists() and not normal_draft.exists():
         stage_assemble.write_draft(normal_draft, stage_assemble.assemble(root, ticket, run, inputs))
     draft = stage_check.validate_draft(ticket, inputs, supports, root)

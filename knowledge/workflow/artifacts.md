@@ -121,10 +121,11 @@ namespace_scope:
 namespace_count: <positive integer>
 ```
 
-`stage-finish` and `metrics-review-probes` use the same parser for this file,
-so an application-metrics terminal PASS proves that the reviewer can consume
-the scope format. It does not run downstream live probes, which require the
-later Kubernetes ticket and datasource access.
+`stage-finish` and `metrics-review-probes` use the same parser for this file.
+`stage-finish` runs that check directly, even when it is promoting an existing
+draft, so an application-metrics terminal PASS proves that the reviewer can
+consume the scope format. It does not run downstream live probes, which require
+the later Kubernetes ticket and datasource access.
 
 The namespace values themselves are never included in an artifact. The
 `kubernetes-metrics` artifact requires `application-metrics` as a direct input
