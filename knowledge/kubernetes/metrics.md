@@ -21,6 +21,8 @@ an optional profile. Do not apply the Kubernetes pod selector to Istio traffic.
 | --- | --- | --- |
 | CPU usage | `rate(container_cpu_usage_seconds_total[$__rate_interval])` | CPU cores |
 | Memory | `container_memory_working_set_bytes` | bytes; working set, not exact OOM headroom |
+| Network receive | `rate(container_network_receive_bytes_total[$__rate_interval])` when exposed | bytes/second; verify interface and pod identity |
+| Network transmit | `rate(container_network_transmit_bytes_total[$__rate_interval])` when exposed | bytes/second; verify interface and pod identity |
 | Container requests | `kube_pod_container_resource_requests` | CPU core or memory byte according to resource/unit labels |
 | Container limits | `kube_pod_container_resource_limits` | CPU core or memory byte according to resource/unit labels |
 | Pod scheduling requests | `kube_pod_resource_requests` from kube-scheduler when exposed | effective pod-level scheduling request; verify resource/unit labels |
@@ -77,6 +79,25 @@ A missing/zero limit is not numeric unlimited capacity.
 
 Usage/request may exceed 100% because requests are scheduling inputs, not ceilings.
 
+CPU usage is a counter-derived rate and must be calculated before container/pod
+aggregation. Memory working set is a gauge; do not apply `rate()` to it.
+
+## Network I/O
+
+Network byte metrics are counters when their verified type says so; calculate
+`rate()` before aggregation. Keep the verified network identity long enough to
+understand whether `interface`, pod sandbox, host-network, or duplicate scrape
+series can cause double counting.
+
+For a pod-total network panel, aggregate only after the network series are known
+to represent distinct interfaces/observations that should be summed. Do not
+blindly sum every `container_network_*` series by pod: cAdvisor label population
+and interface exposure vary by environment.
+
+Do not treat cumulative byte counters as bytes/second without a counter rate.
+Do not use packet-drop/error counters as a denominator-free percentage; define
+the intended packet/traffic population first.
+
 ## Workload state
 
 Deployment/StatefulSet/DaemonSet replica metrics require the verified workload kind/name. Prefer owner relationships over guessed pod-name regexes.
@@ -92,3 +113,7 @@ Grafana Prometheus annotations use returned sample timestamps as marker time, no
 ## Scrape availability
 
 Use `up` only when selectors are verified to identify the intended application target. Exporter scrape labels can identify the exporter rather than workloads represented by its metrics.
+
+`up` measures Prometheus scrape success, not user-visible application
+availability. Read `knowledge/promql/slis.md` before using it as an availability
+signal.

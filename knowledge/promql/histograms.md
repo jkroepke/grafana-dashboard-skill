@@ -26,6 +26,11 @@ histogram_quantile(
 
 Only keep bounded route templates, never unbounded raw paths.
 
+A quantile answers for the estimated value at a percentile. It does not answer
+what fraction of observations is below a fixed SLO threshold. For a fixed
+threshold SLI, use the appropriate cumulative bucket and `_count` pattern in
+`slis.md` when the required bucket boundary exists.
+
 ## Native histograms
 
 Use native-histogram expressions only when native histogram samples are verified in the local datasource and the pinned Prometheus version supports the required functions.
@@ -78,6 +83,8 @@ Require a positive matching denominator. Preserve no-data when the denominator i
 ## Summaries
 
 Client-side summary quantiles cannot be meaningfully averaged or combined into an application-wide quantile. Display them per original population/instance or use count/sum when those answer the question.
+
+Do not average per-instance summary quantiles to create a global p95/p99.
 
 ## Heatmaps
 
