@@ -90,14 +90,17 @@ def yaml_bytes(value: dict[str, Any]) -> bytes:
     return coordinator_artifact.yaml_bytes(value)
 
 
-def atomic_yaml(path: Path, value: dict[str, Any]) -> None:
+def atomic_yaml(path: Path, value: dict[str, Any], *, replace: bool = False) -> None:
     raw = yaml_bytes(value)
     require(len(raw) <= 8192, f"{path.name} exceeds 8192 bytes")
-    require(not path.exists(), f"refusing duplicate write to immutable file: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
     draft = path.parent / f".{path.name}.{os.getpid()}"
     try:
         draft.write_bytes(raw)
+        if replace:
+            os.replace(draft, path)
+            return
+        require(not path.exists(), f"refusing duplicate write to immutable file: {path}")
         os.link(draft, path)
     except FileExistsError as error:
         raise StageError(f"refusing duplicate write to immutable file: {path}") from error

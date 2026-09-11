@@ -43,13 +43,13 @@ def read_request(path: Path, root: Path) -> dict[str, Any]:
 
 
 def write_record(root: Path, request: Path) -> Path:
-    """Serialize one complete request at records/queries/<id>.yaml without replacement."""
+    """Serialize one complete request at records/queries/<id>.yaml."""
     record = read_request(request, root)
     query_id = record["id"]
     require(isinstance(query_id, str) and stage.SAFE_LIMIT_RE.fullmatch(query_id) is not None,
             "record id is invalid")
     output = root / "records" / "queries" / f"{query_id}.yaml"
-    stage.atomic_yaml(output, record)
+    stage.atomic_yaml(output, record, replace=True)
     return output
 
 

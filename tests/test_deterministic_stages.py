@@ -51,7 +51,7 @@ class DeterministicStagesTest(unittest.TestCase):
         self.assertEqual("work_total", result["metrics"][0]["family"])
         self.assertIsNone(result["consumer"])
 
-    def test_query_record_promotes_only_complete_immutable_requests(self) -> None:
+    def test_query_record_replaces_complete_requests(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             request_dir = root / "tmp"
@@ -63,8 +63,10 @@ class DeterministicStagesTest(unittest.TestCase):
             output = query_record.write_record(root, request)
             self.assertEqual(root / "records" / "queries" / "T001.yaml", output)
             self.assertTrue(output.is_file())
-            with self.assertRaisesRegex(stage.StageError, "duplicate"):
-                query_record.write_record(root, request)
+            record["expression"] = "up"
+            request.write_text(json.dumps(record), encoding="utf-8")
+            query_record.write_record(root, request)
+            self.assertEqual("up", stage.read_yaml(output)["expression"])
 
     def test_application_assembler_derives_scope_digest_and_fixed_records(self) -> None:
         with TemporaryDirectory() as temporary:
