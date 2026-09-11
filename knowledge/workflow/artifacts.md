@@ -111,7 +111,8 @@ omission_counts: {<omission-code>: <non-negative count>}
 
 Use `omission_counts: {}` when no families were omitted. `application-metrics` runs first and additionally writes
 one immutable local scope evidence file containing the exact non-empty namespace
-set represented by verified application stored series. Its artifact includes:
+set represented by verified application stored series. Its file content is a
+bare JSON array of strings, not an object wrapper. Its artifact includes:
 
 ```yaml
 namespace_scope:

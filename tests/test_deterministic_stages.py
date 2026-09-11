@@ -331,6 +331,16 @@ class DeterministicStagesTest(unittest.TestCase):
                 ),
             )
 
+    def test_metrics_review_probes_reads_the_application_bare_array_scope(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            scope = root / "namespace-scope.json"
+            scope.write_text('["team-b", "team-a", "team-a"]\n', encoding="utf-8")
+            self.assertEqual(
+                ["team-a", "team-b"],
+                metrics_review_probes.namespaces({"namespace_scope": {"evidence_ref": str(scope)}}),
+            )
+
     def test_metric_disposition_rejects_unknown_ids_and_writes_stable_records(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

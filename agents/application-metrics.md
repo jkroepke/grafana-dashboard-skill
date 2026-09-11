@@ -161,7 +161,8 @@ response or the shortlist. The file may contain more than one namespace and is
 the sole authority for downstream Kubernetes/Istio preset validation and
 queries.
 
-Write that verified namespace array once to `evidence/namespace-scope.json`.
+Write that verified namespace array once as a **bare JSON array** to
+`evidence/namespace-scope.json` (for example, `["team-a", "team-b"]`).
 `./stage-finish` publishes its absolute path, digest, and count
 as `namespace_scope`; the scope evidence is immutable after this stage. If no namespace can
 be verified, return a bounded failure report; the fixed preset stage requires

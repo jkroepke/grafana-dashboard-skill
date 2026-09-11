@@ -36,6 +36,8 @@ requests/responses to `evidence/metrics-review-probes/`, and creates
 the Prometheus reader directly for these routine checks.
 On a resumed stage, it verifies and reuses evidence only when the exact
 candidate IDs/families and namespace scope match; it never repeats the probes.
+The scope evidence referenced by the application artifact is a bare JSON array
+of namespace strings, never an object with a `namespaces` field.
 
 Create rejection/not-considered checkpoints only with `./metric-disposition`.
 It validates every supplied ID against the ticketed shortlists and writes the
