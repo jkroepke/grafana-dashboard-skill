@@ -66,8 +66,8 @@ def main() -> int:
         return fail("environment variable is not allowed")
     if name == "WORKFLOW_RUN_ID":
         return fail("WORKFLOW_RUN_ID is created by mkworkspace")
-    if name == "GRAFANA_PROMETHEUS_DATASOURCE_UID":
-        return fail("GRAFANA_PROMETHEUS_DATASOURCE_UID is created by set_datasource")
+    if name in {"GRAFANA_PROMETHEUS_DATASOURCE_UID", "WORKFLOW_DATASOURCE_ACCESS"}:
+        return fail(f"{name} is created by set_datasource")
     if not valid(name, value):
         return fail("environment variable value is invalid")
     if name == "METRICS_TARGET" and not urlsplit(value).scheme:

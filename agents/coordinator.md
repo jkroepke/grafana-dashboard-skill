@@ -78,7 +78,7 @@ uses the default `pending` status.
   "operations": [
     {"action": "create", "subject": "Bootstrap workspace", "status": "in_progress"},
     {"action": "create", "subject": "Configure workflow access"},
-    {"action": "create", "subject": "Discover Prometheus datasource via set-datasource (or record unavailable)"},
+    {"action": "create", "subject": "Discover Prometheus datasource via set-datasource"},
     {"action": "create", "subject": "Create run contract"},
     {"action": "create", "subject": "Complete application metrics stage"},
     {"action": "create", "subject": "Complete Kubernetes metrics stage"},
@@ -155,20 +155,20 @@ inspect scripts or add configuration fields.
    | `METRICS_TARGET` | metrics HTTP(S) URL or regular local file |
    | `METRICS_HTTP_CLIENT` | supplied client, or `curl` for HTTP(S); empty value for a local file |
    | `METRICS_HTTP_CLIENT_ARGS_JSON` | supplied arguments, or `[]` |
-   | `WORKFLOW_DATASOURCE_ACCESS` | `true` or `false` |
    | `WORKFLOW_DASHBOARD_API_VALIDATION` | `true` or `false` |
    | `WORKFLOW_PUBLISH_REQUESTED` | `true` or `false` |
 
    For a local metrics file, call `./workflow set-env METRICS_HTTP_CLIENT ""`.
 
-3. **Datasource discovery (todo item #3):** when
-   `WORKFLOW_DATASOURCE_ACCESS=true`, run `./workflow set-datasource` with no
-   arguments. This command is the complete datasource-discovery operation: a
-   `PASS datasource` response means item #3 is complete. It is not a specialist
-   stage and requires no dispatch, ticket, or additional discovery command. It
-   refuses to run until that exact explicit flag is stored; it never infers or
-   sets the capability itself. If it fails, create a bounded failure report and
-   stop.
+3. **Datasource discovery (todo item #3):** run `./workflow set-datasource`
+   with no arguments. This command is the complete datasource-discovery
+   operation: it writes `WORKFLOW_DATASOURCE_ACCESS=true` and the selected UID
+   when Grafana has a Prometheus datasource, or writes
+   `WORKFLOW_DATASOURCE_ACCESS=false` when Grafana responds successfully without
+   one. Either `PASS datasource access=<true|false>` response completes item #3;
+   it is not a specialist stage and requires no dispatch, ticket, or additional
+   discovery command. Authentication, transport, or configuration failures are
+   errors: create a bounded failure report and stop.
 4. Run `./workflow run-contract` with no arguments. It performs the fixed Grafana
    eligibility gate and rejects an unsupported target.
 

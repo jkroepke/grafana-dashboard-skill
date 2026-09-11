@@ -38,6 +38,10 @@ class AccessError(ValueError):
     """Raised when a configured Grafana access capability cannot be used."""
 
 
+class NoPrometheusDatasource(AccessError):
+    """Raised when Grafana responds successfully without a Prometheus datasource."""
+
+
 @dataclass(frozen=True)
 class GrafanaAccess:
     """Trusted runtime configuration for the Grafana wrappers."""
@@ -231,7 +235,8 @@ def select_prometheus_datasource_uid(payload: Any) -> str:
         if isinstance(item, dict) and item.get("type") == "prometheus"
         and isinstance(item.get("uid"), str) and UID_RE.fullmatch(item["uid"]) is not None
     ]
-    require(candidates, "no Prometheus datasource is configured")
+    if not candidates:
+        raise NoPrometheusDatasource("no Prometheus datasource is configured")
     default = next((item for item in candidates if item.get("isDefault") in {True, 1, "true", "1"}), None)
     return (default or candidates[0])["uid"]
 

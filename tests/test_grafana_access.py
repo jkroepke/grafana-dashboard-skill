@@ -171,6 +171,15 @@ class GrafanaAccessTest(unittest.TestCase):
             )
             self.assertEqual(2, result.returncode)
             self.assertIn("set_datasource", result.stderr)
+            result = subprocess.run(
+                [sys.executable, str(command), "WORKFLOW_DATASOURCE_ACCESS", "true"],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=workspace,
+            )
+            self.assertEqual(2, result.returncode)
+            self.assertIn("set_datasource", result.stderr)
             config = workspace / ".env"
             self.assertEqual(0o600, config.stat().st_mode & 0o777)
             self.assertIn("WORKFLOW_PUBLISH_REQUESTED=true", config.read_text(encoding="utf-8"))
@@ -283,11 +292,21 @@ class GrafanaAccessTest(unittest.TestCase):
                 check=False,
                 cwd=workspace,
             )
-            self.assertEqual(2, result.returncode)
-            self.assertIn("WORKFLOW_DATASOURCE_ACCESS=true", result.stderr)
-            values = grafana_env(config)
-            values["WORKFLOW_DATASOURCE_ACCESS"] = "true"
-            write_workflow_env(config, values)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertIn("PASS datasource access=true", result.stdout)
+            self.assertIn("WORKFLOW_DATASOURCE_ACCESS=true", config.read_text(encoding="utf-8"))
+            self.assertIn("GRAFANA_PROMETHEUS_DATASOURCE_UID=default", config.read_text(encoding="utf-8"))
+
+            client.write_text(
+                "#!/bin/sh\n"
+                "while [ \"$#\" -gt 0 ]; do\n"
+                "  case \"$1\" in --output) output=$2; shift 2;; *) url=$1; shift;; esac\n"
+                "done\n"
+                "test \"$url\" = https://grafana.example.test/api/datasources || exit 1\n"
+                "printf '%s' '[]' > \"$output\"\n"
+                "printf 200\n",
+                encoding="utf-8",
+            )
             result = subprocess.run(
                 [sys.executable, str(repository / "scripts" / "set_datasource")],
                 capture_output=True,
@@ -296,4 +315,6 @@ class GrafanaAccessTest(unittest.TestCase):
                 cwd=workspace,
             )
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-            self.assertIn("GRAFANA_PROMETHEUS_DATASOURCE_UID=default", config.read_text(encoding="utf-8"))
+            self.assertIn("PASS datasource access=false", result.stdout)
+            self.assertIn("WORKFLOW_DATASOURCE_ACCESS=false", config.read_text(encoding="utf-8"))
+            self.assertNotIn("GRAFANA_PROMETHEUS_DATASOURCE_UID=", config.read_text(encoding="utf-8"))

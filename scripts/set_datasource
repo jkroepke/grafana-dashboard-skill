@@ -8,6 +8,7 @@ import sys
 from grafana_access import (
     AccessError,
     GrafanaAccess,
+    NoPrometheusDatasource,
     grafana_access_from_environment,
     prometheus_datasource_uid,
     workflow_env_path,
@@ -22,16 +23,25 @@ def main() -> int:
         if path is None:
             raise AccessError("set_datasource must run from a dashboard workspace")
         values = grafana_env(path)
-        if values.get("WORKFLOW_DATASOURCE_ACCESS") != "true":
-            raise AccessError("set-datasource requires WORKFLOW_DATASOURCE_ACCESS=true configured first")
         access = grafana_access_from_environment()
         discovery_access = GrafanaAccess(access.target, access.client, access.client_args, None)
         values["GRAFANA_PROMETHEUS_DATASOURCE_UID"] = prometheus_datasource_uid(discovery_access)
+        values["WORKFLOW_DATASOURCE_ACCESS"] = "true"
         write_workflow_env(path, values)
+    except NoPrometheusDatasource:
+        values.pop("GRAFANA_PROMETHEUS_DATASOURCE_UID", None)
+        values["WORKFLOW_DATASOURCE_ACCESS"] = "false"
+        try:
+            write_workflow_env(path, values)
+        except AccessError as error:
+            print(f"ERROR set-datasource: {error}", file=sys.stderr)
+            return 2
+        print("PASS datasource access=false")
+        return 0
     except AccessError as error:
         print(f"ERROR set-datasource: {error}", file=sys.stderr)
         return 2
-    print("PASS datasource")
+    print("PASS datasource access=true")
     return 0
 
 

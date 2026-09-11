@@ -74,8 +74,9 @@ being silently reused.
 `set-workflow-env <key><space><value>`. Do not pass multiple pairs, maps,
 lists, or `KEY=VALUE` tokens in one call.
 
-Before `run-contract`, the coordinator explicitly sets every access key,
-including default client values and argument arrays. In particular,
+Before `run-contract`, the coordinator explicitly sets every access key except
+`WORKFLOW_DATASOURCE_ACCESS`, which `./workflow set-datasource` determines.
+It still sets default client values and argument arrays. In particular,
 `METRICS_HTTP_CLIENT` is `curl` for an HTTP(S) metrics target and an explicit
 empty value for a local metrics file; no stage may depend on an implicit client
 fallback.

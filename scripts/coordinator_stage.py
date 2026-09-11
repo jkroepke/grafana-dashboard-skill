@@ -518,7 +518,7 @@ def dispatch(args: argparse.Namespace) -> str:
         require(generated.returncode == 0,
                 generated.stderr.strip() or "could not generate Kubernetes preset artifact")
         response = generated.stdout.strip().splitlines()[-1]
-        return accept(argparse.Namespace(ticket=ticket_path, response=response, response_file=None))
+        return accept(argparse.Namespace(ticket=ticket_path, agent=None, response=response, response_file=None))
     return (
         f"{agent} workspace={workspace} agent_run={agent_root} "
         f"ticket={ticket_path.relative_to(root)}"
@@ -526,15 +526,16 @@ def dispatch(args: argparse.Namespace) -> str:
 
 
 def accept(args: argparse.Namespace) -> str:
+    requested_agent = getattr(args, "agent", None)
     if args.ticket is not None:
         ticket_path = Path(args.ticket).resolve()
     else:
-        require(args.agent is not None, "accept requires --agent when --ticket is omitted")
-        ticket_path = active_ticket(Path.cwd().resolve(), args.agent)
+        require(requested_agent is not None, "accept requires --agent when --ticket is omitted")
+        ticket_path = active_ticket(Path.cwd().resolve(), requested_agent)
     ticket, run, root, workspace, inputs, supports = validate_ticket(ticket_path)
     require(Path.cwd().resolve() == workspace, "run coordinator commands from workspace")
     agent = ticket["agent"]
-    require(args.agent is None or args.agent == agent, "--agent does not match the ticket")
+    require(requested_agent is None or requested_agent == agent, "--agent does not match the ticket")
     response = args.response
     if args.response_file is not None:
         response_path = path_within(Path(args.response_file), root, "response file")
