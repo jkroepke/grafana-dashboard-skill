@@ -86,11 +86,13 @@ only with datasource access, otherwise `UNVERIFIED`; keep `evidence_refs` as
 an array. `unit` and `question_id` use YAML `null` where the mapping says so.
 
 For a standard namespace/pod variable, the partition supplies the compiler
-template and requires `selector` and `label`; it also marks `editor_ref_id` as
-a required record field. Supply the verified stored label (for example
-`kubernetes_namespace`, not the variable name) to the template; copy its
-expression and `result_identity` verbatim. Variables/annotations not routed as
-standard are `CUSTOM`, not omitted.
+template and requires `label`; it marks `selector` as optional and
+`editor_ref_id` as a required record field. Supply the verified stored label
+(for example `kubernetes_namespace`, not the variable name) to the template.
+When the selector contract has no matcher, omit `selector` (or pass JSON
+`null`)—never pass an empty string. Copy the compiler expression and
+`result_identity` verbatim. Variables/annotations not routed as standard are
+`CUSTOM`, not omitted.
 
 For every planned query (including a `custom` exception):
 

@@ -155,6 +155,10 @@ class DeterministicStagesTest(unittest.TestCase):
         })
         self.assertEqual('label_values(app_info{app_name="demo"}, kubernetes_namespace)', result["expression"])
         self.assertEqual(["kubernetes_namespace"], result["result_identity"])
+        unscoped = promql_templates.compile_template({
+            "template": "namespace_variable", "metric": "app_info", "label": "kubernetes_namespace",
+        })
+        self.assertEqual("label_values(app_info, kubernetes_namespace)", unscoped["expression"])
         with self.assertRaisesRegex(promql_templates.TemplateError, "label"):
             promql_templates.compile_template({"template": "pod_variable", "metric": "app_info"})
 
@@ -178,6 +182,8 @@ class DeterministicStagesTest(unittest.TestCase):
         )
         self.assertEqual("counter_rate_by_pod", result["standard"][0]["template"])
         self.assertEqual("namespace_variable", result["standard"][1]["template"])
+        self.assertEqual(["label"], result["standard"][1]["required_inputs"])
+        self.assertEqual(["selector"], result["standard"][1]["optional_inputs"])
         self.assertEqual("MULTI_METRIC", result["custom"][0]["reason_code"])
         self.assertEqual("ANNOTATION_SEMANTICS_REQUIRED", result["custom"][1]["reason_code"])
         self.assertEqual("Q003", result["preserved"][0]["question_id"])

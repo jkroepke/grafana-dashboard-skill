@@ -92,7 +92,8 @@ def partition(plan: dict[str, Any], contract: dict[str, Any]) -> dict[str, list[
                 "metric_id": metric_ids[0],
                 "template": f"{rendered_name}_variable",
                 "metric": metric.get("family"),
-                "required_inputs": ["selector", "label"],
+                "required_inputs": ["label"],
+                "optional_inputs": ["selector"],
                 "required_record_fields": ["editor_ref_id"],
             })
             continue
