@@ -68,8 +68,35 @@ Independently check:
 - live behavior with one pod, multiple pods, and All where supported
 
 HTTP success or PromQL syntax alone is not a pass. For routine queries, declare
-concrete values/cardinality/identity labels in `evidence/probe-matrix.json` and
-run `./prometheus-probe-matrix`. It stores raw responses and checks
+concrete selector/time substitutions, cardinality, and identity labels in
+`evidence/probe-matrix.json`, then run `./prometheus-probe-matrix`. Its exact
+format is:
+
+```json
+{
+  "probes": [
+    {
+      "id": "T003-one-pod",
+      "operation": "query",
+      "params": {
+        "query": "<exact expression with every Grafana variable replaced by a concrete value>",
+        "time": "<concrete Prometheus timestamp, if needed>"
+      },
+      "identity_labels": ["<declared result identity label>"],
+      "min_series": 1,
+      "max_series": 20
+    }
+  ]
+}
+```
+
+The only probe fields are `id`, `operation`, `params`, `identity_labels`,
+`min_series`, and `max_series`. Use Prometheus `query` for instant queries and
+`query_range` with concrete `query`, `start`, `end`, and `step` parameters for
+range queries. Parameters are strings (or lists of strings). `min_series` and
+`max_series` are inclusive bounds; `identity_labels` is the exact output
+identity to check for duplicates. The matrix does not validate metric sample
+values, so do not invent expected values. It stores raw responses and checks
 status, warnings, labels, duplicate identities, and bounds deterministically.
 Review only failed probes and `CUSTOM` queries for semantic fitness.
 
