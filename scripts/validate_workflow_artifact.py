@@ -199,6 +199,11 @@ def read_artifact(path: Path) -> tuple[bytes, dict[str, Any]]:
     require(path.suffix == ".yaml", f"workflow artifact must use a .yaml filename: {path}")
     try:
         raw = path.read_bytes()
+    except FileNotFoundError as error:
+        raise ArtifactError(f"workflow artifact is unavailable: {path}") from error
+    except OSError as error:
+        raise ArtifactError(f"cannot read workflow artifact {path}: {error}") from error
+    try:
         converted = subprocess.run(
             ["yq", "eval", "-o=json", ".", str(path)],
             capture_output=True,

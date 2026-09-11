@@ -37,6 +37,12 @@ from grafana_dry_run import replacement  # noqa: E402
 
 
 class DeterministicStagesTest(unittest.TestCase):
+    def test_missing_workflow_artifact_is_not_reported_as_a_yq_error(self) -> None:
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "missing.yaml"
+            with self.assertRaisesRegex(validate_workflow_artifact.ArtifactError, "workflow artifact is unavailable"):
+                validate_workflow_artifact.read_artifact(path)
+
     def test_query_review_capabilities_projects_one_query_and_its_metric(self) -> None:
         metric = {
             "id": "AM001", "family": "work_total", "type": "counter", "unit": "ops",
